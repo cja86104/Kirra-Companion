@@ -1,0 +1,311 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 207 90% 48%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 270 70% 60%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 207 90% 48%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 6%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 6%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 207 90% 54%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 270 70% 60%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 207 90% 54%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-primary/20;
+  }
+}
+
+@layer components {
+  /* Kirra Glow Effects */
+  .kirra-glow {
+    @apply relative;
+  }
+
+  .kirra-glow::before {
+    content: '';
+    @apply absolute -inset-1 rounded-lg bg-kirra-gradient opacity-30 blur-xl;
+    z-index: -1;
+  }
+
+  .kirra-glow-pulse::before {
+    animation: glow 2s ease-in-out infinite;
+  }
+
+  /* Glass morphism */
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+
+  .glass-dark {
+    @apply bg-black/20 backdrop-blur-md border border-white/10;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-kirra-gradient bg-clip-text text-transparent;
+  }
+
+  /* Chat bubble styles */
+  .chat-bubble {
+    @apply relative px-4 py-2 rounded-2xl max-w-[80%];
+  }
+
+  .chat-bubble-user {
+    @apply bg-primary text-primary-foreground rounded-br-sm ml-auto;
+  }
+
+  .chat-bubble-companion {
+    @apply bg-muted text-foreground rounded-bl-sm mr-auto;
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    @apply flex gap-1 items-center;
+  }
+
+  .typing-indicator span {
+    @apply w-2 h-2 bg-muted-foreground/60 rounded-full;
+    animation: typing-dot 1.4s ease-in-out infinite;
+  }
+
+  .typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  /* Affection meter */
+  .affection-meter {
+    @apply relative h-2 w-full rounded-full overflow-hidden bg-muted;
+  }
+
+  .affection-meter-fill {
+    @apply absolute left-0 top-0 h-full rounded-full transition-all duration-500;
+    background: linear-gradient(90deg, #94a3b8 0%, #f472b6 50%, #f43f5e 100%);
+  }
+
+  /* Memory node */
+  .memory-node {
+    @apply relative p-4 rounded-xl border transition-all duration-300;
+    @apply hover:shadow-glow hover:border-primary/50;
+  }
+
+  .memory-node-important {
+    @apply border-primary/30 bg-primary/5;
+  }
+
+  /* Life event card */
+  .life-event {
+    @apply relative pl-6 pb-6 border-l-2 border-muted;
+  }
+
+  .life-event::before {
+    content: '';
+    @apply absolute left-[-5px] top-0 w-2 h-2 rounded-full bg-primary;
+  }
+
+  .life-event:last-child {
+    @apply border-l-transparent;
+  }
+
+  /* Avatar with status */
+  .avatar-status {
+    @apply relative;
+  }
+
+  .avatar-status::after {
+    content: '';
+    @apply absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background;
+  }
+
+  .avatar-status-online::after {
+    @apply bg-green-500;
+  }
+
+  .avatar-status-away::after {
+    @apply bg-yellow-500;
+  }
+
+  .avatar-status-busy::after {
+    @apply bg-red-500;
+  }
+
+  /* Shimmer loading */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* Floating action button */
+  .fab {
+    @apply fixed bottom-6 right-6 z-50;
+    @apply w-14 h-14 rounded-full shadow-lg;
+    @apply flex items-center justify-center;
+    @apply bg-primary text-primary-foreground;
+    @apply transition-transform duration-200;
+    @apply hover:scale-110 active:scale-95;
+  }
+
+  /* Emotion badge */
+  .emotion-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .emotion-happy {
+    @apply bg-emotion-happy/20 text-emotion-happy;
+  }
+
+  .emotion-sad {
+    @apply bg-emotion-sad/20 text-emotion-sad;
+  }
+
+  .emotion-excited {
+    @apply bg-emotion-excited/20 text-emotion-excited;
+  }
+
+  .emotion-calm {
+    @apply bg-emotion-calm/20 text-emotion-calm;
+  }
+
+  .emotion-curious {
+    @apply bg-emotion-curious/20 text-emotion-curious;
+  }
+
+  .emotion-loving {
+    @apply bg-emotion-loving/20 text-emotion-loving;
+  }
+
+  .emotion-playful {
+    @apply bg-emotion-playful/20 text-emotion-playful;
+  }
+
+  .emotion-thoughtful {
+    @apply bg-emotion-thoughtful/20 text-emotion-thoughtful;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text balance */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Drag prevention for images/elements */
+  .no-drag {
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  /* Safe area insets for mobile */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
