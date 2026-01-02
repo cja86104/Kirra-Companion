@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import type { Profile, Companion, DataExport } from '@/types/database';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2025-02-24.acacia',
 });
 
 // Admin client for deleting user
@@ -27,11 +28,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Get profile for Stripe customer ID
-    const { data: profile } = await supabase
+    const { data: profileData } = await supabase
       .from('profiles')
       .select('stripe_customer_id, stripe_subscription_id')
       .eq('id', user.id)
       .single();
+
+    const profile = profileData as Pick<Profile, 'stripe_customer_id' | 'stripe_subscription_id'> | null;
 
     // Cancel Stripe subscription if exists
     if (profile?.stripe_subscription_id) {
@@ -44,7 +47,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Export user data before deletion (optional - store in a secure location)
-    const { data: exportData } = await supabase
+    const { data: exportResult } = await supabase
       .from('data_exports')
       .insert({
         user_id: user.id,
@@ -52,9 +55,11 @@ export async function DELETE(request: NextRequest) {
         status: 'completed',
         file_url: null, // We're just logging, not creating a file
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-      })
+      } as never)
       .select()
       .single();
+
+    const exportData = exportResult as DataExport | null;
 
     // Log the deletion
     await supabase
@@ -66,7 +71,7 @@ export async function DELETE(request: NextRequest) {
           export_id: exportData?.id,
           timestamp: new Date().toISOString(),
         },
-      });
+      } as never);
 
     // Delete user data in order (respecting foreign keys)
     // Note: With proper CASCADE setup, most of this happens automatically
@@ -84,12 +89,14 @@ export async function DELETE(request: NextRequest) {
       .eq('user_id', user.id);
 
     // 3. Delete companion-related data
-    const { data: companions } = await supabase
+    const { data: companionsData } = await supabase
       .from('companions')
       .select('id')
       .eq('user_id', user.id);
 
-    if (companions) {
+    const companions = companionsData as Pick<Companion, 'id'>[] | null;
+
+    if (companions && companions.length > 0) {
       const companionIds = companions.map(c => c.id);
       
       // Delete memories

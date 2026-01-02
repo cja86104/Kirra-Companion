@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser, getCompanion, getConversationMessages, createClient } from '@/lib/supabase/server';
 import { ChatWindow } from '@/components/chat/ChatWindow';
+import type { Conversation } from '@/types/database';
 
 interface ChatPageProps {
   params: Promise<{ companionId: string }>;
@@ -24,7 +25,7 @@ export default async function ChatWithCompanionPage({ params }: ChatPageProps) {
   // Get or create conversation
   const supabase = await createClient();
   
-  let { data: conversation } = await supabase
+  const { data: conversationData } = await supabase
     .from('conversations')
     .select('*')
     .eq('companion_id', companionId)
@@ -34,6 +35,8 @@ export default async function ChatWithCompanionPage({ params }: ChatPageProps) {
     .limit(1)
     .single();
 
+  let conversation = conversationData as Conversation | null;
+
   if (!conversation) {
     // Create new conversation
     const { data: newConversation, error } = await supabase
@@ -42,19 +45,19 @@ export default async function ChatWithCompanionPage({ params }: ChatPageProps) {
         companion_id: companionId,
         user_id: user.id,
         title: `Chat with ${companion.name}`,
-      })
+      } as never)
       .select()
       .single();
 
-    if (error) {
+    if (error || !newConversation) {
       console.error('Failed to create conversation:', error);
       throw new Error('Failed to create conversation');
     }
 
-    conversation = newConversation;
+    conversation = newConversation as Conversation;
   }
 
-  // Get messages
+  // Get messages - conversation is guaranteed to exist at this point
   const messages = await getConversationMessages(conversation.id, 100);
 
   return (

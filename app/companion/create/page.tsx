@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Check,
   Loader2,
+  BookOpen,
+  Volume2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -23,11 +25,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { getClient } from '@/lib/supabase/client';
+import { AvatarSelector, resolveAvatarUrl, getGradientConfig } from '@/components/companion/AvatarSelector';
+import { BackstoryGenerator } from '@/components/companion/BackstoryGenerator';
+import { VoiceSelector } from '@/components/companion/VoiceSelector';
+import type { Profile, Companion, VoiceConfig } from '@/types/database';
 
 type RelationshipType = 'friend' | 'mentor' | 'romantic' | 'family' | 'custom';
 
 interface CompanionData {
   name: string;
+  avatarSelection: string | null;
   relationshipType: RelationshipType;
   backstory: string;
   traits: {
@@ -44,6 +51,7 @@ interface CompanionData {
     humorLevel: number;
   };
   interests: string[];
+  voiceConfig: VoiceConfig | null;
 }
 
 const STEPS = [
@@ -51,6 +59,8 @@ const STEPS = [
   { id: 'relationship', title: 'Relationship', icon: Heart },
   { id: 'personality', title: 'Personality', icon: Brain },
   { id: 'style', title: 'Style', icon: Palette },
+  { id: 'backstory', title: 'Backstory', icon: BookOpen },
+  { id: 'voice', title: 'Voice', icon: Volume2 },
   { id: 'review', title: 'Review', icon: Check },
 ];
 
@@ -72,9 +82,14 @@ export default function CreateCompanionPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
+  const [subscriptionTier, setSubscriptionTier] = useState('free');
+  // CRITICAL: Age verification state
+  const [isMinor, setIsMinor] = useState<boolean | null>(null);
+  const [ageTier, setAgeTier] = useState<'blocked' | 'minor' | 'adult'>('adult');
   
   const [companionData, setCompanionData] = useState<CompanionData>({
     name: '',
+    avatarSelection: null,
     relationshipType: 'friend',
     backstory: '',
     traits: {
@@ -91,7 +106,41 @@ export default function CreateCompanionPage() {
       humorLevel: 60,
     },
     interests: [],
+    voiceConfig: null,
   });
+
+  // Load user's subscription tier AND age verification
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      const supabase = getClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('subscription_tier, age_tier, is_minor_flagged')
+          .eq('id', user.id)
+          .single();
+        
+        const profile = profileData as Pick<Profile, 'subscription_tier' | 'age_tier' | 'is_minor_flagged'> | null;
+        if (profile?.subscription_tier) {
+          setSubscriptionTier(profile.subscription_tier);
+        }
+        
+        // CRITICAL: Set age verification status
+        const userAgeTier = profile?.age_tier || 'adult';
+        const isMinorFlagged = profile?.is_minor_flagged || false;
+        setAgeTier(userAgeTier as 'blocked' | 'minor' | 'adult');
+        setIsMinor(userAgeTier === 'minor' || userAgeTier === 'blocked' || isMinorFlagged);
+        
+        // If blocked, redirect away
+        if (userAgeTier === 'blocked') {
+          toast.error('Account access restricted');
+          router.push('/dashboard');
+        }
+      }
+    };
+    loadUserProfile();
+  }, [router]);
 
   const updateData = <K extends keyof CompanionData>(
     key: K,
@@ -129,7 +178,9 @@ export default function CreateCompanionPage() {
       case 1: return true;
       case 2: return true;
       case 3: return companionData.interests.length >= 1;
-      case 4: return true;
+      case 4: return true; // Backstory is optional
+      case 5: return true; // Voice is optional
+      case 6: return true;
       default: return false;
     }
   };
@@ -159,12 +210,34 @@ export default function CreateCompanionPage() {
         return;
       }
 
-      // Check subscription limits
-      const { data: profile } = await supabase
+      // CRITICAL: Re-verify age status before creation (defense in depth)
+      const { data: profileData } = await supabase
         .from('profiles')
-        .select('subscription_tier')
+        .select('subscription_tier, age_tier, is_minor_flagged')
         .eq('id', user.id)
         .single();
+
+      const profile = profileData as Pick<Profile, 'subscription_tier' | 'age_tier' | 'is_minor_flagged'> | null;
+      
+      // CRITICAL: Block adult-only relationship types for minors
+      const userIsMinor = profile?.age_tier === 'minor' || 
+                          profile?.age_tier === 'blocked' || 
+                          profile?.is_minor_flagged === true;
+      
+      if (userIsMinor && (companionData.relationshipType === 'romantic' || companionData.relationshipType === 'custom')) {
+        toast.error('This relationship type is not available for your account');
+        setCompanionData(prev => ({ ...prev, relationshipType: 'friend' }));
+        setCurrentStep(1); // Go back to relationship step
+        setIsCreating(false);
+        return;
+      }
+      
+      // Block blocked users entirely
+      if (profile?.age_tier === 'blocked') {
+        toast.error('Account access restricted');
+        router.push('/dashboard');
+        return;
+      }
 
       const { count: companionCount } = await supabase
         .from('companions')
@@ -187,6 +260,24 @@ export default function CreateCompanionPage() {
         return;
       }
 
+      // Resolve avatar URL
+      const avatarUrl = resolveAvatarUrl(companionData.avatarSelection);
+      const gradientConfig = getGradientConfig(companionData.avatarSelection);
+
+      // Initialize companion needs
+      const now = new Date().toISOString();
+      const initialNeeds = {
+        social: 70,
+        energy: 80,
+        fun: 60,
+        comfort: 75,
+        affection: 50,
+        intellectual: 60,
+        creativity: 50,
+        lastUpdated: now,
+        lastInteraction: now,
+      };
+
       // Create companion
       const insertData = {
         user_id: user.id,
@@ -202,24 +293,26 @@ export default function CreateCompanionPage() {
           secondary: 'curious',
           intensity: 0.7,
         },
+        needs: initialNeeds,
+        avatar_url: avatarUrl,
+        avatar_3d_config: gradientConfig ? { gradient: gradientConfig } : null,
+        voice_config: companionData.voiceConfig,
       };
       
-      console.log('Attempting to insert companion:', JSON.stringify(insertData, null, 2));
-      console.log('User ID:', user.id);
-      
-      const { data: companion, error: companionError } = await supabase
+      const { data: newCompanionData, error: companionError } = await supabase
         .from('companions')
-        .insert(insertData)
+        .insert(insertData as never)
         .select()
         .single();
 
-      if (companionError) {
-        console.error('Companion insert error:', JSON.stringify(companionError, null, 2));
-        console.error('Error message:', companionError.message);
-        console.error('Error code:', companionError.code);
-        console.error('Error details:', companionError.details);
-        console.error('Error hint:', companionError.hint);
-        throw new Error(companionError.message || 'Failed to create companion');
+      const companion = newCompanionData as Companion | null;
+
+      if (companionError || !companion) {
+        if (companionError) {
+          console.error('Companion insert error:', JSON.stringify(companionError, null, 2));
+          throw new Error(companionError.message || 'Failed to create companion');
+        }
+        throw new Error('Failed to create companion');
       }
 
       // Create companion DNA
@@ -258,12 +351,10 @@ export default function CreateCompanionPage() {
             importance_weight: 0.5,
             emotional_weight: 0.2,
           },
-        });
+        } as never);
 
       if (dnaError) {
         console.error('DNA insert error:', JSON.stringify(dnaError, null, 2));
-        console.error('Error message:', dnaError.message);
-        console.error('Error code:', dnaError.code);
         throw new Error(dnaError.message || 'Failed to create companion DNA');
       }
 
@@ -282,7 +373,7 @@ export default function CreateCompanionPage() {
     switch (currentStep) {
       case 0:
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="space-y-2">
               <Label htmlFor="name">What would you like to call your companion?</Label>
               <Input
@@ -297,17 +388,36 @@ export default function CreateCompanionPage() {
                 {companionData.name.length}/30 characters
               </p>
             </div>
+
+            <AvatarSelector
+              selectedAvatar={companionData.avatarSelection}
+              onSelect={(avatar) => updateData('avatarSelection', avatar)}
+              companionName={companionData.name}
+            />
           </div>
         );
 
       case 1:
+        // CRITICAL: Filter relationship types based on age
+        const availableRelationships = RELATIONSHIP_TYPES.filter(rel => {
+          if (isMinor && (rel.type === 'romantic' || rel.type === 'custom')) {
+            return false; // Hide adult-only options for minors
+          }
+          return true;
+        });
+        
         return (
           <div className="space-y-4">
             <p className="text-muted-foreground">
               What kind of relationship would you like to have with {companionData.name || 'your companion'}?
             </p>
+            {isMinor && (
+              <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3 text-sm text-blue-600 dark:text-blue-400">
+                💙 Some relationship types are only available for users 18+
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
-              {RELATIONSHIP_TYPES.map((rel) => (
+              {availableRelationships.map((rel) => (
                 <button
                   key={rel.type}
                   onClick={() => updateData('relationshipType', rel.type)}
@@ -401,17 +511,58 @@ export default function CreateCompanionPage() {
 
       case 4:
         return (
+          <BackstoryGenerator
+            name={companionData.name}
+            relationshipType={companionData.relationshipType}
+            traits={companionData.traits}
+            interests={companionData.interests}
+            backstory={companionData.backstory}
+            onBackstoryChange={(backstory) => updateData('backstory', backstory)}
+          />
+        );
+
+      case 5:
+        return (
+          <VoiceSelector
+            selectedVoice={companionData.voiceConfig}
+            onVoiceSelect={(voice: VoiceConfig | null) => updateData('voiceConfig', voice)}
+            subscriptionTier={subscriptionTier}
+          />
+        );
+
+      case 6:
+        return (
           <div className="space-y-6">
             <div className="rounded-lg border border-border bg-muted/30 p-6">
               <div className="mb-4 flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-kirra-gradient text-2xl text-white">
-                  {companionData.name[0]?.toUpperCase() || '?'}
-                </div>
+                {companionData.avatarSelection?.startsWith('gradient:') ? (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-kirra-gradient text-2xl text-white">
+                    {companionData.name[0]?.toUpperCase() || '?'}
+                  </div>
+                ) : companionData.avatarSelection ? (
+                  <img
+                    src={companionData.avatarSelection}
+                    alt={companionData.name}
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-kirra-gradient text-2xl text-white">
+                    {companionData.name[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
                 <div>
                   <h3 className="text-xl font-bold">{companionData.name}</h3>
-                  <Badge variant="secondary" className="capitalize">
-                    {companionData.relationshipType}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="capitalize">
+                      {companionData.relationshipType}
+                    </Badge>
+                    {companionData.voiceConfig && (
+                      <Badge variant="outline" className="gap-1">
+                        <Volume2 className="h-3 w-3" />
+                        Voice enabled
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -424,6 +575,7 @@ export default function CreateCompanionPage() {
                     {companionData.traits.agreeableness > 60 && <Badge variant="outline">Friendly</Badge>}
                     {companionData.traits.openness > 60 && <Badge variant="outline">Creative</Badge>}
                     {companionData.traits.conscientiousness > 60 && <Badge variant="outline">Organized</Badge>}
+                    {companionData.traits.neuroticism < 40 && <Badge variant="outline">Calm</Badge>}
                   </div>
                 </div>
 
@@ -444,6 +596,15 @@ export default function CreateCompanionPage() {
                     {companionData.communicationStyle.humorLevel > 50 ? 'playful humor' : 'subtle humor'}
                   </p>
                 </div>
+
+                {companionData.backstory && (
+                  <div>
+                    <h4 className="mb-2 font-medium">Backstory</h4>
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {companionData.backstory}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -463,7 +624,7 @@ export default function CreateCompanionPage() {
             <div key={step.id} className="flex items-center">
               <div
                 className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-full transition-all',
+                  'flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full transition-all',
                   index < currentStep
                     ? 'bg-primary text-primary-foreground'
                     : index === currentStep
@@ -472,15 +633,15 @@ export default function CreateCompanionPage() {
                 )}
               >
                 {index < currentStep ? (
-                  <Check className="h-5 w-5" />
+                  <Check className="h-4 w-4 sm:h-5 sm:w-5" />
                 ) : (
-                  <step.icon className="h-5 w-5" />
+                  <step.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                 )}
               </div>
               {index < STEPS.length - 1 && (
                 <div
                   className={cn(
-                    'mx-2 h-1 w-12 rounded-full transition-all sm:w-20',
+                    'mx-1 h-1 w-4 sm:mx-2 sm:w-8 lg:w-12 rounded-full transition-all',
                     index < currentStep ? 'bg-primary' : 'bg-muted'
                   )}
                 />
@@ -488,14 +649,15 @@ export default function CreateCompanionPage() {
             </div>
           ))}
         </div>
-        <div className="mt-4 flex justify-between text-sm">
+        <div className="mt-4 flex justify-between text-xs sm:text-sm">
           {STEPS.map((step, index) => (
             <span
               key={step.id}
               className={cn(
-                'hidden sm:block',
+                'hidden sm:block text-center',
                 index === currentStep ? 'text-primary font-medium' : 'text-muted-foreground'
               )}
+              style={{ width: `${100 / STEPS.length}%` }}
             >
               {step.title}
             </span>
@@ -553,7 +715,7 @@ export default function CreateCompanionPage() {
             onClick={nextStep}
             disabled={!canProceed()}
           >
-            Next
+            {currentStep === 4 && !companionData.backstory ? 'Skip' : 'Next'}
             <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         )}

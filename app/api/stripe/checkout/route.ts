@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
+import type { Profile } from '@/types/database';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2025-02-24.acacia',
 });
 
 // Price IDs mapping - set these in your environment variables
@@ -60,12 +61,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Get or create Stripe customer
-    const { data: profile } = await supabase
+    const { data: profileData } = await supabase
       .from('profiles')
       .select('stripe_customer_id, email, full_name')
       .eq('id', user.id)
       .single();
 
+    const profile = profileData as Pick<Profile, 'stripe_customer_id' | 'email' | 'full_name'> | null;
     let customerId = profile?.stripe_customer_id;
 
     if (!customerId) {
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
       // Save customer ID to profile
       await supabase
         .from('profiles')
-        .update({ stripe_customer_id: customerId })
+        .update({ stripe_customer_id: customerId } as never)
         .eq('id', user.id);
     }
 

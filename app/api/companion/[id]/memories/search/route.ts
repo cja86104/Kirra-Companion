@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateEmbedding, cosineSimilarity } from '@/lib/ai/embeddings';
+import type { Memory, MemoryCategoryRow } from '@/types/database';
 
 interface SearchRequestBody {
   query: string;
   limit?: number;
+}
+
+// Type for memory with category joined
+interface MemoryWithCategory extends Pick<Memory, 'id' | 'title' | 'content' | 'importance_score' | 'embedding'> {
+  memory_categories: Pick<MemoryCategoryRow, 'name'> | null;
 }
 
 export async function POST(
@@ -34,14 +40,14 @@ export async function POST(
       );
     }
 
-    const { data: companion, error: companionError } = await supabase
+    const { data: companionData, error: companionError } = await supabase
       .from('companions')
       .select('id')
       .eq('id', companionId)
       .eq('user_id', user.id)
       .single();
 
-    if (companionError || !companion) {
+    if (companionError || !companionData) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -49,7 +55,7 @@ export async function POST(
     }
 
     // Get all memories for this companion
-    const { data: memories, error: memoriesError } = await supabase
+    const { data: memoriesData, error: memoriesError } = await supabase
       .from('memories')
       .select(`
         id,
@@ -72,6 +78,8 @@ export async function POST(
       );
     }
 
+    const memories = memoriesData as MemoryWithCategory[] | null;
+
     if (!memories || memories.length === 0) {
       return NextResponse.json({ results: [] });
     }
@@ -83,7 +91,7 @@ export async function POST(
 
     let results: Array<{
       id: string;
-      title: string;
+      title: string | null;
       content: string;
       importance_score: number;
       similarity: number;
@@ -111,7 +119,7 @@ export async function POST(
       
       results = memories
         .filter((m) => 
-          m.title.toLowerCase().includes(lowerQuery) ||
+          (m.title?.toLowerCase().includes(lowerQuery)) ||
           m.content.toLowerCase().includes(lowerQuery)
         )
         .map((memory) => ({
@@ -133,9 +141,7 @@ export async function POST(
         companion_id: companionId,
         access_type: 'search',
         context: { query, results_count: results.length },
-      })
-      .select()
-      .single();
+      } as never);
 
     return NextResponse.json({ results });
   } catch (error) {

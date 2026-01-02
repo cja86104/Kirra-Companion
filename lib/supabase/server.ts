@@ -1,6 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import type { Database } from '@/types/database';
+import type { Database, Profile, Companion, CompanionDNA, Message, Memory, MemoryCategoryRow, LifeEvent } from '@/types/database';
+import type { CookieOptions } from '@supabase/ssr';
+
+interface CookieToSet {
+  name: string;
+  value: string;
+  options?: CookieOptions;
+}
 
 /**
  * Create a Supabase client for use in Server Components
@@ -17,9 +24,9 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
+            cookiesToSet.forEach(({ name, value, options }: CookieToSet) =>
               cookieStore.set(name, value, options)
             );
           } catch {
@@ -63,7 +70,7 @@ export async function getCurrentSession() {
 /**
  * Get user profile from database
  */
-export async function getUserProfile() {
+export async function getUserProfile(): Promise<Profile | null> {
   const user = await getCurrentUser();
   
   if (!user) {
@@ -82,7 +89,7 @@ export async function getUserProfile() {
     return null;
   }
   
-  return profile;
+  return profile as Profile | null;
 }
 
 /**
@@ -96,7 +103,7 @@ export async function isAuthenticated() {
 /**
  * Get user's companions
  */
-export async function getUserCompanions() {
+export async function getUserCompanions(): Promise<Companion[]> {
   const user = await getCurrentUser();
   
   if (!user) {
@@ -116,13 +123,20 @@ export async function getUserCompanions() {
     return [];
   }
   
-  return companions;
+  return (companions as Companion[]) || [];
+}
+
+/**
+ * Companion with DNA joined type
+ */
+export interface CompanionWithDNA extends Companion {
+  companion_dna: CompanionDNA[] | null;
 }
 
 /**
  * Get a specific companion
  */
-export async function getCompanion(companionId: string) {
+export async function getCompanion(companionId: string): Promise<CompanionWithDNA | null> {
   const user = await getCurrentUser();
   
   if (!user) {
@@ -145,7 +159,7 @@ export async function getCompanion(companionId: string) {
     return null;
   }
   
-  return companion;
+  return companion as CompanionWithDNA | null;
 }
 
 /**
@@ -154,7 +168,7 @@ export async function getCompanion(companionId: string) {
 export async function getConversationMessages(
   conversationId: string,
   limit = 50
-) {
+): Promise<Message[]> {
   const supabase = await createClient();
   const { data: messages, error } = await supabase
     .from('messages')
@@ -169,7 +183,14 @@ export async function getConversationMessages(
     return [];
   }
   
-  return messages;
+  return (messages as Message[]) || [];
+}
+
+/**
+ * Memory with category joined type
+ */
+export interface MemoryWithCategory extends Memory {
+  memory_categories: Pick<MemoryCategoryRow, 'name' | 'icon' | 'color'> | null;
 }
 
 /**
@@ -178,7 +199,7 @@ export async function getConversationMessages(
 export async function getCompanionMemories(
   companionId: string,
   limit = 50
-) {
+): Promise<MemoryWithCategory[]> {
   const supabase = await createClient();
   const { data: memories, error } = await supabase
     .from('memories')
@@ -199,7 +220,7 @@ export async function getCompanionMemories(
     return [];
   }
   
-  return memories;
+  return (memories as MemoryWithCategory[]) || [];
 }
 
 /**
@@ -208,7 +229,7 @@ export async function getCompanionMemories(
 export async function getCompanionLifeEvents(
   companionId: string,
   limit = 20
-) {
+): Promise<LifeEvent[]> {
   const supabase = await createClient();
   const { data: events, error } = await supabase
     .from('life_events')
@@ -222,19 +243,29 @@ export async function getCompanionLifeEvents(
     return [];
   }
   
-  return events;
+  return (events as LifeEvent[]) || [];
+}
+
+/**
+ * Subscription status response type
+ */
+export interface SubscriptionStatusResponse {
+  tier: Profile['subscription_tier'];
+  status: Profile['subscription_status'];
+  periodEnd?: string | null;
+  canSendMessage: boolean;
 }
 
 /**
  * Check subscription status
  */
-export async function getSubscriptionStatus() {
+export async function getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
   const profile = await getUserProfile();
   
   if (!profile) {
     return {
-      tier: 'free' as const,
-      status: 'active' as const,
+      tier: 'free',
+      status: 'active',
       canSendMessage: false,
     };
   }

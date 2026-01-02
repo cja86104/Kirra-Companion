@@ -24,18 +24,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn, formatRelativeTime } from '@/lib/utils/cn';
+import type { MoodState } from '@/types/database';
 
 interface LifeEventCardProps {
   event: {
     id: string;
     event_type: string;
     title: string;
-    description: string;
-    mood_impact: number;
-    is_completed: boolean;
-    scheduled_at: string;
+    description: string | null;
+    mood_before?: MoodState | null;
+    mood_after?: MoodState | null;
+    scheduled_at: string | null;
     completed_at: string | null;
-    notify_user: boolean;
+    should_notify_user?: boolean;
   };
   companion: {
     id: string;
@@ -90,27 +91,31 @@ export function LifeEventCard({ event, companion }: LifeEventCardProps) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const getMoodLabel = (impact: number) => {
-    if (impact > 0.5) return { label: 'Very Happy', color: 'text-green-600' };
-    if (impact > 0.2) return { label: 'Happy', color: 'text-green-500' };
-    if (impact > -0.2) return { label: 'Neutral', color: 'text-muted-foreground' };
-    if (impact > -0.5) return { label: 'Sad', color: 'text-yellow-600' };
-    return { label: 'Very Sad', color: 'text-red-500' };
+  const getMoodLabel = (moodState: MoodState | null | undefined) => {
+    if (!moodState) return { label: 'Neutral', color: 'text-muted-foreground' };
+    const primary = moodState.primary || 'neutral';
+    
+    if (primary === 'happy' || primary === 'excited') return { label: 'Happy', color: 'text-green-500' };
+    if (primary === 'sad' || primary === 'melancholy') return { label: 'Sad', color: 'text-yellow-600' };
+    if (primary === 'angry' || primary === 'frustrated') return { label: 'Upset', color: 'text-red-500' };
+    return { label: 'Neutral', color: 'text-muted-foreground' };
   };
 
-  const mood = getMoodLabel(event.mood_impact);
+  const mood = getMoodLabel(event.mood_after || event.mood_before);
+  const isCompleted = event.completed_at !== null;
+  const notifyUser = event.should_notify_user ?? false;
 
   return (
     <div className="relative">
       {/* Timeline Dot */}
       <div className={cn(
         'absolute -left-[31px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-background',
-        event.is_completed ? 'bg-primary' : 'bg-muted'
+        isCompleted ? 'bg-primary' : 'bg-muted'
       )} />
 
       <Card className={cn(
         'transition-all hover:shadow-md',
-        !event.is_completed && 'opacity-60'
+        !isCompleted && 'opacity-60'
       )}>
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
@@ -125,7 +130,7 @@ export function LifeEventCard({ event, companion }: LifeEventCardProps) {
                 <div>
                   <h3 className="font-medium">{event.title}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {event.description}
+                    {event.description || ''}
                   </p>
                 </div>
 
@@ -148,7 +153,7 @@ export function LifeEventCard({ event, companion }: LifeEventCardProps) {
               {/* Footer */}
               <div className="mt-3 flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
-                  {formatRelativeTime(event.scheduled_at)}
+                  {event.scheduled_at ? formatRelativeTime(event.scheduled_at) : 'Unscheduled'}
                 </span>
                 
                 <Badge variant="outline" className="text-xs">
@@ -159,7 +164,7 @@ export function LifeEventCard({ event, companion }: LifeEventCardProps) {
                   {mood.label}
                 </span>
 
-                {event.notify_user && !event.is_completed && (
+                {notifyUser && !isCompleted && (
                   <Badge variant="secondary" className="text-xs">
                     Will notify you
                   </Badge>
@@ -167,7 +172,7 @@ export function LifeEventCard({ event, companion }: LifeEventCardProps) {
               </div>
 
               {/* Action */}
-              {event.notify_user && companion && (
+              {notifyUser && companion && (
                 <div className="mt-3">
                   <Button size="sm" variant="outline" asChild>
                     <Link href={`/chat/${companion.id}`}>

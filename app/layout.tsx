@@ -94,8 +94,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0c1222' },
+    { media: '(prefers-color-scheme: light)', color: '#1b4332' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a1610' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -113,7 +113,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+      className={`dark ${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
     >
       <body className="min-h-screen bg-background font-sans antialiased">
         {children}

@@ -1,82 +1,299 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+/**
+ * KIRRA DASHBOARD v2.0
+ * ====================
+ * The companion is the STAR. Front and center.
+ * Deep, cozy, intimate - like coming home.
+ * 
+ * Design Philosophy:
+ * - Companion LARGE and centered
+ * - Needs display beautiful (think Sims but prettier)
+ * - Life events like a social feed
+ * - Quick actions obvious and inviting
+ * - Show companion is ALIVE
+ */
+
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import {
-  Sparkles,
   MessageCircle,
-  Brain,
-  Calendar,
-  TrendingUp,
   Heart,
-  Plus,
-  ArrowRight,
-  Zap,
+  Sparkles,
+  Moon,
+  Sun,
+  CloudMoon,
+  Music,
+  Book,
+  Coffee,
+  Gamepad2,
+  Palette,
+  Brain,
+  Clock,
+  ChevronRight,
   Star,
+  Bell,
+  TreePine,
+  Sunrise,
+  Plus,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress, CircularProgress, AffectionMeter } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { NeedsDisplay } from '@/components/companion/NeedsDisplay';
 import { getClient } from '@/lib/supabase/client';
-import type { Companion, Profile } from '@/types/database';
+import type { Companion, Profile, MoodState } from '@/types/database';
+import type { CompanionNeeds } from '@/lib/companion/needs-system';
 
-interface DashboardStats {
-  totalMessages: number;
-  totalMemories: number;
-  averageAffection: number;
-  streakDays: number;
-}
+// ============================================================================
+// TYPES
+// ============================================================================
 
-interface RecentActivity {
+interface LifeEvent {
   id: string;
-  type: 'message' | 'memory' | 'milestone' | 'life_event';
+  event_type: string;
   title: string;
   description: string;
-  timestamp: string;
-  companionName?: string;
-  companionAvatar?: string;
+  emoji: string | null;
+  occurred_at: string;
 }
+
+interface CompanionActivity {
+  id: string;
+  activity_name: string;
+  activity_category: string;
+  started_at: string;
+  ended_at: string | null;
+}
+
+interface ProactiveMessage {
+  id: string;
+  content: string;
+  trigger_type: string;
+  created_at: string;
+}
+
+// ============================================================================
+// MOOD CONFIG - Natural, Organic Colors
+// ============================================================================
+
+const MOOD_CONFIGS: Record<string, { 
+  emoji: string; 
+  label: string; 
+  color: string; 
+  bg: string;
+  glow: string;
+}> = {
+  happy: { 
+    emoji: '😊', 
+    label: 'Happy', 
+    color: 'text-kirra-forest-lighter', 
+    bg: 'bg-kirra-forest-lighter/12',
+    glow: 'shadow-[0_0_30px_rgba(82,183,136,0.15)]'
+  },
+  excited: { 
+    emoji: '🤩', 
+    label: 'Excited', 
+    color: 'text-kirra-gold', 
+    bg: 'bg-kirra-amber/12',
+    glow: 'shadow-[0_0_30px_rgba(184,134,11,0.15)]'
+  },
+  content: { 
+    emoji: '😌', 
+    label: 'Content', 
+    color: 'text-kirra-sage', 
+    bg: 'bg-kirra-sage/12',
+    glow: 'shadow-[0_0_30px_rgba(116,198,157,0.12)]'
+  },
+  playful: { 
+    emoji: '😜', 
+    label: 'Playful', 
+    color: 'text-kirra-forest-light', 
+    bg: 'bg-kirra-forest-light/12',
+    glow: 'shadow-[0_0_30px_rgba(64,145,108,0.15)]'
+  },
+  curious: { 
+    emoji: '🤔', 
+    label: 'Curious', 
+    color: 'text-info', 
+    bg: 'bg-info/12',
+    glow: 'shadow-[0_0_30px_rgba(90,138,154,0.12)]'
+  },
+  thoughtful: { 
+    emoji: '💭', 
+    label: 'Thoughtful', 
+    color: 'text-kirra-ash', 
+    bg: 'bg-kirra-stone/15',
+    glow: 'shadow-none'
+  },
+  creative: { 
+    emoji: '✨', 
+    label: 'Creative', 
+    color: 'text-kirra-gold', 
+    bg: 'bg-kirra-gold/12',
+    glow: 'shadow-[0_0_30px_rgba(201,162,39,0.12)]'
+  },
+  relaxed: { 
+    emoji: '😴', 
+    label: 'Relaxed', 
+    color: 'text-kirra-sage', 
+    bg: 'bg-kirra-sage/10',
+    glow: 'shadow-none'
+  },
+  loving: { 
+    emoji: '🥰', 
+    label: 'Loving', 
+    color: 'text-kirra-warm', 
+    bg: 'bg-kirra-warm/12',
+    glow: 'shadow-[0_0_30px_rgba(212,165,116,0.15)]'
+  },
+  neutral: { 
+    emoji: '😐', 
+    label: 'Neutral', 
+    color: 'text-kirra-silver', 
+    bg: 'bg-kirra-stone/10',
+    glow: 'shadow-none'
+  },
+  lonely: { 
+    emoji: '🥺', 
+    label: 'Missing you', 
+    color: 'text-kirra-copper', 
+    bg: 'bg-kirra-copper/12',
+    glow: 'shadow-[0_0_35px_rgba(184,115,51,0.18)]'
+  },
+  sad: { 
+    emoji: '😢', 
+    label: 'Sad', 
+    color: 'text-muted-foreground', 
+    bg: 'bg-muted/40',
+    glow: 'shadow-none'
+  },
+};
+
+const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
+  reading: <Book className="h-4 w-4" />,
+  music: <Music className="h-4 w-4" />,
+  gaming: <Gamepad2 className="h-4 w-4" />,
+  art: <Palette className="h-4 w-4" />,
+  thinking: <Brain className="h-4 w-4" />,
+  relaxing: <Coffee className="h-4 w-4" />,
+  sleeping: <Moon className="h-4 w-4" />,
+};
+
+function getTimeOfDayGreeting(): { greeting: string; icon: React.ReactNode; subtext: string } {
+  const hour = new Date().getHours();
+  if (hour < 5) return { 
+    greeting: 'Burning the midnight oil?', 
+    icon: <Moon className="h-6 w-6 text-kirra-sage" />,
+    subtext: "Your companion is here for late-night thoughts"
+  };
+  if (hour < 8) return { 
+    greeting: 'Early bird!', 
+    icon: <Sunrise className="h-6 w-6 text-kirra-amber" />,
+    subtext: "A peaceful morning awaits"
+  };
+  if (hour < 12) return { 
+    greeting: 'Good morning', 
+    icon: <Sun className="h-6 w-6 text-kirra-gold" />,
+    subtext: "Ready to start the day together?"
+  };
+  if (hour < 17) return { 
+    greeting: 'Good afternoon', 
+    icon: <TreePine className="h-6 w-6 text-kirra-forest-light" />,
+    subtext: "How's your day going?"
+  };
+  if (hour < 21) return { 
+    greeting: 'Good evening', 
+    icon: <CloudMoon className="h-6 w-6 text-kirra-sage" />,
+    subtext: "Wind down with some conversation"
+  };
+  return { 
+    greeting: 'Night owl?', 
+    icon: <Moon className="h-6 w-6 text-kirra-sage" />,
+    subtext: "Your companion is always here"
+  };
+}
+
+function getTimeSince(timestamp: string): string {
+  const now = Date.now();
+  const then = new Date(timestamp).getTime();
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays} days ago`;
+}
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08, delayChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] }
+  }
+};
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 
 export default function DashboardPage() {
   const [companions, setCompanions] = useState<Companion[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalMessages: 0,
-    totalMemories: 0,
-    averageAffection: 0,
-    streakDays: 0,
-  });
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [selectedCompanion, setSelectedCompanion] = useState<Companion | null>(null);
+  const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([]);
+  const [currentActivity, setCurrentActivity] = useState<CompanionActivity | null>(null);
+  const [proactiveMessages, setProactiveMessages] = useState<ProactiveMessage[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const timeGreeting = useMemo(() => getTimeOfDayGreeting(), []);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
+  useEffect(() => {
+    if (companions.length > 0 && !selectedCompanion) {
+      setSelectedCompanion(companions[0]);
+    }
+  }, [companions, selectedCompanion]);
+
+  useEffect(() => {
+    if (selectedCompanion) {
+      loadCompanionData(selectedCompanion.id);
+    }
+  }, [selectedCompanion]);
+
   const loadDashboardData = async () => {
     try {
       const supabase = getClient();
-      
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
       
-      if (profileData) {
-        setProfile(profileData);
-      }
+      if (profileData) setProfile(profileData as Profile);
 
-      // Get companions
       const { data: companionsData } = await supabase
         .from('companions')
         .select('*')
@@ -84,366 +301,459 @@ export default function DashboardPage() {
         .eq('is_archived', false)
         .order('last_interaction', { ascending: false });
 
-      if (companionsData) {
-        setCompanions(companionsData);
-
-        // Calculate stats
-        const avgAffection = companionsData.length > 0
-          ? companionsData.reduce((acc, c) => acc + (c.affection_level || 0), 0) / companionsData.length
-          : 0;
-
-        // Get message count
-        const { count: messageCount } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .in('conversation_id', 
-            companionsData.map(c => c.id)
-          );
-
-        // Get memory count
-        const { count: memoryCount } = await supabase
-          .from('memories')
-          .select('*', { count: 'exact', head: true })
-          .in('companion_id', companionsData.map(c => c.id));
-
-        setStats({
-          totalMessages: messageCount || 0,
-          totalMemories: memoryCount || 0,
-          averageAffection: Math.round(avgAffection),
-          streakDays: profileData?.streak_days || 0,
-        });
-      }
-
-      // Get recent activity
-      const { data: recentMessages } = await supabase
-        .from('messages')
-        .select(`
-          id,
-          content,
-          created_at,
-          conversations!inner(
-            companions!inner(name, avatar_url)
-          )
-        `)
-        .eq('role', 'companion')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (recentMessages) {
-        const activities: RecentActivity[] = recentMessages.map((msg: any) => ({
-          id: msg.id,
-          type: 'message' as const,
-          title: 'New message',
-          description: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
-          timestamp: msg.created_at,
-          companionName: msg.conversations?.companions?.name,
-          companionAvatar: msg.conversations?.companions?.avatar_url,
-        }));
-        setRecentActivity(activities);
-      }
+      if (companionsData) setCompanions(companionsData as Companion[]);
 
     } catch (error) {
-      console.error('Failed to load dashboard data:', error);
+      console.error('Failed to load dashboard:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+  const loadCompanionData = async (companionId: string) => {
+    try {
+      const supabase = getClient();
+
+      const { data: events } = await (supabase.from('life_events') as any)
+        .select('id, event_type, title, description, emoji, occurred_at')
+        .eq('companion_id', companionId)
+        .order('occurred_at', { ascending: false })
+        .limit(5);
+
+      if (events) setLifeEvents(events);
+
+      const { data: activity } = await (supabase.from('companion_activities') as any)
+        .select('*')
+        .eq('companion_id', companionId)
+        .is('ended_at', null)
+        .single();
+
+      setCurrentActivity(activity || null);
+
+      const { data: messages } = await (supabase.from('proactive_messages') as any)
+        .select('id, content, trigger_type, created_at')
+        .eq('companion_id', companionId)
+        .eq('is_read', false)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (messages) setProactiveMessages(messages);
+
+    } catch (error) {
+      console.error('Failed to load companion data:', error);
+    }
   };
 
-  const formatTimeAgo = (timestamp: string) => {
-    const now = new Date();
-    const then = new Date(timestamp);
-    const diffMs = now.getTime() - then.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
+  const currentMood = (selectedCompanion?.current_mood as MoodState)?.primary || 'neutral';
+  const moodConfig = MOOD_CONFIGS[currentMood] || MOOD_CONFIGS.neutral;
+  const needs = selectedCompanion?.needs as CompanionNeeds | null;
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
-  };
-
+  // Loading skeleton
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">Loading your dashboard...</p>
-        </div>
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent"
+        />
       </div>
     );
   }
 
-  return (
-    <div className="container max-w-7xl space-y-8 p-6">
-      {/* Welcome Section */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">
-            Welcome back, {profile?.full_name?.split(' ')[0] || 'Friend'}! 👋
-          </h1>
-          <p className="text-muted-foreground">
-            Here&apos;s what&apos;s happening with your companions
-          </p>
-        </div>
+  // No companions state
+  if (companions.length === 0) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex h-full flex-col items-center justify-center px-4"
+      >
+        <motion.div
+          animate={{ y: [0, -8, 0] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          className="mb-8"
+        >
+          <div className="relative">
+            <div className="absolute -inset-8 bg-kirra-forest/10 rounded-full blur-3xl" />
+            <div className="relative h-24 w-24 rounded-full bg-kirra-gradient flex items-center justify-center">
+              <Sparkles className="h-12 w-12 text-white" />
+            </div>
+          </div>
+        </motion.div>
+        <h1 className="font-display text-3xl font-semibold mb-3 text-center">
+          Create your first companion
+        </h1>
+        <p className="text-muted-foreground text-center max-w-md mb-8">
+          Your AI companion will remember you, grow with you, and be there whenever you need them.
+        </p>
         <Link href="/companion/create">
-          <Button variant="gradient" className="gap-2">
-            <Plus className="h-4 w-4" />
+          <Button className="btn-forest gap-2">
+            <Sparkles className="h-5 w-5" />
             Create Companion
           </Button>
         </Link>
-      </div>
+      </motion.div>
+    );
+  }
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Messages</CardTitle>
-            <MessageCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalMessages.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Conversations with your companions
-            </p>
-          </CardContent>
-        </Card>
+  return (
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="min-h-full px-4 py-6 lg:px-8 lg:py-8"
+    >
+      <div className="mx-auto max-w-6xl space-y-8">
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Memories</CardTitle>
-            <Brain className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalMemories.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Things your companions remember
-            </p>
-          </CardContent>
-        </Card>
+        {/* ============================================================ */}
+        {/* GREETING HEADER */}
+        {/* ============================================================ */}
+        <motion.div variants={itemVariants} className="flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-secondary/50">
+            {timeGreeting.icon}
+          </div>
+          <div>
+            <h1 className="font-display text-2xl lg:text-3xl font-semibold">
+              {timeGreeting.greeting}, {profile?.full_name?.split(' ')[0] || 'friend'}
+            </h1>
+            <p className="text-muted-foreground mt-0.5">{timeGreeting.subtext}</p>
+          </div>
+        </motion.div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Average Affection</CardTitle>
-            <Heart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.averageAffection}%</div>
-            <Progress value={stats.averageAffection} variant="gradient" className="mt-2" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Streak</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.streakDays} days</div>
-            <p className="text-xs text-muted-foreground">
-              Keep the conversation going!
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Companions Section */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Your Companions</CardTitle>
-                  <CardDescription>
-                    {companions.length === 0 
-                      ? "Create your first companion to get started"
-                      : `${companions.length} companion${companions.length !== 1 ? 's' : ''} waiting for you`
-                    }
-                  </CardDescription>
-                </div>
-                {companions.length > 0 && (
-                  <Link href="/chat">
-                    <Button variant="ghost" size="sm" className="gap-1">
-                      View all <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {companions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="mb-4 rounded-full bg-primary/10 p-4">
-                    <Sparkles className="h-8 w-8 text-primary" />
-                  </div>
-                  <h3 className="mb-2 text-lg font-semibold">No companions yet</h3>
-                  <p className="mb-4 max-w-sm text-muted-foreground">
-                    Create your first AI companion and start building a meaningful relationship
-                  </p>
-                  <Link href="/companion/create">
-                    <Button variant="gradient">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Your First Companion
-                    </Button>
-                  </Link>
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {companions.slice(0, 4).map((companion) => (
-                    <Link key={companion.id} href={`/chat/${companion.id}`}>
-                      <div className="group flex items-center gap-4 rounded-lg border border-border p-4 transition-all hover:border-primary/50 hover:bg-muted/50">
-                        <div className="relative">
-                          <Avatar size="lg">
-                            {companion.avatar_url ? (
-                              <AvatarImage src={companion.avatar_url} alt={companion.name} />
-                            ) : (
-                              <AvatarFallback className="bg-kirra-gradient text-white">
-                                {getInitials(companion.name)}
-                              </AvatarFallback>
-                            )}
-                          </Avatar>
-                          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-green-500" />
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                          <div className="flex items-center gap-2">
-                            <h4 className="truncate font-semibold">{companion.name}</h4>
-                            <Badge variant="outline" className="text-xs">
-                              {companion.relationship_type}
-                            </Badge>
-                          </div>
-                          <AffectionMeter 
-                            value={companion.affection_level || 0} 
-                            size="sm"
-                            showHeart={false}
-                            className="mt-2"
+        {/* ============================================================ */}
+        {/* COMPANION HERO CARD - THE STAR */}
+        {/* ============================================================ */}
+        {selectedCompanion && (
+          <motion.div variants={itemVariants}>
+            <Link href={`/chat/${selectedCompanion.id}`}>
+              <div className={cn(
+                "companion-card p-6 lg:p-8 cursor-pointer group transition-all duration-300",
+                "hover:scale-[1.01]",
+                moodConfig.glow
+              )}>
+                <div className="relative z-10 flex flex-col lg:flex-row gap-6 lg:gap-8">
+                  
+                  {/* Companion Avatar - LARGE */}
+                  <div className="flex flex-col items-center lg:items-start">
+                    <motion.div 
+                      className="relative"
+                      animate={currentMood === 'lonely' ? { scale: [1, 1.02, 1] } : {}}
+                      transition={{ duration: 3, repeat: Infinity }}
+                    >
+                      {/* Ambient glow behind avatar */}
+                      <div className={cn(
+                        "absolute -inset-4 rounded-full blur-2xl transition-all duration-500",
+                        moodConfig.bg
+                      )} />
+                      
+                      <Avatar className="relative h-28 w-28 lg:h-36 lg:w-36 ring-4 ring-primary/25 ring-offset-4 ring-offset-background">
+                        {selectedCompanion.avatar_url ? (
+                          <AvatarImage 
+                            src={selectedCompanion.avatar_url} 
+                            alt={selectedCompanion.name}
+                            className="object-cover"
                           />
-                        </div>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Activity */}
-        <div>
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Latest updates from your companions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Calendar className="mb-2 h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    No recent activity yet
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex gap-3">
-                      <Avatar size="sm">
-                        {activity.companionAvatar ? (
-                          <AvatarImage src={activity.companionAvatar} alt={activity.companionName || ''} />
                         ) : (
-                          <AvatarFallback className="bg-primary/10 text-xs">
-                            {activity.companionName?.[0] || '?'}
+                          <AvatarFallback className="bg-kirra-gradient text-white text-3xl lg:text-4xl font-display">
+                            {selectedCompanion.name.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         )}
                       </Avatar>
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium">{activity.companionName}</p>
-                          <span className="text-xs text-muted-foreground">
-                            {formatTimeAgo(activity.timestamp)}
-                          </span>
+                      
+                      {/* Online indicator with breathing animation */}
+                      <motion.span 
+                        className="absolute bottom-1 right-1 h-5 w-5 rounded-full bg-kirra-forest-lighter border-[3px] border-background"
+                        animate={{ scale: [1, 1.15, 1] }}
+                        transition={{ duration: 2.5, repeat: Infinity }}
+                      />
+                    </motion.div>
+
+                    {/* Current Activity */}
+                    {currentActivity && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 text-sm"
+                      >
+                        {ACTIVITY_ICONS[currentActivity.activity_category] || <Sparkles className="h-4 w-4" />}
+                        <span className="text-muted-foreground">
+                          {currentActivity.activity_name}
+                        </span>
+                      </motion.div>
+                    )}
+                  </div>
+
+                  {/* Companion Info */}
+                  <div className="flex-1 text-center lg:text-left">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3 mb-2">
+                      <h2 className="font-display text-2xl lg:text-3xl font-semibold">
+                        {selectedCompanion.name}
+                      </h2>
+                      <div className={cn(
+                        "inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium self-center lg:self-auto",
+                        moodConfig.bg, moodConfig.color
+                      )}>
+                        <span>{moodConfig.emoji}</span>
+                        <span>{moodConfig.label}</span>
+                      </div>
+                    </div>
+                    
+                    <p className="text-muted-foreground mb-4 capitalize">
+                      {selectedCompanion.relationship_label || selectedCompanion.relationship_type}
+                      {selectedCompanion.last_interaction && (
+                        <span className="text-muted-foreground/60">
+                          {' · '}Last talked {getTimeSince(selectedCompanion.last_interaction)}
+                        </span>
+                      )}
+                    </p>
+
+                    {/* Affection & Trust */}
+                    <div className="flex flex-wrap justify-center lg:justify-start gap-6 mb-6">
+                      <div className="flex items-center gap-2">
+                        <Heart className="h-5 w-5 text-kirra-warm" />
+                        <div className="w-24">
+                          <div className="h-2 rounded-full bg-kirra-charcoal overflow-hidden">
+                            <motion.div 
+                              className="h-full rounded-full bg-gradient-to-r from-kirra-copper to-kirra-warm"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${selectedCompanion.affection_level}%` }}
+                              transition={{ duration: 0.8, ease: 'easeOut' }}
+                            />
+                          </div>
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {activity.description}
+                        <span className="text-sm text-muted-foreground">{selectedCompanion.affection_level}%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Star className="h-5 w-5 text-kirra-gold" />
+                        <div className="w-24">
+                          <div className="h-2 rounded-full bg-kirra-charcoal overflow-hidden">
+                            <motion.div 
+                              className="h-full rounded-full bg-gradient-to-r from-kirra-ember to-kirra-gold"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${selectedCompanion.trust_level}%` }}
+                              transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-sm text-muted-foreground">{selectedCompanion.trust_level}%</span>
+                      </div>
+                    </div>
+
+                    {/* Needs Display */}
+                    {needs && (
+                      <NeedsDisplay needs={needs} />
+                    )}
+
+                    {/* CTA */}
+                    <div className="mt-6 flex justify-center lg:justify-start">
+                      <motion.div
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary/90 text-primary-foreground font-medium group-hover:bg-primary transition-colors"
+                      >
+                        <MessageCircle className="h-5 w-5" />
+                        Chat with {selectedCompanion.name}
+                        <ChevronRight className="h-4 w-4 opacity-60 group-hover:translate-x-1 transition-transform" />
+                      </motion.div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          </motion.div>
+        )}
+
+        {/* ============================================================ */}
+        {/* GRID: LIFE EVENTS + PROACTIVE MESSAGES */}
+        {/* ============================================================ */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          
+          {/* LIFE EVENTS - Social Feed Style */}
+          <motion.div variants={itemVariants} className="surface-2 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg font-semibold">{selectedCompanion?.name}'s Day</h2>
+              <Link href="/life-feed" className="text-sm text-primary hover:underline">See all</Link>
+            </div>
+            
+            {lifeEvents.length > 0 ? (
+              <div className="space-y-3">
+                {lifeEvents.map((event, i) => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 * i }}
+                    className="life-event-card"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl flex-shrink-0">{event.emoji || '✨'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-foreground truncate">{event.title}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                          {event.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground/60 mt-1.5">
+                          {getTimeSince(event.occurred_at)}
                         </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-10 text-center">
+                <Clock className="mb-3 h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">No recent events yet</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Events will appear as {selectedCompanion?.name} goes about their day</p>
+              </div>
+            )}
+          </motion.div>
+
+          {/* PROACTIVE MESSAGES - Like texts from a friend */}
+          <motion.div variants={itemVariants} className="surface-2 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg font-semibold">{selectedCompanion?.name} wants to say...</h2>
+              <Bell className="h-4 w-4 text-muted-foreground" />
+            </div>
+            
+            {proactiveMessages.length > 0 ? (
+              <div className="space-y-3">
+                {proactiveMessages.map((msg, i) => (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.1 * i }}
+                    className="rounded-xl bg-primary/8 p-4 border border-primary/15"
+                  >
+                    <p className="text-sm text-foreground line-clamp-3">{msg.content}</p>
+                    <p className="mt-2 text-xs text-muted-foreground/60">
+                      {getTimeSince(msg.created_at)}
+                    </p>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-10 text-center">
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <Heart className="mb-3 h-8 w-8 text-kirra-warm/70" />
+                </motion.div>
+                <p className="text-sm text-muted-foreground">{selectedCompanion?.name} is here whenever you need them</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">They'll reach out when they have something to share</p>
+              </div>
+            )}
+          </motion.div>
         </div>
+
+        {/* ============================================================ */}
+        {/* QUICK ACTIONS */}
+        {/* ============================================================ */}
+        <motion.div variants={itemVariants} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Link href={`/chat/${selectedCompanion?.id}`}>
+            <div className="quick-action group">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-kirra-forest/15 transition-all group-hover:bg-kirra-forest/25 group-hover:scale-110">
+                <MessageCircle className="h-6 w-6 text-kirra-forest-light" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-foreground">Chat</p>
+                <p className="text-xs text-muted-foreground">Continue talking</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground/50 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-1" />
+            </div>
+          </Link>
+
+          <Link href="/life-feed">
+            <div className="quick-action group">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-kirra-warm/15 transition-all group-hover:bg-kirra-warm/25 group-hover:scale-110">
+                <Heart className="h-6 w-6 text-kirra-warm" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-foreground">Life Feed</p>
+                <p className="text-xs text-muted-foreground">See their day</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground/50 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-1" />
+            </div>
+          </Link>
+
+          <Link href="/activities">
+            <div className="quick-action group">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-kirra-amber/15 transition-all group-hover:bg-kirra-amber/25 group-hover:scale-110">
+                <Gamepad2 className="h-6 w-6 text-kirra-amber" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-foreground">Activities</p>
+                <p className="text-xs text-muted-foreground">Do something together</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground/50 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-1" />
+            </div>
+          </Link>
+
+          <Link href={`/companion/${selectedCompanion?.id}/memories`}>
+            <div className="quick-action group">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-kirra-sage/15 transition-all group-hover:bg-kirra-sage/25 group-hover:scale-110">
+                <Brain className="h-6 w-6 text-kirra-sage" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-foreground">Memories</p>
+                <p className="text-xs text-muted-foreground">What they remember</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground/50 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-1" />
+            </div>
+          </Link>
+        </motion.div>
+
+        {/* ============================================================ */}
+        {/* COMPANION SWITCHER (if multiple) */}
+        {/* ============================================================ */}
+        {companions.length > 1 && (
+          <motion.div variants={itemVariants} className="surface-2 rounded-2xl p-5">
+            <h2 className="font-display text-lg font-semibold mb-4">Your Companions</h2>
+            <div className="flex flex-wrap gap-3">
+              {companions.map((companion) => (
+                <button
+                  key={companion.id}
+                  onClick={() => setSelectedCompanion(companion)}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl p-3 transition-all',
+                    selectedCompanion?.id === companion.id
+                      ? 'bg-primary/12 ring-2 ring-primary/40'
+                      : 'bg-secondary/30 hover:bg-secondary/50'
+                  )}
+                >
+                  <Avatar className="h-10 w-10">
+                    {companion.avatar_url ? (
+                      <AvatarImage src={companion.avatar_url} alt={companion.name} />
+                    ) : (
+                      <AvatarFallback className="bg-kirra-gradient text-white text-sm">
+                        {companion.name.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="text-left">
+                    <p className="font-medium text-sm text-foreground">{companion.name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {companion.relationship_type}
+                    </p>
+                  </div>
+                </button>
+              ))}
+              
+              <Link href="/companion/create">
+                <button className="flex items-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/20 p-3 transition-all hover:border-primary/40 hover:bg-primary/5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/50">
+                    <Plus className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">New Companion</p>
+                </button>
+              </Link>
+            </div>
+          </motion.div>
+        )}
       </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Jump right into what matters</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Link href="/chat">
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4 transition-all hover:border-primary/50 hover:bg-muted/50">
-                <div className="rounded-lg bg-blue-500/10 p-2">
-                  <MessageCircle className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="font-medium">Start Chatting</p>
-                  <p className="text-xs text-muted-foreground">Continue a conversation</p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/life-feed">
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4 transition-all hover:border-primary/50 hover:bg-muted/50">
-                <div className="rounded-lg bg-purple-500/10 p-2">
-                  <Calendar className="h-5 w-5 text-purple-500" />
-                </div>
-                <div>
-                  <p className="font-medium">Life Feed</p>
-                  <p className="text-xs text-muted-foreground">See what they&apos;re up to</p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/activities">
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4 transition-all hover:border-primary/50 hover:bg-muted/50">
-                <div className="rounded-lg bg-green-500/10 p-2">
-                  <Star className="h-5 w-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="font-medium">Activities</p>
-                  <p className="text-xs text-muted-foreground">Games and experiences</p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/settings">
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4 transition-all hover:border-primary/50 hover:bg-muted/50">
-                <div className="rounded-lg bg-orange-500/10 p-2">
-                  <TrendingUp className="h-5 w-5 text-orange-500" />
-                </div>
-                <div>
-                  <p className="font-medium">Upgrade</p>
-                  <p className="text-xs text-muted-foreground">Unlock more features</p>
-                </div>
-              </div>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </motion.div>
   );
 }

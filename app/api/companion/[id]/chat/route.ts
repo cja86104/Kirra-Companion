@@ -4,7 +4,7 @@ import {
   createChatCompletion, 
   buildCompanionSystemPrompt,
   type ChatMessage 
-} from '@/lib/ai/anthropic';
+} from '@/lib/ai/chat-client';
 import { getMessageLimitForTier } from '@/lib/ai/config';
 import { 
   checkMessageSafety, 
@@ -26,11 +26,32 @@ import {
   getAgeAppropriateSystemPrompt,
   type AgeTier,
 } from '@/lib/safety/age-verification';
+import { processLifeEventFromChat } from '@/lib/companion/life-events';
+import { processMemoriesFromChat } from '@/lib/companion/memory-extraction';
+import type { Profile, Companion, CompanionDNA, Message } from '@/types/database';
 
 interface ChatRequestBody {
   message: string;
   conversationId: string;
 }
+
+// Type for companion with DNA joined
+interface CompanionWithDNA extends Companion {
+  companion_dna: CompanionDNA[] | null;
+}
+
+// Type for profile fields we need
+type ChatProfile = Pick<Profile, 
+  | 'subscription_tier' 
+  | 'messages_today' 
+  | 'messages_reset_at' 
+  | 'age_tier' 
+  | 'is_minor_flagged' 
+  | 'behavioral_profile'
+>;
+
+// Type for message with role and content
+type MessageWithRoleContent = Pick<Message, 'role' | 'content'>;
 
 export async function POST(
   request: NextRequest,
@@ -60,12 +81,13 @@ export async function POST(
     }
 
     // Get user profile for tier, limits, and age verification
-    const { data: profile } = await supabase
+    const { data: profileData } = await supabase
       .from('profiles')
       .select('subscription_tier, messages_today, messages_reset_at, age_tier, is_minor_flagged, behavioral_profile')
       .eq('id', user.id)
       .single();
 
+    const profile = profileData as ChatProfile | null;
     const subscriptionTier = profile?.subscription_tier || 'free';
     const ageTier = (profile?.age_tier || 'adult') as AgeTier;
     const isMinorFlagged = profile?.is_minor_flagged || false;
@@ -80,7 +102,7 @@ export async function POST(
       if (resetAt.toDateString() !== now.toDateString()) {
         await supabase
           .from('profiles')
-          .update({ messages_today: 0, messages_reset_at: now.toISOString() })
+          .update({ messages_today: 0, messages_reset_at: now.toISOString() } as never)
           .eq('id', user.id);
       } else if (profile.messages_today >= messageLimit) {
         return NextResponse.json(
@@ -117,7 +139,7 @@ export async function POST(
           severity: crisisLog.severity,
           keywords_matched: crisisLog.matchedKeywords,
           response_provided: crisisLog.responseProvided,
-        });
+        } as never);
 
       // Save user message
       await supabase
@@ -131,7 +153,7 @@ export async function POST(
           content_type: 'text',
           tokens_used: 0,
           metadata: { crisis_detected: true, crisis_type: safetyResult.crisisType },
-        });
+        } as never);
 
       // Return the safety response - COMPANION BREAKS CHARACTER
       const { data: safetyMessage } = await supabase
@@ -145,13 +167,13 @@ export async function POST(
           content_type: 'text',
           tokens_used: 0,
           metadata: { is_safety_response: true, crisis_type: safetyResult.crisisType },
-        })
+        } as never)
         .select()
         .single();
 
       return NextResponse.json({
         userMessage: { content: message },
-        companionMessage: safetyMessage,
+        companionMessage: safetyMessage as unknown as Message,
         isCrisisResponse: true,
         resources: safetyResult.resources,
       });
@@ -173,7 +195,7 @@ export async function POST(
           is_minor_flagged: true,
           minor_flagged_at: new Date().toISOString(),
           minor_flag_reason: behavioralDetection.triggers.join('; '),
-        })
+        } as never)
         .eq('id', user.id);
 
       // Log the detection
@@ -186,7 +208,7 @@ export async function POST(
           categories: behavioralDetection.triggerCategories,
           confidence: behavioralDetection.confidence,
           detected_age: behavioralDetection.detectedAge,
-        });
+        } as never);
 
       console.log(`User ${user.id} flagged as minor. Triggers: ${behavioralDetection.triggers.join(', ')}`);
     }
@@ -198,7 +220,7 @@ export async function POST(
     // ============================================================
 
     // Get companion with DNA
-    const { data: companion, error: companionError } = await supabase
+    const { data: companionData, error: companionError } = await supabase
       .from('companions')
       .select(`
         *,
@@ -207,6 +229,8 @@ export async function POST(
       .eq('id', companionId)
       .eq('user_id', user.id)
       .single();
+
+    const companion = companionData as CompanionWithDNA | null;
 
     if (companionError || !companion) {
       return NextResponse.json(
@@ -229,18 +253,20 @@ export async function POST(
       // Update needs in database
       await supabase
         .from('companions')
-        .update({ needs: companionNeeds })
+        .update({ needs: companionNeeds } as never)
         .eq('id', companionId);
     }
 
     // Get recent messages for context
-    const { data: recentMessages } = await supabase
+    const { data: recentMessagesData } = await supabase
       .from('messages')
       .select('role, content')
       .eq('conversation_id', conversationId)
       .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(20);
+
+    const recentMessages = recentMessagesData as MessageWithRoleContent[] | null;
 
     // Get relevant memories
     const { data: memories } = await supabase
@@ -266,7 +292,8 @@ export async function POST(
           },
         } : undefined,
       },
-      memories || []
+      ((memories as Array<{ title: string | null; content: string; importance_score: number }>) || [])
+        .map(m => ({ title: m.title || '', content: m.content, importance_score: m.importance_score }))
     );
 
     // Add mood influence from needs system
@@ -318,7 +345,7 @@ export async function POST(
         content: message.trim(),
         content_type: 'text',
         tokens_used: completion.inputTokens,
-      })
+      } as never)
       .select()
       .single();
 
@@ -337,7 +364,7 @@ export async function POST(
         content: completion.content,
         content_type: 'text',
         tokens_used: completion.outputTokens,
-      })
+      } as never)
       .select()
       .single();
 
@@ -351,7 +378,7 @@ export async function POST(
       .update({
         message_count: (recentMessages?.length || 0) + 2,
         last_message_at: new Date().toISOString(),
-      })
+      } as never)
       .eq('id', conversationId);
 
     // Update companion stats
@@ -360,18 +387,40 @@ export async function POST(
       .update({
         total_messages: companion.total_messages + 2,
         last_interaction: new Date().toISOString(),
-      })
+      } as never)
       .eq('id', companionId);
 
     // Increment user's daily message count
     await supabase
       .from('profiles')
-      .update({ messages_today: (profile?.messages_today || 0) + 1 })
+      .update({ messages_today: (profile?.messages_today || 0) + 1 } as never)
       .eq('id', user.id);
 
+    // Process life event from this chat exchange (non-blocking)
+    // This runs in the background and doesn't affect the response
+    processLifeEventFromChat(
+      companionId,
+      user.id,
+      companion.name,
+      message.trim(),
+      completion.content,
+      companion.current_mood as import('@/types/database').MoodState | null,
+      companion.total_messages + 2,
+      (recentMessages?.length || 0) === 0
+    ).catch(err => {
+      // Log but don't fail the request
+      console.error('Life event processing error:', err);
+    });
+
+    // Extract and save memories from user message (non-blocking)
+    // Looks for personal facts, preferences, relationships, etc.
+    processMemoriesFromChat(companionId, message.trim()).catch(err => {
+      console.error('Memory extraction error:', err);
+    });
+
     return NextResponse.json({
-      userMessage,
-      companionMessage,
+      userMessage: userMessage as unknown as Message,
+      companionMessage: companionMessage as unknown as Message,
       model: completion.model,
       // Include minor detection info if just detected
       minorDetected: behavioralDetection.shouldFlag,

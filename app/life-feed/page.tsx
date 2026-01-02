@@ -1,97 +1,208 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Calendar, 
-  Clock, 
-  Heart, 
-  Sparkles,
-  Coffee,
-  Book,
-  Music,
-  Moon,
-  Sun,
-  MessageCircle,
-  Filter,
-} from 'lucide-react';
+import { Sparkles, Heart, Brain, MessageCircle, Star, Moon, Calendar } from 'lucide-react';
 
-import { getCurrentUser, getUserCompanions } from '@/lib/supabase/server';
-import { createClient } from '@/lib/supabase/server';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCurrentUser } from '@/lib/supabase/server';
+import { getLifeEventsForUser } from '@/lib/companion/life-events';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { LifeEventCard } from '@/components/life-feed/LifeEventCard';
-import { formatRelativeTime } from '@/lib/utils/cn';
+import { Button } from '@/components/ui/button';
+import type { EventType } from '@/types/database';
 
-export default async function LifeFeedPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+// ============================================================
+// TYPES
+// ============================================================
 
-  const companions = await getUserCompanions();
+interface LifeEventWithCompanion {
+  id: string;
+  companion_id: string;
+  event_type: EventType;
+  title: string;
+  description: string | null;
+  created_at: string;
+  companions: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  } | null;
+}
+
+// ============================================================
+// EVENT TYPE ICONS & COLORS
+// ============================================================
+
+const EVENT_CONFIG: Record<EventType, { icon: typeof Sparkles; color: string; bg: string }> = {
+  thought: { icon: Brain, color: 'text-kirra-sage', bg: 'bg-kirra-sage/20' },
+  mood_change: { icon: Heart, color: 'text-kirra-warm', bg: 'bg-kirra-warm/20' },
+  milestone: { icon: Star, color: 'text-kirra-amber', bg: 'bg-kirra-amber/20' },
+  social: { icon: MessageCircle, color: 'text-kirra-forest-light', bg: 'bg-kirra-forest-light/20' },
+  activity: { icon: Sparkles, color: 'text-kirra-forest-lighter', bg: 'bg-kirra-forest-lighter/20' },
+  dream: { icon: Moon, color: 'text-kirra-stone', bg: 'bg-kirra-stone/20' },
+};
+
+// ============================================================
+// TIME HELPERS
+// ============================================================
+
+function getTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
   
-  if (companions.length === 0) {
-    redirect('/dashboard');
-  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-  const supabase = await createClient();
+function groupEventsByTime(events: LifeEventWithCompanion[]): Record<string, LifeEventWithCompanion[]> {
+  const groups: Record<string, LifeEventWithCompanion[]> = {
+    'Today': [],
+    'Yesterday': [],
+    'This Week': [],
+    'Earlier': [],
+  };
 
-  // Get life events for all companions
-  const { data: lifeEvents } = await supabase
-    .from('life_events')
-    .select(`
-      *,
-      companions (
-        id,
-        name,
-        avatar_url
-      )
-    `)
-    .in('companion_id', companions.map(c => c.id))
-    .order('scheduled_at', { ascending: false })
-    .limit(50);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const weekAgo = new Date(today.getTime() - 7 * 86400000);
 
-  // Get pending notifications
-  const { data: notifications } = await supabase
-    .from('proactive_message_queue')
-    .select(`
-      *,
-      companions (
-        id,
-        name,
-        avatar_url
-      )
-    `)
-    .in('companion_id', companions.map(c => c.id))
-    .eq('is_sent', false)
-    .order('scheduled_for', { ascending: true })
-    .limit(10);
-
-  // Group events by date
-  const eventsByDate = (lifeEvents || []).reduce((acc, event) => {
-    const date = new Date(event.scheduled_at).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    });
-    if (!acc[date]) {
-      acc[date] = [];
+  events.forEach(event => {
+    const eventDate = new Date(event.created_at);
+    
+    if (eventDate >= today) {
+      groups['Today'].push(event);
+    } else if (eventDate >= yesterday) {
+      groups['Yesterday'].push(event);
+    } else if (eventDate >= weekAgo) {
+      groups['This Week'].push(event);
+    } else {
+      groups['Earlier'].push(event);
     }
-    acc[date].push(event);
-    return acc;
-  }, {} as Record<string, typeof lifeEvents>);
+  });
+
+  return groups;
+}
+
+// ============================================================
+// COMPONENTS
+// ============================================================
+
+function EventCard({ event }: { event: LifeEventWithCompanion }) {
+  const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.thought;
+  const Icon = config.icon;
+  const companion = event.companions;
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   return (
+    <div className="group relative flex gap-4 rounded-xl bg-card p-4 shadow-sm transition-all hover:shadow-md">
+      {/* Event Icon */}
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${config.bg}`}>
+        <Icon className={`h-5 w-5 ${config.color}`} />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-foreground">{event.title}</h3>
+            {event.description && (
+              <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                {event.description}
+              </p>
+            )}
+          </div>
+          
+          {/* Companion Avatar */}
+          {companion && (
+            <Link 
+              href={`/chat/${companion.id}`}
+              className="shrink-0 opacity-80 transition-opacity hover:opacity-100"
+            >
+              <Avatar size="sm">
+                {companion.avatar_url ? (
+                  <AvatarImage src={companion.avatar_url} alt={companion.name} />
+                ) : (
+                  <AvatarFallback className="bg-kirra-forest text-white text-xs">
+                    {getInitials(companion.name)}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+            </Link>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <span>{getTimeAgo(event.created_at)}</span>
+          {companion && (
+            <>
+              <span>•</span>
+              <Link 
+                href={`/chat/${companion.id}`}
+                className="hover:text-foreground transition-colors"
+              >
+                {companion.name}
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-kirra-forest/10">
+        <Calendar className="h-8 w-8 text-kirra-forest-light" />
+      </div>
+      <h2 className="text-xl font-semibold text-foreground">No events yet</h2>
+      <p className="mt-2 max-w-sm text-muted-foreground">
+        Life events will appear here as you chat with your companions. 
+        Start a conversation to see what happens!
+      </p>
+      <Button asChild className="mt-6">
+        <Link href="/chat">Start Chatting</Link>
+      </Button>
+    </div>
+  );
+}
+
+// ============================================================
+// PAGE
+// ============================================================
+
+export default async function LifeFeedPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
+
+  // Fetch real life events from database
+  const events = await getLifeEventsForUser(user.id, 50) as LifeEventWithCompanion[];
+  
+  // Group events by time period
+  const groupedEvents = groupEventsByTime(events);
+  
+  // Check if we have any events
+  const hasEvents = events.length > 0;
+
+  return (
     <div className="min-h-full p-6 lg:p-8">
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-2xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="font-display text-3xl font-bold flex items-center gap-3">
-            <Calendar className="h-8 w-8 text-primary" />
+          <h1 className="font-display text-3xl font-bold text-foreground flex items-center gap-3">
+            <Calendar className="h-8 w-8 text-kirra-forest-light" />
             Life Feed
           </h1>
           <p className="mt-1 text-muted-foreground">
@@ -99,108 +210,28 @@ export default async function LifeFeedPage() {
           </p>
         </div>
 
-        {/* Pending Messages */}
-        {notifications && notifications.length > 0 && (
-          <Card className="mb-8 border-primary/50 bg-primary/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-primary" />
-                Pending Messages
-              </CardTitle>
-              <CardDescription>
-                Your companions want to tell you something
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {notifications.map((notification) => (
-                <Link 
-                  key={notification.id}
-                  href={`/chat/${notification.companion_id}`}
-                  className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-background"
-                >
-                  <Avatar size="sm">
-                    {notification.companions?.avatar_url ? (
-                      <AvatarImage 
-                        src={notification.companions.avatar_url} 
-                        alt={notification.companions?.name || 'Companion'} 
-                      />
-                    ) : (
-                      <AvatarFallback className="bg-kirra-gradient text-white text-xs">
-                        {notification.companions?.name ? getInitials(notification.companions.name) : '?'}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  <div className="flex-1">
-                    <p className="font-medium">{notification.companions?.name}</p>
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      {notification.message_content}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {notification.trigger_type}
-                  </Badge>
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Companion Filter Tabs */}
-        <Tabs defaultValue="all" className="mb-6">
-          <TabsList>
-            <TabsTrigger value="all">All Companions</TabsTrigger>
-            {companions.map((companion) => (
-              <TabsTrigger key={companion.id} value={companion.id}>
-                {companion.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        {/* Events Timeline */}
-        {Object.keys(eventsByDate).length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Calendar className="h-8 w-8 text-primary" />
-              </div>
-              <h2 className="mb-2 font-display text-xl font-semibold">
-                No Life Events Yet
-              </h2>
-              <p className="mb-6 max-w-md text-center text-muted-foreground">
-                Your companions will start living their own lives as you interact with them.
-                Check back later to see what they&apos;ve been up to!
-              </p>
-              <Button asChild>
-                <Link href={`/chat/${companions[0]?.id}`}>
-                  <MessageCircle className="mr-2 h-4 w-4" />
-                  Chat with {companions[0]?.name}
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
+        {/* Content */}
+        {hasEvents ? (
           <div className="space-y-8">
-            {Object.entries(eventsByDate).map(([date, events]) => (
-              <div key={date}>
-                <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                    <Calendar className="h-4 w-4" />
-                  </span>
-                  {date}
-                </h2>
-                <div className="relative ml-4 space-y-4 border-l-2 border-border pl-6">
-                  {events?.map((event) => (
-                    <LifeEventCard 
-                      key={event.id} 
-                      event={event}
-                      companion={event.companions}
-                    />
-                  ))}
+            {Object.entries(groupedEvents).map(([period, periodEvents]) => {
+              if (periodEvents.length === 0) return null;
+              
+              return (
+                <div key={period}>
+                  <h2 className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                    {period}
+                  </h2>
+                  <div className="space-y-3">
+                    {periodEvents.map(event => (
+                      <EventCard key={event.id} event={event} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        ) : (
+          <EmptyState />
         )}
       </div>
     </div>

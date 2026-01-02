@@ -22,7 +22,7 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         gradient:
-          'bg-kirra-gradient text-white shadow-lg shadow-kirra-500/25 hover:shadow-xl hover:shadow-kirra-500/30 active:scale-[0.98]',
+          'bg-kirra-gradient text-white shadow-lg shadow-kirra-forest-DEFAULT/25 hover:shadow-xl hover:shadow-kirra-forest-DEFAULT/35 active:scale-[0.98]',
         glow: 'bg-primary text-primary-foreground shadow-glow hover:shadow-glow-lg active:scale-[0.98]',
       },
       size: {
@@ -75,6 +75,20 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const Comp = asChild ? Slot : 'button';
+
+    // When asChild is true, pass children directly without wrapper
+    // to avoid passing className to Fragment
+    if (asChild) {
+      return (
+        <Comp
+          className={cn(buttonVariants({ variant, size, rounded, className }))}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </Comp>
+      );
+    }
 
     return (
       <Comp

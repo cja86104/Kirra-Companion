@@ -1,4 +1,4 @@
-import type { Companion, CompanionDNA } from './database';
+import type { Companion, CompanionDNA } from '@/types/database';
 
 // Personality traits interface
 export interface PersonalityTraits {

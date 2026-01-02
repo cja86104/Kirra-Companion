@@ -101,7 +101,11 @@ export async function signInWithEmail(email: string, password: string) {
 export async function signUpWithEmail(
   email: string, 
   password: string,
-  metadata?: { full_name?: string }
+  metadata?: { 
+    full_name?: string;
+    date_of_birth?: string;
+    age_tier?: string;
+  }
 ) {
   const supabase = getClient();
   const { data, error } = await supabase.auth.signUp({

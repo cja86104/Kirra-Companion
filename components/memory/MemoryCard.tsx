@@ -42,7 +42,7 @@ export function MemoryCard({ memory, companionId, onUpdate }: MemoryCardProps) {
     try {
       const { error } = await supabase
         .from('memories')
-        .update({ is_pinned: !memory.is_pinned })
+        .update({ is_pinned: !memory.is_pinned } as never)
         .eq('id', memory.id);
 
       if (error) throw error;

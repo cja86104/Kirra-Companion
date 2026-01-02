@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils/cn';
 import { getClient } from '@/lib/supabase/client';
+import type { Profile } from '@/types/database';
 
 interface PricingTier {
   id: string;
@@ -141,11 +142,13 @@ export default function BillingSettingsPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data: profile } = await supabase
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('subscription_tier, messages_today')
           .eq('id', user.id)
           .single();
+
+        const profile = profileData as Pick<Profile, 'subscription_tier' | 'messages_today'> | null;
 
         if (profile) {
           setCurrentTier(profile.subscription_tier);

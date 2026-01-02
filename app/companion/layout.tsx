@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser, getUserProfile, getUserCompanions } from '@/lib/supabase/server';
-import { Sidebar } from '@/components/layout/sidebar';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 
 export default async function CompanionLayout({

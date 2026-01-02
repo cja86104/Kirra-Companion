@@ -1,311 +1,1060 @@
+/**
+ * KIRRA DESIGN SYSTEM v2.0
+ * ========================
+ * Premium Forest / Intimate Dark Theme
+ * 
+ * Design Philosophy:
+ * The companion is ALIVE. This app should feel like visiting
+ * someone you deeply care about in a cozy enchanted cabin.
+ * Every pixel serves connection, not decoration.
+ * 
+ * Color Story:
+ * - Deep forest greens (#1b4332 → #52b788) create groundedness
+ * - Warm amber/gold (#b8860b) adds life and warmth
+ * - Green-tinted charcoals replace harsh blacks
+ * - Soft cream replaces blinding whites
+ * 
+ * ABSOLUTELY NO:
+ * - Rainbow gradients (pink/purple/blue)
+ * - True black (#000000)
+ * - Blinding white backgrounds
+ * - Generic SaaS aesthetics
+ * - Neon colors
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   CSS CUSTOM PROPERTIES
+   ============================================================ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 207 90% 48%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 270 70% 60%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 207 90% 48%;
-    --radius: 0.75rem;
+    /* ========================================
+       LIGHT MODE - Warm Sage (Secondary)
+       Cream and sage, never harsh white
+       ======================================== */
+    --background: 75 20% 93%;
+    --foreground: 150 25% 12%;
+    
+    --card: 75 18% 90%;
+    --card-foreground: 150 25% 12%;
+    
+    --popover: 75 18% 88%;
+    --popover-foreground: 150 25% 12%;
+    
+    --primary: 153 47% 23%;
+    --primary-foreground: 75 20% 95%;
+    
+    --secondary: 143 20% 82%;
+    --secondary-foreground: 150 25% 15%;
+    
+    --muted: 75 15% 86%;
+    --muted-foreground: 150 15% 38%;
+    
+    --accent: 38 65% 42%;
+    --accent-foreground: 75 20% 95%;
+    
+    --destructive: 0 55% 45%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 150 12% 78%;
+    --input: 150 12% 80%;
+    --ring: 153 47% 28%;
+    
+    --radius: 1rem;
+    
+    --chart-1: 153 47% 23%;
+    --chart-2: 143 27% 42%;
+    --chart-3: 38 65% 42%;
+    --chart-4: 150 25% 55%;
+    --chart-5: 150 15% 65%;
+    
+    --sidebar-background: 75 18% 88%;
+    --sidebar-foreground: 150 25% 12%;
+    --sidebar-primary: 153 47% 23%;
+    --sidebar-primary-foreground: 75 20% 95%;
+    --sidebar-accent: 75 12% 84%;
+    --sidebar-accent-foreground: 150 25% 12%;
+    --sidebar-border: 150 12% 76%;
+    --sidebar-ring: 153 47% 28%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 6%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 6%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 207 90% 54%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 270 70% 60%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 50.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 207 90% 54%;
+    /* ========================================
+       DARK MODE - PRIMARY EXPERIENCE
+       Deep enchanted forest at twilight.
+       Green-tinted charcoals, warm amber light.
+       ======================================== */
+    
+    /* Background: Deep forest night with green undertone */
+    --background: 155 25% 5%;
+    --foreground: 60 12% 88%;
+    
+    /* Cards: Elevated surfaces with subtle green cast */
+    --card: 152 22% 9%;
+    --card-foreground: 60 12% 90%;
+    
+    --popover: 152 20% 11%;
+    --popover-foreground: 60 12% 90%;
+    
+    /* Primary: Luminous Forest Green - the life of the app */
+    --primary: 152 45% 32%;
+    --primary-foreground: 60 15% 96%;
+    
+    /* Secondary: Soft moss on dark */
+    --secondary: 152 18% 13%;
+    --secondary-foreground: 60 10% 78%;
+    
+    /* Muted: Quiet forest floor */
+    --muted: 152 15% 11%;
+    --muted-foreground: 60 8% 50%;
+    
+    /* Accent: Warm amber firelight - adds life */
+    --accent: 38 70% 45%;
+    --accent-foreground: 155 25% 5%;
+    
+    /* Destructive: Earth red */
+    --destructive: 0 50% 40%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders: Whisper-soft, never harsh */
+    --border: 152 15% 16%;
+    --input: 152 15% 14%;
+    --ring: 152 45% 38%;
+    
+    /* Charts */
+    --chart-1: 152 45% 40%;
+    --chart-2: 143 35% 48%;
+    --chart-3: 38 70% 50%;
+    --chart-4: 150 30% 52%;
+    --chart-5: 152 22% 32%;
+    
+    /* Sidebar: Slightly darker than main bg */
+    --sidebar-background: 155 28% 4%;
+    --sidebar-foreground: 60 10% 78%;
+    --sidebar-primary: 152 45% 36%;
+    --sidebar-primary-foreground: 60 15% 96%;
+    --sidebar-accent: 152 20% 10%;
+    --sidebar-accent-foreground: 60 10% 82%;
+    --sidebar-border: 152 15% 12%;
+    --sidebar-ring: 152 45% 38%;
   }
 }
+
+/* ============================================================
+   KIRRA BRAND PALETTE
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* Forest Green Spectrum - Deep to Light */
+    --kirra-forest-abyss: #050c08;
+    --kirra-forest-deepest: #0a1610;
+    --kirra-forest-darker: #0f211a;
+    --kirra-forest-dark: #1b4332;
+    --kirra-forest: #2d6a4f;
+    --kirra-forest-light: #40916c;
+    --kirra-forest-lighter: #52b788;
+    --kirra-sage: #74c69d;
+    --kirra-mint: #95d5b2;
+    --kirra-seafoam: #b7e4c7;
+    
+    /* Warm Accent Spectrum - Fire & Earth */
+    --kirra-ember: #8b6914;
+    --kirra-amber: #b8860b;
+    --kirra-gold: #c9a227;
+    --kirra-copper: #b87333;
+    --kirra-warm: #d4a574;
+    --kirra-cream: #f5e6d3;
+    
+    /* Neutral Spectrum - Forest-Tinted */
+    --kirra-void: #030605;
+    --kirra-night: #0a1610;
+    --kirra-charcoal: #121d18;
+    --kirra-slate: #1a2820;
+    --kirra-graphite: #243329;
+    --kirra-stone: #3a4a42;
+    --kirra-ash: #5a6b62;
+    --kirra-silver: #8a9b92;
+    --kirra-mist: #b8c5be;
+    --kirra-cloud: #dce5e0;
+    
+    /* Semantic Status Colors */
+    --kirra-success: #40916c;
+    --kirra-warning: #b8860b;
+    --kirra-error: #a63d40;
+    --kirra-info: #4a7c8c;
+    
+    /* Companion Mood Palette - Natural, Organic */
+    --mood-happy: #52b788;
+    --mood-excited: #c9a227;
+    --mood-content: #74c69d;
+    --mood-playful: #6ba368;
+    --mood-curious: #5a8a9a;
+    --mood-thoughtful: #6a7a7a;
+    --mood-creative: #8a7a9c;
+    --mood-relaxed: #6a8a7a;
+    --mood-loving: #b87a7a;
+    --mood-lonely: #6a7a8a;
+    --mood-sad: #5a6570;
+    --mood-anxious: #a67c5a;
+    --mood-peaceful: #7aa68a;
+    
+    /* Needs Indicator Colors */
+    --needs-critical: #a63d40;
+    --needs-low: #b87333;
+    --needs-medium: #b8860b;
+    --needs-good: #52b788;
+    --needs-full: #40916c;
+    
+    /* Affection Meter */
+    --affection-new: #5a6b62;
+    --affection-growing: #b8860b;
+    --affection-strong: #52b788;
+    --affection-deep: #40916c;
+    --affection-soulmate: #74c69d;
+  }
+}
+
+/* ============================================================
+   BASE ELEMENT STYLES
+   ============================================================ */
 
 @layer base {
   * {
     @apply border-border;
   }
-
+  
   html {
-    @apply scroll-smooth antialiased;
+    color-scheme: dark;
+    scroll-behavior: smooth;
   }
-
+  
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Outfit', system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    letter-spacing: -0.01em;
   }
-
-  /* Custom scrollbar */
+  
+  /* Display/Heading font */
+  h1, h2, h3, .font-display {
+    font-family: 'Fraunces', Georgia, serif;
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+  }
+  
+  /* Custom Scrollbar - Subtle & Elegant */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
-
+  
   ::-webkit-scrollbar-track {
-    @apply bg-transparent;
+    background: transparent;
   }
-
+  
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/20 rounded-full;
+    background: hsl(var(--muted-foreground) / 0.2);
+    border-radius: 3px;
+    transition: background 0.2s ease;
   }
-
+  
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/40;
+    background: hsl(var(--muted-foreground) / 0.35);
   }
-
+  
   /* Selection */
   ::selection {
-    @apply bg-primary/20;
+    background: hsl(var(--primary) / 0.25);
+    color: hsl(var(--foreground));
+  }
+  
+  /* Focus Styles */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
-@layer components {
-  /* Kirra Glow Effects */
-  .kirra-glow {
-    @apply relative;
-  }
+/* ============================================================
+   GLASSMORPHISM & SURFACE UTILITIES
+   ============================================================ */
 
-  .kirra-glow::before {
-    content: '';
-    @apply absolute -inset-1 rounded-lg bg-kirra-gradient opacity-30 blur-xl;
-    z-index: -1;
-  }
-
-  .kirra-glow-pulse::before {
-    animation: glow 2s ease-in-out infinite;
-  }
-
-  /* Glass morphism */
+@layer utilities {
+  /* Glass Effects */
   .glass {
-    @apply bg-white/10 backdrop-blur-md border border-white/20;
+    @apply backdrop-blur-2xl;
+    background: hsl(var(--card) / 0.7);
+    border: 1px solid hsl(var(--border) / 0.5);
   }
-
-  .glass-dark {
-    @apply bg-black/20 backdrop-blur-md border border-white/10;
+  
+  .glass-heavy {
+    @apply backdrop-blur-3xl;
+    background: hsl(155 25% 5% / 0.85);
+    border: 1px solid hsl(152 15% 18% / 0.6);
+    box-shadow: 
+      0 4px 30px hsl(0 0% 0% / 0.15),
+      inset 0 1px 0 hsl(var(--foreground) / 0.03);
   }
-
-  /* Gradient text */
-  .gradient-text {
-    @apply bg-kirra-gradient bg-clip-text text-transparent;
+  
+  .glass-subtle {
+    @apply backdrop-blur-xl;
+    background: hsl(var(--card) / 0.4);
+    border: 1px solid hsl(var(--border) / 0.3);
   }
-
-  /* Chat bubble styles */
-  .chat-bubble {
-    @apply relative px-4 py-2 rounded-2xl max-w-[80%];
+  
+  /* Surface Elevations */
+  .surface-0 {
+    background: hsl(155 25% 5%);
   }
-
-  .chat-bubble-user {
-    @apply bg-primary text-primary-foreground rounded-br-sm ml-auto;
+  
+  .surface-1 {
+    background: hsl(152 22% 8%);
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.15);
   }
-
-  .chat-bubble-companion {
-    @apply bg-muted text-foreground rounded-bl-sm mr-auto;
+  
+  .surface-2 {
+    background: hsl(152 20% 10%);
+    box-shadow: 
+      0 2px 8px hsl(0 0% 0% / 0.2),
+      0 0 1px hsl(0 0% 0% / 0.3);
   }
-
-  /* Typing indicator */
-  .typing-indicator {
-    @apply flex gap-1 items-center;
+  
+  .surface-3 {
+    background: hsl(152 18% 12%);
+    box-shadow: 
+      0 4px 16px hsl(0 0% 0% / 0.25),
+      0 0 1px hsl(0 0% 0% / 0.3);
   }
-
-  .typing-indicator span {
-    @apply w-2 h-2 bg-muted-foreground/60 rounded-full;
-    animation: typing-dot 1.4s ease-in-out infinite;
+  
+  .surface-4 {
+    background: hsl(152 16% 14%);
+    box-shadow: 
+      0 8px 32px hsl(0 0% 0% / 0.3),
+      0 0 1px hsl(0 0% 0% / 0.3);
   }
-
-  .typing-indicator span:nth-child(2) {
-    animation-delay: 0.2s;
+  
+  /* Subtle inner glow for cards */
+  .surface-glow {
+    box-shadow: 
+      inset 0 1px 0 hsl(var(--foreground) / 0.02),
+      inset 0 -1px 0 hsl(0 0% 0% / 0.05);
   }
+}
 
-  .typing-indicator span:nth-child(3) {
-    animation-delay: 0.4s;
+/* ============================================================
+   GLOW & LIGHTING EFFECTS
+   ============================================================ */
+
+@layer utilities {
+  /* Forest Glows */
+  .glow-forest {
+    box-shadow: 0 0 50px hsl(152 45% 32% / 0.15);
   }
-
-  /* Affection meter */
-  .affection-meter {
-    @apply relative h-2 w-full rounded-full overflow-hidden bg-muted;
+  
+  .glow-forest-strong {
+    box-shadow: 
+      0 0 40px hsl(152 45% 32% / 0.2),
+      0 0 80px hsl(152 45% 32% / 0.1);
   }
-
-  .affection-meter-fill {
-    @apply absolute left-0 top-0 h-full rounded-full transition-all duration-500;
-    background: linear-gradient(90deg, #94a3b8 0%, #f472b6 50%, #f43f5e 100%);
+  
+  .glow-forest-pulse {
+    animation: glow-pulse-forest 3s ease-in-out infinite;
   }
-
-  /* Memory node */
-  .memory-node {
-    @apply relative p-4 rounded-xl border transition-all duration-300;
-    @apply hover:shadow-glow hover:border-primary/50;
+  
+  @keyframes glow-pulse-forest {
+    0%, 100% {
+      box-shadow: 0 0 30px hsl(152 45% 32% / 0.12);
+    }
+    50% {
+      box-shadow: 0 0 50px hsl(152 45% 32% / 0.22);
+    }
   }
-
-  .memory-node-important {
-    @apply border-primary/30 bg-primary/5;
+  
+  /* Amber Glows */
+  .glow-amber {
+    box-shadow: 0 0 50px hsl(38 70% 45% / 0.12);
   }
-
-  /* Life event card */
-  .life-event {
-    @apply relative pl-6 pb-6 border-l-2 border-muted;
+  
+  .glow-amber-strong {
+    box-shadow: 
+      0 0 40px hsl(38 70% 45% / 0.18),
+      0 0 80px hsl(38 70% 45% / 0.08);
   }
+  
+  .glow-amber-pulse {
+    animation: glow-pulse-amber 3s ease-in-out infinite;
+  }
+  
+  @keyframes glow-pulse-amber {
+    0%, 100% {
+      box-shadow: 0 0 30px hsl(38 70% 45% / 0.1);
+    }
+    50% {
+      box-shadow: 0 0 50px hsl(38 70% 45% / 0.2);
+    }
+  }
+  
+  /* Soft ambient glow for main elements */
+  .glow-ambient {
+    box-shadow: 
+      0 0 120px hsl(152 45% 32% / 0.06),
+      0 0 60px hsl(38 70% 45% / 0.04);
+  }
+}
 
-  .life-event::before {
+/* ============================================================
+   TEXT EFFECTS & GRADIENTS
+   ============================================================ */
+
+@layer utilities {
+  /* Forest text gradient */
+  .text-gradient-forest {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #74c69d 0%, #40916c 50%, #2d6a4f 100%);
+  }
+  
+  /* Warm text gradient */
+  .text-gradient-warm {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #d4a574 0%, #b8860b 100%);
+  }
+  
+  /* Premium gold shimmer */
+  .text-shimmer {
+    @apply bg-clip-text text-transparent;
+    background: linear-gradient(
+      90deg,
+      #b8860b 0%,
+      #d4a574 25%,
+      #b8860b 50%,
+      #d4a574 75%,
+      #b8860b 100%
+    );
+    background-size: 200% 100%;
+    animation: text-shimmer 3s ease-in-out infinite;
+  }
+  
+  @keyframes text-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+/* ============================================================
+   COMPANION CARD - THE STAR
+   ============================================================ */
+
+@layer utilities {
+  .companion-card {
+    @apply relative overflow-hidden rounded-3xl;
+    background: linear-gradient(
+      165deg,
+      hsl(152 20% 11%) 0%,
+      hsl(152 22% 8%) 50%,
+      hsl(155 25% 6%) 100%
+    );
+    border: 1px solid hsl(152 15% 18% / 0.5);
+  }
+  
+  /* Top highlight */
+  .companion-card::before {
     content: '';
-    @apply absolute left-[-5px] top-0 w-2 h-2 rounded-full bg-primary;
-  }
-
-  .life-event:last-child {
-    @apply border-l-transparent;
-  }
-
-  /* Avatar with status */
-  .avatar-status {
-    @apply relative;
-  }
-
-  .avatar-status::after {
-    content: '';
-    @apply absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background;
-  }
-
-  .avatar-status-online::after {
-    @apply bg-green-500;
-  }
-
-  .avatar-status-away::after {
-    @apply bg-yellow-500;
-  }
-
-  .avatar-status-busy::after {
-    @apply bg-red-500;
-  }
-
-  /* Shimmer loading */
-  .shimmer {
-    @apply relative overflow-hidden;
-  }
-
-  .shimmer::after {
-    content: '';
-    @apply absolute inset-0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.1) 50%,
+      hsl(152 45% 40% / 0.3) 30%,
+      hsl(152 45% 40% / 0.4) 50%,
+      hsl(152 45% 40% / 0.3) 70%,
       transparent 100%
     );
-    background-size: 200% 100%;
-    animation: shimmer 2s linear infinite;
   }
-
-  /* Floating action button */
-  .fab {
-    @apply fixed bottom-6 right-6 z-50;
-    @apply w-14 h-14 rounded-full shadow-lg;
-    @apply flex items-center justify-center;
-    @apply bg-primary text-primary-foreground;
-    @apply transition-transform duration-200;
-    @apply hover:scale-110 active:scale-95;
+  
+  /* Ambient glow */
+  .companion-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+      ellipse at center,
+      hsl(152 45% 32% / 0.03) 0%,
+      transparent 50%
+    );
+    pointer-events: none;
   }
-
-  /* Emotion badge */
-  .emotion-badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  
+  /* Mood-reactive background - add class based on mood */
+  .companion-card[data-mood="happy"]::after {
+    background: radial-gradient(
+      ellipse at center,
+      hsl(152 50% 35% / 0.05) 0%,
+      transparent 50%
+    );
   }
-
-  .emotion-happy {
-    @apply bg-emotion-happy/20 text-emotion-happy;
+  
+  .companion-card[data-mood="excited"]::after {
+    background: radial-gradient(
+      ellipse at center,
+      hsl(38 70% 45% / 0.05) 0%,
+      transparent 50%
+    );
   }
-
-  .emotion-sad {
-    @apply bg-emotion-sad/20 text-emotion-sad;
+  
+  .companion-card[data-mood="loving"]::after {
+    background: radial-gradient(
+      ellipse at center,
+      hsl(0 40% 50% / 0.04) 0%,
+      transparent 50%
+    );
   }
-
-  .emotion-excited {
-    @apply bg-emotion-excited/20 text-emotion-excited;
+  
+  .companion-card[data-mood="lonely"]::after {
+    background: radial-gradient(
+      ellipse at center,
+      hsl(200 25% 35% / 0.04) 0%,
+      transparent 50%
+    );
+    animation: lonely-pulse 4s ease-in-out infinite;
   }
-
-  .emotion-calm {
-    @apply bg-emotion-calm/20 text-emotion-calm;
-  }
-
-  .emotion-curious {
-    @apply bg-emotion-curious/20 text-emotion-curious;
-  }
-
-  .emotion-loving {
-    @apply bg-emotion-loving/20 text-emotion-loving;
-  }
-
-  .emotion-playful {
-    @apply bg-emotion-playful/20 text-emotion-playful;
-  }
-
-  .emotion-thoughtful {
-    @apply bg-emotion-thoughtful/20 text-emotion-thoughtful;
+  
+  @keyframes lonely-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 }
 
+/* ============================================================
+   AVATAR STYLING
+   ============================================================ */
+
 @layer utilities {
-  /* Hide scrollbar but keep functionality */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  /* Avatar ring - shows status */
+  .avatar-ring {
+    @apply rounded-full;
+    box-shadow: 
+      0 0 0 3px hsl(var(--background)),
+      0 0 0 5px hsl(var(--primary) / 0.5);
   }
-
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  
+  .avatar-ring-amber {
+    box-shadow: 
+      0 0 0 3px hsl(var(--background)),
+      0 0 0 5px hsl(38 70% 45% / 0.6);
   }
-
-  /* Text balance */
-  .text-balance {
-    text-wrap: balance;
+  
+  /* Pulsing ring for attention */
+  .avatar-ring-pulse {
+    animation: avatar-pulse 2.5s ease-in-out infinite;
   }
-
-  /* Drag prevention for images/elements */
-  .no-drag {
-    -webkit-user-drag: none;
-    user-select: none;
+  
+  @keyframes avatar-pulse {
+    0%, 100% {
+      box-shadow: 
+        0 0 0 3px hsl(var(--background)),
+        0 0 0 5px hsl(38 70% 45% / 0.4);
+    }
+    50% {
+      box-shadow: 
+        0 0 0 3px hsl(var(--background)),
+        0 0 0 8px hsl(38 70% 45% / 0.6),
+        0 0 25px hsl(38 70% 45% / 0.2);
+    }
   }
-
-  /* Safe area insets for mobile */
-  .safe-top {
-    padding-top: env(safe-area-inset-top);
+  
+  /* Online status indicator */
+  .status-online::after {
+    content: '';
+    @apply absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full;
+    background: #52b788;
+    border: 2.5px solid hsl(var(--background));
+    box-shadow: 0 0 8px hsl(152 50% 50% / 0.5);
   }
-
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+  
+  .status-online.breathing::after {
+    animation: status-breathe 3s ease-in-out infinite;
   }
-
-  .safe-left {
-    padding-left: env(safe-area-inset-left);
+  
+  @keyframes status-breathe {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.85; }
   }
+}
 
-  .safe-right {
-    padding-right: env(safe-area-inset-right);
+/* ============================================================
+   BUTTON STYLES
+   ============================================================ */
+
+@layer utilities {
+  /* Primary Forest Button */
+  .btn-forest {
+    @apply relative px-6 py-2.5 rounded-xl font-medium overflow-hidden;
+    background: linear-gradient(145deg, #40916c 0%, #2d6a4f 50%, #1b4332 100%);
+    color: white;
+    box-shadow: 
+      0 2px 12px hsl(152 45% 32% / 0.3),
+      inset 0 1px 0 hsl(152 50% 60% / 0.2);
+    transition: all 0.2s ease;
+  }
+  
+  .btn-forest:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 6px 20px hsl(152 45% 32% / 0.4),
+      inset 0 1px 0 hsl(152 50% 60% / 0.25);
+  }
+  
+  .btn-forest:active {
+    transform: translateY(0);
+    box-shadow: 
+      0 2px 8px hsl(152 45% 32% / 0.3),
+      inset 0 1px 0 hsl(152 50% 60% / 0.15);
+  }
+  
+  /* Warm Amber Button */
+  .btn-warm {
+    @apply relative px-6 py-2.5 rounded-xl font-medium overflow-hidden;
+    background: linear-gradient(145deg, #c9a227 0%, #b8860b 50%, #8b6914 100%);
+    color: white;
+    box-shadow: 
+      0 2px 12px hsl(38 70% 45% / 0.3),
+      inset 0 1px 0 hsl(38 80% 70% / 0.2);
+    transition: all 0.2s ease;
+  }
+  
+  .btn-warm:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 6px 20px hsl(38 70% 45% / 0.4),
+      inset 0 1px 0 hsl(38 80% 70% / 0.25);
+  }
+  
+  /* Ghost Button */
+  .btn-ghost {
+    @apply px-4 py-2 rounded-xl font-medium transition-all duration-200;
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+  }
+  
+  .btn-ghost:hover {
+    background: hsl(var(--muted) / 0.5);
+    color: hsl(var(--foreground));
+  }
+}
+
+/* ============================================================
+   MESSAGE BUBBLES
+   ============================================================ */
+
+@layer components {
+  /* User message */
+  .message-user {
+    @apply relative rounded-2xl rounded-br-md px-4 py-3;
+    background: linear-gradient(145deg, hsl(152 40% 30%) 0%, hsl(152 45% 25%) 100%);
+    color: white;
+    box-shadow: 
+      0 2px 8px hsl(152 45% 25% / 0.3),
+      inset 0 1px 0 hsl(152 50% 50% / 0.1);
+  }
+  
+  /* Companion message */
+  .message-companion {
+    @apply relative rounded-2xl rounded-bl-md px-4 py-3;
+    background: hsl(152 18% 13%);
+    color: hsl(60 12% 88%);
+    border: 1px solid hsl(152 15% 18% / 0.7);
+    box-shadow: 
+      0 2px 6px hsl(0 0% 0% / 0.15),
+      inset 0 1px 0 hsl(var(--foreground) / 0.02);
+  }
+  
+  /* Thinking/typing state for companion */
+  .message-thinking {
+    @apply rounded-2xl rounded-bl-md px-4 py-3;
+    background: hsl(152 18% 12%);
+    border: 1px solid hsl(152 15% 16% / 0.5);
+  }
+}
+
+/* ============================================================
+   NEEDS DISPLAY
+   ============================================================ */
+
+@layer utilities {
+  .needs-bar {
+    @apply relative h-2 rounded-full overflow-hidden;
+    background: hsl(152 15% 12%);
+  }
+  
+  .needs-bar-fill {
+    @apply absolute left-0 top-0 h-full rounded-full transition-all duration-500 ease-out;
+  }
+  
+  .needs-critical .needs-bar-fill {
+    background: linear-gradient(90deg, #a63d40 0%, #b85050 100%);
+    box-shadow: 0 0 12px hsl(0 50% 45% / 0.4);
+  }
+  
+  .needs-low .needs-bar-fill {
+    background: linear-gradient(90deg, #b87333 0%, #c9854a 100%);
+    box-shadow: 0 0 8px hsl(25 60% 50% / 0.3);
+  }
+  
+  .needs-medium .needs-bar-fill {
+    background: linear-gradient(90deg, #b8860b 0%, #c9a227 100%);
+  }
+  
+  .needs-good .needs-bar-fill {
+    background: linear-gradient(90deg, #52b788 0%, #74c69d 100%);
+  }
+  
+  .needs-full .needs-bar-fill {
+    background: linear-gradient(90deg, #40916c 0%, #52b788 100%);
+    box-shadow: 0 0 8px hsl(152 50% 45% / 0.3);
+  }
+}
+
+/* ============================================================
+   MOOD BADGES
+   ============================================================ */
+
+@layer components {
+  .mood-badge {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium;
+    background: hsl(var(--primary) / 0.1);
+    color: hsl(152 45% 55%);
+    border: 1px solid hsl(var(--primary) / 0.2);
+    transition: all 0.2s ease;
+  }
+  
+  .mood-badge:hover {
+    background: hsl(var(--primary) / 0.15);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+  
+  .mood-badge-excited {
+    background: hsl(38 70% 45% / 0.12);
+    color: hsl(38 80% 60%);
+    border-color: hsl(38 70% 45% / 0.2);
+  }
+  
+  .mood-badge-loving {
+    background: hsl(0 40% 50% / 0.1);
+    color: hsl(0 50% 65%);
+    border-color: hsl(0 40% 50% / 0.2);
+  }
+  
+  .mood-badge-lonely {
+    background: hsl(200 25% 35% / 0.1);
+    color: hsl(200 30% 60%);
+    border-color: hsl(200 25% 35% / 0.2);
+  }
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+
+@layer components {
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200;
+    color: hsl(60 8% 50%);
+  }
+  
+  .nav-item:hover {
+    background: hsl(152 18% 11%);
+    color: hsl(60 10% 75%);
+  }
+  
+  .nav-item.active {
+    background: hsl(152 45% 32% / 0.12);
+    color: hsl(152 50% 55%);
+    position: relative;
+  }
+  
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    background: hsl(152 50% 45%);
+    border-radius: 0 3px 3px 0;
+  }
+}
+
+/* ============================================================
+   QUICK ACTION CARDS
+   ============================================================ */
+
+@layer components {
+  .quick-action {
+    @apply relative flex items-center gap-4 p-4 rounded-2xl transition-all duration-300 overflow-hidden;
+    background: hsl(152 20% 10%);
+    border: 1px solid hsl(152 15% 15%);
+  }
+  
+  .quick-action::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(152 45% 40% / 0.15), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .quick-action:hover {
+    background: hsl(152 20% 12%);
+    border-color: hsl(152 35% 25% / 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.2);
+  }
+  
+  .quick-action:hover::before {
+    opacity: 1;
+  }
+}
+
+/* ============================================================
+   LIFE EVENT CARDS
+   ============================================================ */
+
+@layer components {
+  .life-event-card {
+    @apply relative rounded-xl p-4 transition-all duration-200;
+    background: hsl(152 18% 10%);
+    border: 1px solid hsl(152 15% 14%);
+  }
+  
+  .life-event-card:hover {
+    background: hsl(152 18% 12%);
+    border-color: hsl(152 35% 25% / 0.4);
+    transform: translateX(4px);
+  }
+}
+
+/* ============================================================
+   INPUT FIELDS
+   ============================================================ */
+
+@layer components {
+  .input-forest {
+    @apply w-full px-4 py-3 rounded-xl transition-all duration-200;
+    background: hsl(152 20% 8%);
+    border: 1px solid hsl(152 15% 16%);
+    color: hsl(60 12% 90%);
+  }
+  
+  .input-forest:focus {
+    outline: none;
+    border-color: hsl(152 45% 35%);
+    box-shadow: 
+      0 0 0 3px hsl(152 45% 35% / 0.15),
+      0 0 20px hsl(152 45% 35% / 0.1);
+  }
+  
+  .input-forest::placeholder {
+    color: hsl(60 8% 40%);
+  }
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@layer utilities {
+  /* Float - gentle hovering */
+  .animate-float {
+    animation: float 5s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+  
+  /* Breathe - living, organic */
+  .animate-breathe {
+    animation: breathe 4s ease-in-out infinite;
+  }
+  
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+  }
+  
+  /* Fade in up - entrance */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out forwards;
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Fade in - subtle */
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  /* Slide in from left */
+  .animate-slide-in-left {
+    animation: slideInLeft 0.4s ease-out forwards;
+  }
+  
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  /* Typing dots */
+  .animate-typing-dot {
+    animation: typingDot 1.4s ease-in-out infinite;
+  }
+  
+  @keyframes typingDot {
+    0%, 100% { 
+      opacity: 0.25;
+      transform: scale(0.85);
+    }
+    50% { 
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  /* Heart beat for affection */
+  .animate-heartbeat {
+    animation: heartbeat 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    15% { transform: scale(1.1); }
+    30% { transform: scale(1); }
+    45% { transform: scale(1.08); }
+  }
+  
+  /* Stagger delays */
+  .delay-75 { animation-delay: 75ms; }
+  .delay-100 { animation-delay: 100ms; }
+  .delay-150 { animation-delay: 150ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-250 { animation-delay: 250ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+}
+
+/* ============================================================
+   OVERRIDE RAINBOW GRADIENTS - KILL THE GENERIC
+   ============================================================ */
+
+@layer utilities {
+  /* Override any lingering rainbow gradients */
+  .bg-kirra-gradient,
+  [class*="from-pink"][class*="to-blue"],
+  [class*="from-purple"][class*="to-pink"],
+  [class*="from-pink"][class*="via-purple"] {
+    background: linear-gradient(145deg, #40916c 0%, #2d6a4f 50%, #1b4332 100%) !important;
+  }
+  
+  /* Override purple/violet/pink text colors */
+  .text-purple-500,
+  .text-violet-500,
+  .text-pink-500 {
+    color: hsl(152 50% 50%) !important;
+  }
+  
+  /* Override white backgrounds */
+  .bg-white {
+    background: hsl(152 20% 10%) !important;
+  }
+  
+  /* Soften pure white text */
+  .text-white {
+    color: hsl(60 15% 94%) !important;
+  }
+}
+
+/* ============================================================
+   SPECIAL: COMPANION PRESENCE INDICATOR
+   ============================================================ */
+
+@layer utilities {
+  /* Glowing ring around companion avatar when they want attention */
+  .companion-wants-attention {
+    animation: attention-pulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes attention-pulse {
+    0%, 100% {
+      box-shadow: 
+        0 0 0 0 hsl(38 70% 45% / 0.7),
+        0 0 0 0 hsl(38 70% 45% / 0.4);
+    }
+    50% {
+      box-shadow: 
+        0 0 0 8px hsl(38 70% 45% / 0),
+        0 0 0 16px hsl(38 70% 45% / 0);
+    }
+  }
+  
+  /* Subtle shimmer on companion card when they're thinking of you */
+  .companion-thinking-of-you::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(38 70% 45% / 0.08),
+      transparent
+    );
+    animation: thinking-shimmer 3s ease-in-out infinite;
+  }
+  
+  @keyframes thinking-shimmer {
+    0% { left: -50%; }
+    100% { left: 150%; }
   }
 }
