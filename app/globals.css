@@ -1,28 +1,20 @@
 /**
- * KIRRA DESIGN SYSTEM v2.0
+ * KIRRA DESIGN SYSTEM v3.0
  * ========================
- * Premium Forest / Intimate Dark Theme
+ * Premium. Sophisticated. Intimate.
  * 
  * Design Philosophy:
- * The companion is ALIVE. This app should feel like visiting
- * someone you deeply care about in a cozy enchanted cabin.
- * Every pixel serves connection, not decoration.
+ * Minimal, warm, and refined. The companion is the focus.
+ * Clean surfaces, purposeful accents, premium feel.
  * 
  * Color Story:
- * - Deep forest greens (#1b4332 → #52b788) create groundedness
- * - Warm amber/gold (#b8860b) adds life and warmth
- * - Green-tinted charcoals replace harsh blacks
- * - Soft cream replaces blinding whites
- * 
- * ABSOLUTELY NO:
- * - Rainbow gradients (pink/purple/blue)
- * - True black (#000000)
- * - Blinding white backgrounds
- * - Generic SaaS aesthetics
- * - Neon colors
+ * - Warm neutrals as foundation (stone, slate, cream)
+ * - Single accent: warm amber/copper for life and personality
+ * - Soft blacks and muted whites - never harsh
+ * - Subtle tonal variations create depth
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -35,114 +27,113 @@
 @layer base {
   :root {
     /* ========================================
-       LIGHT MODE - Warm Sage (Secondary)
-       Cream and sage, never harsh white
+       LIGHT MODE - Warm, airy, refined
+       Cream/ivory base with warm stone accents
        ======================================== */
-    --background: 75 20% 93%;
-    --foreground: 150 25% 12%;
+    --background: 40 30% 97%;
+    --foreground: 20 15% 15%;
     
-    --card: 75 18% 90%;
-    --card-foreground: 150 25% 12%;
+    --card: 40 25% 99%;
+    --card-foreground: 20 15% 15%;
     
-    --popover: 75 18% 88%;
-    --popover-foreground: 150 25% 12%;
+    --popover: 40 25% 99%;
+    --popover-foreground: 20 15% 15%;
     
-    --primary: 153 47% 23%;
-    --primary-foreground: 75 20% 95%;
+    --primary: 25 75% 47%;
+    --primary-foreground: 40 30% 99%;
     
-    --secondary: 143 20% 82%;
-    --secondary-foreground: 150 25% 15%;
+    --secondary: 30 15% 92%;
+    --secondary-foreground: 20 12% 30%;
     
-    --muted: 75 15% 86%;
-    --muted-foreground: 150 15% 38%;
+    --muted: 30 12% 93%;
+    --muted-foreground: 20 8% 45%;
     
-    --accent: 38 65% 42%;
-    --accent-foreground: 75 20% 95%;
+    --accent: 25 75% 47%;
+    --accent-foreground: 40 30% 99%;
     
-    --destructive: 0 55% 45%;
+    --destructive: 0 65% 50%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 150 12% 78%;
-    --input: 150 12% 80%;
-    --ring: 153 47% 28%;
+    --border: 30 15% 88%;
+    --input: 30 15% 90%;
+    --ring: 25 75% 50%;
     
-    --radius: 1rem;
+    --radius: 0.875rem;
     
-    --chart-1: 153 47% 23%;
-    --chart-2: 143 27% 42%;
-    --chart-3: 38 65% 42%;
-    --chart-4: 150 25% 55%;
-    --chart-5: 150 15% 65%;
+    --chart-1: 25 75% 47%;
+    --chart-2: 30 50% 55%;
+    --chart-3: 35 45% 60%;
+    --chart-4: 20 40% 50%;
+    --chart-5: 15 35% 45%;
     
-    --sidebar-background: 75 18% 88%;
-    --sidebar-foreground: 150 25% 12%;
-    --sidebar-primary: 153 47% 23%;
-    --sidebar-primary-foreground: 75 20% 95%;
-    --sidebar-accent: 75 12% 84%;
-    --sidebar-accent-foreground: 150 25% 12%;
-    --sidebar-border: 150 12% 76%;
-    --sidebar-ring: 153 47% 28%;
+    --sidebar-background: 30 20% 95%;
+    --sidebar-foreground: 20 15% 15%;
+    --sidebar-primary: 25 75% 47%;
+    --sidebar-primary-foreground: 40 30% 99%;
+    --sidebar-accent: 30 15% 90%;
+    --sidebar-accent-foreground: 20 12% 25%;
+    --sidebar-border: 30 15% 86%;
+    --sidebar-ring: 25 75% 50%;
   }
 
   .dark {
     /* ========================================
-       DARK MODE - PRIMARY EXPERIENCE
-       Deep enchanted forest at twilight.
-       Green-tinted charcoals, warm amber light.
+       DARK MODE - Warm charcoal, not black
+       Cozy evening feel, never harsh
        ======================================== */
     
-    /* Background: Deep forest night with green undertone */
-    --background: 155 25% 5%;
-    --foreground: 60 12% 88%;
+    /* Background: Warm charcoal with subtle warmth */
+    --background: 25 12% 10%;
+    --foreground: 35 15% 90%;
     
-    /* Cards: Elevated surfaces with subtle green cast */
-    --card: 152 22% 9%;
-    --card-foreground: 60 12% 90%;
+    /* Cards: Elevated surfaces with warmth */
+    --card: 25 12% 13%;
+    --card-foreground: 35 15% 92%;
     
-    --popover: 152 20% 11%;
-    --popover-foreground: 60 12% 90%;
+    --popover: 25 12% 15%;
+    --popover-foreground: 35 15% 92%;
     
-    /* Primary: Luminous Forest Green - the life of the app */
-    --primary: 152 45% 32%;
-    --primary-foreground: 60 15% 96%;
+    /* Primary: Warm copper/amber - life and warmth */
+    --primary: 28 70% 55%;
+    --primary-foreground: 25 12% 8%;
     
-    /* Secondary: Soft moss on dark */
-    --secondary: 152 18% 13%;
-    --secondary-foreground: 60 10% 78%;
+    /* Secondary: Subtle warm gray */
+    --secondary: 25 10% 18%;
+    --secondary-foreground: 35 12% 75%;
     
-    /* Muted: Quiet forest floor */
-    --muted: 152 15% 11%;
-    --muted-foreground: 60 8% 50%;
+    /* Muted: Quiet background */
+    --muted: 25 10% 15%;
+    --muted-foreground: 35 8% 50%;
     
-    /* Accent: Warm amber firelight - adds life */
-    --accent: 38 70% 45%;
-    --accent-foreground: 155 25% 5%;
+    /* Accent: Same warm copper */
+    --accent: 28 70% 55%;
+    --accent-foreground: 25 12% 8%;
     
-    /* Destructive: Earth red */
-    --destructive: 0 50% 40%;
+    /* Destructive: Softer red */
+    --destructive: 0 55% 50%;
     --destructive-foreground: 0 0% 100%;
     
-    /* Borders: Whisper-soft, never harsh */
-    --border: 152 15% 16%;
-    --input: 152 15% 14%;
-    --ring: 152 45% 38%;
+    /* Borders: Soft, never harsh */
+    --border: 25 10% 20%;
+    --input: 25 10% 18%;
+    --ring: 28 70% 55%;
     
     /* Charts */
-    --chart-1: 152 45% 40%;
-    --chart-2: 143 35% 48%;
-    --chart-3: 38 70% 50%;
-    --chart-4: 150 30% 52%;
-    --chart-5: 152 22% 32%;
+    --chart-1: 28 70% 55%;
+    --chart-2: 35 55% 60%;
+    --chart-3: 30 60% 65%;
+    --chart-4: 25 50% 55%;
+    --chart-5: 20 40% 50%;
     
-    /* Sidebar: Slightly darker than main bg */
-    --sidebar-background: 155 28% 4%;
-    --sidebar-foreground: 60 10% 78%;
-    --sidebar-primary: 152 45% 36%;
-    --sidebar-primary-foreground: 60 15% 96%;
-    --sidebar-accent: 152 20% 10%;
-    --sidebar-accent-foreground: 60 10% 82%;
-    --sidebar-border: 152 15% 12%;
-    --sidebar-ring: 152 45% 38%;
+    /* Sidebar: Slightly darker */
+    --sidebar-background: 25 12% 8%;
+    --sidebar-foreground: 35 12% 75%;
+    --sidebar-primary: 28 70% 55%;
+    --sidebar-primary-foreground: 25 12% 8%;
+    --sidebar-accent: 25 10% 14%;
+    --sidebar-accent-foreground: 35 12% 80%;
+    --sidebar-border: 25 10% 16%;
+    --sidebar-ring: 28 70% 55%;
   }
 }
 
@@ -152,72 +143,59 @@
 
 @layer base {
   :root {
-    /* Forest Green Spectrum - Deep to Light */
-    --kirra-forest-abyss: #050c08;
-    --kirra-forest-deepest: #0a1610;
-    --kirra-forest-darker: #0f211a;
-    --kirra-forest-dark: #1b4332;
-    --kirra-forest: #2d6a4f;
-    --kirra-forest-light: #40916c;
-    --kirra-forest-lighter: #52b788;
-    --kirra-sage: #74c69d;
-    --kirra-mint: #95d5b2;
-    --kirra-seafoam: #b7e4c7;
+    /* Warm Spectrum - The Soul */
+    --kirra-copper: #c17f59;
+    --kirra-amber: #d4956a;
+    --kirra-gold: #dba66b;
+    --kirra-warm: #e8c49a;
+    --kirra-cream: #f5ebe0;
     
-    /* Warm Accent Spectrum - Fire & Earth */
-    --kirra-ember: #8b6914;
-    --kirra-amber: #b8860b;
-    --kirra-gold: #c9a227;
-    --kirra-copper: #b87333;
-    --kirra-warm: #d4a574;
-    --kirra-cream: #f5e6d3;
+    /* Neutral Spectrum - Refined */
+    --kirra-charcoal: #1a1816;
+    --kirra-night: #201e1c;
+    --kirra-slate: #2a2725;
+    --kirra-stone: #3d3936;
+    --kirra-ash: #5c5652;
+    --kirra-gray: #8a837d;
+    --kirra-silver: #b5aea6;
+    --kirra-mist: #d9d4ce;
+    --kirra-cloud: #f0ebe5;
+    --kirra-ivory: #faf8f5;
     
-    /* Neutral Spectrum - Forest-Tinted */
-    --kirra-void: #030605;
-    --kirra-night: #0a1610;
-    --kirra-charcoal: #121d18;
-    --kirra-slate: #1a2820;
-    --kirra-graphite: #243329;
-    --kirra-stone: #3a4a42;
-    --kirra-ash: #5a6b62;
-    --kirra-silver: #8a9b92;
-    --kirra-mist: #b8c5be;
-    --kirra-cloud: #dce5e0;
+    /* Status Colors - Muted & Sophisticated */
+    --kirra-success: #6b9080;
+    --kirra-warning: #c17f59;
+    --kirra-error: #b85c5c;
+    --kirra-info: #6b8a9b;
     
-    /* Semantic Status Colors */
-    --kirra-success: #40916c;
-    --kirra-warning: #b8860b;
-    --kirra-error: #a63d40;
-    --kirra-info: #4a7c8c;
-    
-    /* Companion Mood Palette - Natural, Organic */
-    --mood-happy: #52b788;
-    --mood-excited: #c9a227;
-    --mood-content: #74c69d;
-    --mood-playful: #6ba368;
-    --mood-curious: #5a8a9a;
-    --mood-thoughtful: #6a7a7a;
-    --mood-creative: #8a7a9c;
-    --mood-relaxed: #6a8a7a;
-    --mood-loving: #b87a7a;
-    --mood-lonely: #6a7a8a;
-    --mood-sad: #5a6570;
-    --mood-anxious: #a67c5a;
-    --mood-peaceful: #7aa68a;
+    /* Companion Mood Palette - Subtle, Natural */
+    --mood-happy: #8fbc94;
+    --mood-excited: #d4956a;
+    --mood-content: #a8c5a8;
+    --mood-playful: #9bb59b;
+    --mood-curious: #7a9baa;
+    --mood-thoughtful: #8a8a8a;
+    --mood-creative: #b8a088;
+    --mood-relaxed: #a0b5a0;
+    --mood-loving: #c9a0a0;
+    --mood-lonely: #8a9ba0;
+    --mood-sad: #7a8085;
+    --mood-anxious: #b8a080;
+    --mood-peaceful: #95b5a5;
     
     /* Needs Indicator Colors */
-    --needs-critical: #a63d40;
-    --needs-low: #b87333;
-    --needs-medium: #b8860b;
-    --needs-good: #52b788;
-    --needs-full: #40916c;
+    --needs-critical: #b85c5c;
+    --needs-low: #c17f59;
+    --needs-medium: #d4956a;
+    --needs-good: #8fbc94;
+    --needs-full: #6b9080;
     
     /* Affection Meter */
-    --affection-new: #5a6b62;
-    --affection-growing: #b8860b;
-    --affection-strong: #52b788;
-    --affection-deep: #40916c;
-    --affection-soulmate: #74c69d;
+    --affection-new: #8a837d;
+    --affection-growing: #c17f59;
+    --affection-strong: #d4956a;
+    --affection-deep: #dba66b;
+    --affection-soulmate: #e8c49a;
   }
 }
 
@@ -244,22 +222,28 @@
   
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Outfit', system-ui, sans-serif;
-    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
-    letter-spacing: -0.01em;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv02" 1, "cv03" 1, "cv04" 1;
+    letter-spacing: -0.011em;
+    line-height: 1.6;
   }
   
   /* Display/Heading font */
   h1, h2, h3, .font-display {
-    font-family: 'Fraunces', Georgia, serif;
-    font-optical-sizing: auto;
+    font-family: 'Playfair Display', Georgia, serif;
     letter-spacing: -0.02em;
+    line-height: 1.2;
   }
   
-  /* Custom Scrollbar - Subtle & Elegant */
+  /* Monospace */
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  /* Custom Scrollbar - Minimal & Elegant */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
   
   ::-webkit-scrollbar-track {
@@ -267,18 +251,18 @@
   }
   
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.2);
-    border-radius: 3px;
+    background: hsl(var(--muted-foreground) / 0.15);
+    border-radius: 4px;
     transition: background 0.2s ease;
   }
   
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.35);
+    background: hsl(var(--muted-foreground) / 0.25);
   }
   
   /* Selection */
   ::selection {
-    background: hsl(var(--primary) / 0.25);
+    background: hsl(var(--primary) / 0.15);
     color: hsl(var(--foreground));
   }
   
@@ -290,257 +274,164 @@
 }
 
 /* ============================================================
-   GLASSMORPHISM & SURFACE UTILITIES
+   SURFACE & CARD UTILITIES
    ============================================================ */
 
 @layer utilities {
-  /* Glass Effects */
-  .glass {
-    @apply backdrop-blur-2xl;
-    background: hsl(var(--card) / 0.7);
-    border: 1px solid hsl(var(--border) / 0.5);
-  }
-  
-  .glass-heavy {
-    @apply backdrop-blur-3xl;
-    background: hsl(155 25% 5% / 0.85);
-    border: 1px solid hsl(152 15% 18% / 0.6);
-    box-shadow: 
-      0 4px 30px hsl(0 0% 0% / 0.15),
-      inset 0 1px 0 hsl(var(--foreground) / 0.03);
-  }
-  
-  .glass-subtle {
-    @apply backdrop-blur-xl;
-    background: hsl(var(--card) / 0.4);
-    border: 1px solid hsl(var(--border) / 0.3);
-  }
-  
-  /* Surface Elevations */
+  /* Surface Elevations - Subtle depth */
   .surface-0 {
-    background: hsl(155 25% 5%);
+    background: hsl(var(--background));
   }
   
   .surface-1 {
-    background: hsl(152 22% 8%);
-    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.15);
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.04);
   }
   
   .surface-2 {
-    background: hsl(152 20% 10%);
+    background: hsl(var(--card));
     box-shadow: 
-      0 2px 8px hsl(0 0% 0% / 0.2),
-      0 0 1px hsl(0 0% 0% / 0.3);
+      0 1px 3px hsl(0 0% 0% / 0.06),
+      0 1px 2px hsl(0 0% 0% / 0.04);
   }
   
   .surface-3 {
-    background: hsl(152 18% 12%);
+    background: hsl(var(--card));
     box-shadow: 
-      0 4px 16px hsl(0 0% 0% / 0.25),
-      0 0 1px hsl(0 0% 0% / 0.3);
+      0 4px 6px -1px hsl(0 0% 0% / 0.06),
+      0 2px 4px -1px hsl(0 0% 0% / 0.04);
   }
   
   .surface-4 {
-    background: hsl(152 16% 14%);
+    background: hsl(var(--card));
     box-shadow: 
-      0 8px 32px hsl(0 0% 0% / 0.3),
-      0 0 1px hsl(0 0% 0% / 0.3);
+      0 10px 15px -3px hsl(0 0% 0% / 0.06),
+      0 4px 6px -2px hsl(0 0% 0% / 0.04);
   }
   
-  /* Subtle inner glow for cards */
-  .surface-glow {
-    box-shadow: 
-      inset 0 1px 0 hsl(var(--foreground) / 0.02),
-      inset 0 -1px 0 hsl(0 0% 0% / 0.05);
+  /* Glass Effect - Refined */
+  .glass {
+    @apply backdrop-blur-xl;
+    background: hsl(var(--card) / 0.8);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+  
+  .glass-subtle {
+    @apply backdrop-blur-md;
+    background: hsl(var(--card) / 0.6);
+    border: 1px solid hsl(var(--border) / 0.3);
   }
 }
 
 /* ============================================================
-   GLOW & LIGHTING EFFECTS
+   TEXT UTILITIES
    ============================================================ */
 
 @layer utilities {
-  /* Forest Glows */
-  .glow-forest {
-    box-shadow: 0 0 50px hsl(152 45% 32% / 0.15);
-  }
-  
-  .glow-forest-strong {
-    box-shadow: 
-      0 0 40px hsl(152 45% 32% / 0.2),
-      0 0 80px hsl(152 45% 32% / 0.1);
-  }
-  
-  .glow-forest-pulse {
-    animation: glow-pulse-forest 3s ease-in-out infinite;
-  }
-  
-  @keyframes glow-pulse-forest {
-    0%, 100% {
-      box-shadow: 0 0 30px hsl(152 45% 32% / 0.12);
-    }
-    50% {
-      box-shadow: 0 0 50px hsl(152 45% 32% / 0.22);
-    }
-  }
-  
-  /* Amber Glows */
-  .glow-amber {
-    box-shadow: 0 0 50px hsl(38 70% 45% / 0.12);
-  }
-  
-  .glow-amber-strong {
-    box-shadow: 
-      0 0 40px hsl(38 70% 45% / 0.18),
-      0 0 80px hsl(38 70% 45% / 0.08);
-  }
-  
-  .glow-amber-pulse {
-    animation: glow-pulse-amber 3s ease-in-out infinite;
-  }
-  
-  @keyframes glow-pulse-amber {
-    0%, 100% {
-      box-shadow: 0 0 30px hsl(38 70% 45% / 0.1);
-    }
-    50% {
-      box-shadow: 0 0 50px hsl(38 70% 45% / 0.2);
-    }
-  }
-  
-  /* Soft ambient glow for main elements */
-  .glow-ambient {
-    box-shadow: 
-      0 0 120px hsl(152 45% 32% / 0.06),
-      0 0 60px hsl(38 70% 45% / 0.04);
-  }
-}
-
-/* ============================================================
-   TEXT EFFECTS & GRADIENTS
-   ============================================================ */
-
-@layer utilities {
-  /* Forest text gradient */
-  .text-gradient-forest {
+  /* Gradient text - Single warm tone */
+  .gradient-text {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #74c69d 0%, #40916c 50%, #2d6a4f 100%);
+    background-image: linear-gradient(135deg, 
+      hsl(28 70% 55%) 0%, 
+      hsl(25 75% 50%) 100%
+    );
   }
   
-  /* Warm text gradient */
-  .text-gradient-warm {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #d4a574 0%, #b8860b 100%);
-  }
-  
-  /* Premium gold shimmer */
+  /* Shimmer effect - Subtle gold */
   .text-shimmer {
     @apply bg-clip-text text-transparent;
     background: linear-gradient(
       90deg,
-      #b8860b 0%,
-      #d4a574 25%,
-      #b8860b 50%,
-      #d4a574 75%,
-      #b8860b 100%
+      hsl(28 70% 50%) 0%,
+      hsl(35 65% 60%) 50%,
+      hsl(28 70% 50%) 100%
     );
     background-size: 200% 100%;
-    animation: text-shimmer 3s ease-in-out infinite;
+    animation: shimmer 3s ease-in-out infinite;
   }
   
-  @keyframes text-shimmer {
+  @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
 }
 
 /* ============================================================
-   COMPANION CARD - THE STAR
+   GLOW EFFECTS - Subtle & Purposeful
+   ============================================================ */
+
+@layer utilities {
+  .glow-warm {
+    box-shadow: 0 0 40px hsl(28 70% 55% / 0.08);
+  }
+  
+  .glow-warm-strong {
+    box-shadow: 
+      0 0 30px hsl(28 70% 55% / 0.12),
+      0 0 60px hsl(28 70% 55% / 0.06);
+  }
+  
+  .glow-warm-pulse {
+    animation: glow-pulse 3s ease-in-out infinite;
+  }
+  
+  @keyframes glow-pulse {
+    0%, 100% {
+      box-shadow: 0 0 25px hsl(28 70% 55% / 0.08);
+    }
+    50% {
+      box-shadow: 0 0 45px hsl(28 70% 55% / 0.15);
+    }
+  }
+  
+  .shadow-glow {
+    box-shadow: 
+      0 4px 6px -1px hsl(0 0% 0% / 0.06),
+      0 2px 4px -1px hsl(0 0% 0% / 0.04),
+      0 0 0 1px hsl(var(--primary) / 0.1);
+  }
+}
+
+/* ============================================================
+   COMPANION CARD - Hero Element
    ============================================================ */
 
 @layer utilities {
   .companion-card {
-    @apply relative overflow-hidden rounded-3xl;
-    background: linear-gradient(
-      165deg,
-      hsl(152 20% 11%) 0%,
-      hsl(152 22% 8%) 50%,
-      hsl(155 25% 6%) 100%
-    );
-    border: 1px solid hsl(152 15% 18% / 0.5);
+    @apply relative overflow-hidden rounded-2xl;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
-  /* Top highlight */
+  .companion-card:hover {
+    border-color: hsl(var(--primary) / 0.3);
+    box-shadow: 
+      0 20px 25px -5px hsl(0 0% 0% / 0.06),
+      0 10px 10px -5px hsl(0 0% 0% / 0.04),
+      0 0 0 1px hsl(var(--primary) / 0.1);
+  }
+  
+  /* Subtle top accent line */
   .companion-card::before {
     content: '';
     position: absolute;
     top: 0;
-    left: 0;
-    right: 0;
+    left: 5%;
+    right: 5%;
     height: 1px;
     background: linear-gradient(
       90deg,
       transparent 0%,
-      hsl(152 45% 40% / 0.3) 30%,
-      hsl(152 45% 40% / 0.4) 50%,
-      hsl(152 45% 40% / 0.3) 70%,
+      hsl(var(--primary) / 0.3) 50%,
       transparent 100%
     );
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
   
-  /* Ambient glow */
-  .companion-card::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(
-      ellipse at center,
-      hsl(152 45% 32% / 0.03) 0%,
-      transparent 50%
-    );
-    pointer-events: none;
-  }
-  
-  /* Mood-reactive background - add class based on mood */
-  .companion-card[data-mood="happy"]::after {
-    background: radial-gradient(
-      ellipse at center,
-      hsl(152 50% 35% / 0.05) 0%,
-      transparent 50%
-    );
-  }
-  
-  .companion-card[data-mood="excited"]::after {
-    background: radial-gradient(
-      ellipse at center,
-      hsl(38 70% 45% / 0.05) 0%,
-      transparent 50%
-    );
-  }
-  
-  .companion-card[data-mood="loving"]::after {
-    background: radial-gradient(
-      ellipse at center,
-      hsl(0 40% 50% / 0.04) 0%,
-      transparent 50%
-    );
-  }
-  
-  .companion-card[data-mood="lonely"]::after {
-    background: radial-gradient(
-      ellipse at center,
-      hsl(200 25% 35% / 0.04) 0%,
-      transparent 50%
-    );
-    animation: lonely-pulse 4s ease-in-out infinite;
-  }
-  
-  @keyframes lonely-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+  .companion-card:hover::before {
+    opacity: 1;
   }
 }
 
@@ -549,21 +440,13 @@
    ============================================================ */
 
 @layer utilities {
-  /* Avatar ring - shows status */
   .avatar-ring {
     @apply rounded-full;
     box-shadow: 
       0 0 0 3px hsl(var(--background)),
-      0 0 0 5px hsl(var(--primary) / 0.5);
+      0 0 0 5px hsl(var(--primary) / 0.4);
   }
   
-  .avatar-ring-amber {
-    box-shadow: 
-      0 0 0 3px hsl(var(--background)),
-      0 0 0 5px hsl(38 70% 45% / 0.6);
-  }
-  
-  /* Pulsing ring for attention */
   .avatar-ring-pulse {
     animation: avatar-pulse 2.5s ease-in-out infinite;
   }
@@ -572,13 +455,13 @@
     0%, 100% {
       box-shadow: 
         0 0 0 3px hsl(var(--background)),
-        0 0 0 5px hsl(38 70% 45% / 0.4);
+        0 0 0 5px hsl(var(--primary) / 0.3);
     }
     50% {
       box-shadow: 
         0 0 0 3px hsl(var(--background)),
-        0 0 0 8px hsl(38 70% 45% / 0.6),
-        0 0 25px hsl(38 70% 45% / 0.2);
+        0 0 0 8px hsl(var(--primary) / 0.5),
+        0 0 20px hsl(var(--primary) / 0.15);
     }
   }
   
@@ -586,9 +469,8 @@
   .status-online::after {
     content: '';
     @apply absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full;
-    background: #52b788;
+    background: hsl(var(--kirra-success));
     border: 2.5px solid hsl(var(--background));
-    box-shadow: 0 0 8px hsl(152 50% 50% / 0.5);
   }
   
   .status-online.breathing::after {
@@ -606,59 +488,63 @@
    ============================================================ */
 
 @layer utilities {
-  /* Primary Forest Button */
-  .btn-forest {
-    @apply relative px-6 py-2.5 rounded-xl font-medium overflow-hidden;
-    background: linear-gradient(145deg, #40916c 0%, #2d6a4f 50%, #1b4332 100%);
-    color: white;
+  /* Primary Button - Warm & Inviting */
+  .btn-primary {
+    @apply relative px-6 py-3 rounded-xl font-medium overflow-hidden;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
     box-shadow: 
-      0 2px 12px hsl(152 45% 32% / 0.3),
-      inset 0 1px 0 hsl(152 50% 60% / 0.2);
+      0 1px 3px hsl(0 0% 0% / 0.1),
+      0 1px 2px hsl(0 0% 0% / 0.06);
     transition: all 0.2s ease;
   }
   
-  .btn-forest:hover {
-    transform: translateY(-2px);
+  .btn-primary:hover {
+    transform: translateY(-1px);
     box-shadow: 
-      0 6px 20px hsl(152 45% 32% / 0.4),
-      inset 0 1px 0 hsl(152 50% 60% / 0.25);
+      0 4px 6px hsl(0 0% 0% / 0.1),
+      0 2px 4px hsl(0 0% 0% / 0.06);
+    filter: brightness(1.05);
   }
   
-  .btn-forest:active {
+  .btn-primary:active {
     transform: translateY(0);
     box-shadow: 
-      0 2px 8px hsl(152 45% 32% / 0.3),
-      inset 0 1px 0 hsl(152 50% 60% / 0.15);
+      0 1px 2px hsl(0 0% 0% / 0.08);
   }
   
-  /* Warm Amber Button */
-  .btn-warm {
-    @apply relative px-6 py-2.5 rounded-xl font-medium overflow-hidden;
-    background: linear-gradient(145deg, #c9a227 0%, #b8860b 50%, #8b6914 100%);
-    color: white;
-    box-shadow: 
-      0 2px 12px hsl(38 70% 45% / 0.3),
-      inset 0 1px 0 hsl(38 80% 70% / 0.2);
+  /* Secondary Button */
+  .btn-secondary {
+    @apply relative px-6 py-3 rounded-xl font-medium;
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(var(--border));
     transition: all 0.2s ease;
   }
   
-  .btn-warm:hover {
-    transform: translateY(-2px);
-    box-shadow: 
-      0 6px 20px hsl(38 70% 45% / 0.4),
-      inset 0 1px 0 hsl(38 80% 70% / 0.25);
+  .btn-secondary:hover {
+    background: hsl(var(--muted));
+    border-color: hsl(var(--primary) / 0.3);
   }
   
   /* Ghost Button */
   .btn-ghost {
-    @apply px-4 py-2 rounded-xl font-medium transition-all duration-200;
+    @apply px-4 py-2.5 rounded-xl font-medium transition-all duration-200;
     color: hsl(var(--muted-foreground));
     background: transparent;
   }
   
   .btn-ghost:hover {
-    background: hsl(var(--muted) / 0.5);
+    background: hsl(var(--muted));
     color: hsl(var(--foreground));
+  }
+  
+  /* Kirra Gradient - Single warm tone, no rainbow */
+  .bg-kirra-gradient {
+    background: linear-gradient(145deg, 
+      hsl(28 70% 58%) 0%, 
+      hsl(25 75% 50%) 100%
+    );
   }
 }
 
@@ -669,30 +555,24 @@
 @layer components {
   /* User message */
   .message-user {
-    @apply relative rounded-2xl rounded-br-md px-4 py-3;
-    background: linear-gradient(145deg, hsl(152 40% 30%) 0%, hsl(152 45% 25%) 100%);
-    color: white;
-    box-shadow: 
-      0 2px 8px hsl(152 45% 25% / 0.3),
-      inset 0 1px 0 hsl(152 50% 50% / 0.1);
+    @apply relative rounded-2xl rounded-br-sm px-4 py-3;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
   }
   
   /* Companion message */
   .message-companion {
-    @apply relative rounded-2xl rounded-bl-md px-4 py-3;
-    background: hsl(152 18% 13%);
-    color: hsl(60 12% 88%);
-    border: 1px solid hsl(152 15% 18% / 0.7);
-    box-shadow: 
-      0 2px 6px hsl(0 0% 0% / 0.15),
-      inset 0 1px 0 hsl(var(--foreground) / 0.02);
+    @apply relative rounded-2xl rounded-bl-sm px-4 py-3;
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(var(--border));
   }
   
-  /* Thinking/typing state for companion */
+  /* Thinking/typing state */
   .message-thinking {
-    @apply rounded-2xl rounded-bl-md px-4 py-3;
-    background: hsl(152 18% 12%);
-    border: 1px solid hsl(152 15% 16% / 0.5);
+    @apply rounded-2xl rounded-bl-sm px-4 py-3;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border) / 0.5);
   }
 }
 
@@ -702,35 +582,33 @@
 
 @layer utilities {
   .needs-bar {
-    @apply relative h-2 rounded-full overflow-hidden;
-    background: hsl(152 15% 12%);
+    @apply relative h-1.5 rounded-full overflow-hidden;
+    background: hsl(var(--muted));
   }
   
   .needs-bar-fill {
     @apply absolute left-0 top-0 h-full rounded-full transition-all duration-500 ease-out;
+    background: hsl(var(--primary));
   }
   
   .needs-critical .needs-bar-fill {
-    background: linear-gradient(90deg, #a63d40 0%, #b85050 100%);
-    box-shadow: 0 0 12px hsl(0 50% 45% / 0.4);
+    background: var(--needs-critical);
   }
   
   .needs-low .needs-bar-fill {
-    background: linear-gradient(90deg, #b87333 0%, #c9854a 100%);
-    box-shadow: 0 0 8px hsl(25 60% 50% / 0.3);
+    background: var(--needs-low);
   }
   
   .needs-medium .needs-bar-fill {
-    background: linear-gradient(90deg, #b8860b 0%, #c9a227 100%);
+    background: var(--needs-medium);
   }
   
   .needs-good .needs-bar-fill {
-    background: linear-gradient(90deg, #52b788 0%, #74c69d 100%);
+    background: var(--needs-good);
   }
   
   .needs-full .needs-bar-fill {
-    background: linear-gradient(90deg, #40916c 0%, #52b788 100%);
-    box-shadow: 0 0 8px hsl(152 50% 45% / 0.3);
+    background: var(--needs-full);
   }
 }
 
@@ -741,33 +619,15 @@
 @layer components {
   .mood-badge {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium;
-    background: hsl(var(--primary) / 0.1);
-    color: hsl(152 45% 55%);
-    border: 1px solid hsl(var(--primary) / 0.2);
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(var(--border));
     transition: all 0.2s ease;
   }
   
   .mood-badge:hover {
-    background: hsl(var(--primary) / 0.15);
-    border-color: hsl(var(--primary) / 0.3);
-  }
-  
-  .mood-badge-excited {
-    background: hsl(38 70% 45% / 0.12);
-    color: hsl(38 80% 60%);
-    border-color: hsl(38 70% 45% / 0.2);
-  }
-  
-  .mood-badge-loving {
-    background: hsl(0 40% 50% / 0.1);
-    color: hsl(0 50% 65%);
-    border-color: hsl(0 40% 50% / 0.2);
-  }
-  
-  .mood-badge-lonely {
-    background: hsl(200 25% 35% / 0.1);
-    color: hsl(200 30% 60%);
-    border-color: hsl(200 25% 35% / 0.2);
+    background: hsl(var(--muted));
+    border-color: hsl(var(--primary) / 0.2);
   }
 }
 
@@ -778,17 +638,17 @@
 @layer components {
   .nav-item {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200;
-    color: hsl(60 8% 50%);
+    color: hsl(var(--muted-foreground));
   }
   
   .nav-item:hover {
-    background: hsl(152 18% 11%);
-    color: hsl(60 10% 75%);
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
   }
   
   .nav-item.active {
-    background: hsl(152 45% 32% / 0.12);
-    color: hsl(152 50% 55%);
+    background: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
     position: relative;
   }
   
@@ -799,9 +659,9 @@
     top: 50%;
     transform: translateY(-50%);
     width: 3px;
-    height: 60%;
-    background: hsl(152 50% 45%);
-    border-radius: 0 3px 3px 0;
+    height: 50%;
+    background: hsl(var(--primary));
+    border-radius: 0 2px 2px 0;
   }
 }
 
@@ -811,32 +671,16 @@
 
 @layer components {
   .quick-action {
-    @apply relative flex items-center gap-4 p-4 rounded-2xl transition-all duration-300 overflow-hidden;
-    background: hsl(152 20% 10%);
-    border: 1px solid hsl(152 15% 15%);
-  }
-  
-  .quick-action::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, hsl(152 45% 40% / 0.15), transparent);
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    @apply relative flex items-center gap-4 p-4 rounded-xl transition-all duration-200 overflow-hidden;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
   }
   
   .quick-action:hover {
-    background: hsl(152 20% 12%);
-    border-color: hsl(152 35% 25% / 0.5);
+    background: hsl(var(--secondary));
+    border-color: hsl(var(--primary) / 0.2);
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.2);
-  }
-  
-  .quick-action:hover::before {
-    opacity: 1;
+    box-shadow: 0 4px 12px hsl(0 0% 0% / 0.06);
   }
 }
 
@@ -847,14 +691,13 @@
 @layer components {
   .life-event-card {
     @apply relative rounded-xl p-4 transition-all duration-200;
-    background: hsl(152 18% 10%);
-    border: 1px solid hsl(152 15% 14%);
+    background: hsl(var(--secondary) / 0.5);
+    border: 1px solid hsl(var(--border) / 0.5);
   }
   
   .life-event-card:hover {
-    background: hsl(152 18% 12%);
-    border-color: hsl(152 35% 25% / 0.4);
-    transform: translateX(4px);
+    background: hsl(var(--secondary));
+    border-color: hsl(var(--border));
   }
 }
 
@@ -863,23 +706,21 @@
    ============================================================ */
 
 @layer components {
-  .input-forest {
+  .input-kirra {
     @apply w-full px-4 py-3 rounded-xl transition-all duration-200;
-    background: hsl(152 20% 8%);
-    border: 1px solid hsl(152 15% 16%);
-    color: hsl(60 12% 90%);
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
   }
   
-  .input-forest:focus {
+  .input-kirra:focus {
     outline: none;
-    border-color: hsl(152 45% 35%);
-    box-shadow: 
-      0 0 0 3px hsl(152 45% 35% / 0.15),
-      0 0 20px hsl(152 45% 35% / 0.1);
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1);
   }
   
-  .input-forest::placeholder {
-    color: hsl(60 8% 40%);
+  .input-kirra::placeholder {
+    color: hsl(var(--muted-foreground));
   }
 }
 
@@ -895,7 +736,7 @@
   
   @keyframes float {
     0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
+    50% { transform: translateY(-6px); }
   }
   
   /* Breathe - living, organic */
@@ -905,7 +746,7 @@
   
   @keyframes breathe {
     0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.02); }
+    50% { transform: scale(1.015); }
   }
   
   /* Fade in up - entrance */
@@ -916,7 +757,7 @@
   @keyframes fadeInUp {
     from {
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(16px);
     }
     to {
       opacity: 1;
@@ -942,7 +783,7 @@
   @keyframes slideInLeft {
     from {
       opacity: 0;
-      transform: translateX(-20px);
+      transform: translateX(-16px);
     }
     to {
       opacity: 1;
@@ -957,8 +798,8 @@
   
   @keyframes typingDot {
     0%, 100% { 
-      opacity: 0.25;
-      transform: scale(0.85);
+      opacity: 0.3;
+      transform: scale(0.9);
     }
     50% { 
       opacity: 1;
@@ -973,9 +814,9 @@
   
   @keyframes heartbeat {
     0%, 100% { transform: scale(1); }
-    15% { transform: scale(1.1); }
+    15% { transform: scale(1.08); }
     30% { transform: scale(1); }
-    45% { transform: scale(1.08); }
+    45% { transform: scale(1.05); }
   }
   
   /* Stagger delays */
@@ -990,42 +831,10 @@
 }
 
 /* ============================================================
-   OVERRIDE RAINBOW GRADIENTS - KILL THE GENERIC
+   COMPANION ATTENTION INDICATORS
    ============================================================ */
 
 @layer utilities {
-  /* Override any lingering rainbow gradients */
-  .bg-kirra-gradient,
-  [class*="from-pink"][class*="to-blue"],
-  [class*="from-purple"][class*="to-pink"],
-  [class*="from-pink"][class*="via-purple"] {
-    background: linear-gradient(145deg, #40916c 0%, #2d6a4f 50%, #1b4332 100%) !important;
-  }
-  
-  /* Override purple/violet/pink text colors */
-  .text-purple-500,
-  .text-violet-500,
-  .text-pink-500 {
-    color: hsl(152 50% 50%) !important;
-  }
-  
-  /* Override white backgrounds */
-  .bg-white {
-    background: hsl(152 20% 10%) !important;
-  }
-  
-  /* Soften pure white text */
-  .text-white {
-    color: hsl(60 15% 94%) !important;
-  }
-}
-
-/* ============================================================
-   SPECIAL: COMPANION PRESENCE INDICATOR
-   ============================================================ */
-
-@layer utilities {
-  /* Glowing ring around companion avatar when they want attention */
   .companion-wants-attention {
     animation: attention-pulse 2s ease-in-out infinite;
   }
@@ -1033,17 +842,16 @@
   @keyframes attention-pulse {
     0%, 100% {
       box-shadow: 
-        0 0 0 0 hsl(38 70% 45% / 0.7),
-        0 0 0 0 hsl(38 70% 45% / 0.4);
+        0 0 0 0 hsl(var(--primary) / 0.5),
+        0 0 0 0 hsl(var(--primary) / 0.3);
     }
     50% {
       box-shadow: 
-        0 0 0 8px hsl(38 70% 45% / 0),
-        0 0 0 16px hsl(38 70% 45% / 0);
+        0 0 0 6px hsl(var(--primary) / 0),
+        0 0 0 12px hsl(var(--primary) / 0);
     }
   }
   
-  /* Subtle shimmer on companion card when they're thinking of you */
   .companion-thinking-of-you::after {
     content: '';
     position: absolute;
@@ -1054,7 +862,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      hsl(38 70% 45% / 0.08),
+      hsl(var(--primary) / 0.05),
       transparent
     );
     animation: thinking-shimmer 3s ease-in-out infinite;
@@ -1071,98 +879,83 @@
    ============================================================ */
 
 @layer components {
-  /* Navigation in light mode */
-  .light .nav-item {
-    color: hsl(150 20% 35%);
+  /* Light mode cards get subtle shadow */
+  .light .surface-2 {
+    background: hsl(var(--card));
+    box-shadow: 
+      0 1px 3px hsl(0 0% 0% / 0.08),
+      0 1px 2px hsl(0 0% 0% / 0.06);
   }
   
-  .light .nav-item:hover {
-    background: hsl(150 20% 92%);
-    color: hsl(150 25% 20%);
+  .light .companion-card {
+    background: hsl(var(--card));
+    box-shadow: 
+      0 1px 3px hsl(0 0% 0% / 0.06),
+      0 1px 2px hsl(0 0% 0% / 0.04);
   }
   
-  .light .nav-item.active {
-    background: hsl(152 45% 32% / 0.1);
-    color: hsl(152 50% 28%);
+  .light .companion-card:hover {
+    box-shadow: 
+      0 10px 15px -3px hsl(0 0% 0% / 0.08),
+      0 4px 6px -2px hsl(0 0% 0% / 0.05);
   }
   
-  /* Quick actions in light mode */
   .light .quick-action {
-    background: hsl(75 15% 96%);
-    border-color: hsl(150 15% 85%);
+    background: hsl(var(--card));
   }
   
   .light .quick-action:hover {
-    background: hsl(75 15% 94%);
-    border-color: hsl(152 35% 70%);
-  }
-  
-  /* Life event cards in light mode */
-  .light .life-event-card {
-    background: hsl(75 15% 96%);
-    border-color: hsl(150 15% 85%);
-  }
-  
-  .light .life-event-card:hover {
-    background: hsl(75 15% 94%);
-    border-color: hsl(152 35% 70%);
-  }
-  
-  /* Input fields in light mode */
-  .light .input-forest {
-    background: hsl(75 15% 98%);
-    border-color: hsl(150 15% 80%);
-    color: hsl(150 25% 15%);
-  }
-  
-  .light .input-forest:focus {
-    border-color: hsl(152 45% 40%);
-    box-shadow: 
-      0 0 0 3px hsl(152 45% 40% / 0.1),
-      0 0 20px hsl(152 45% 40% / 0.05);
-  }
-  
-  .light .input-forest::placeholder {
-    color: hsl(150 10% 55%);
-  }
-  
-  /* Glass effects in light mode */
-  .light .glass {
-    background: hsl(75 18% 95% / 0.8);
-    border-color: hsl(150 12% 80% / 0.6);
-  }
-  
-  .light .glass-heavy {
-    background: hsl(75 18% 92% / 0.9);
-    border-color: hsl(150 12% 78% / 0.7);
-  }
-  
-  /* Surface utilities in light mode */
-  .light .surface-1 {
-    background: hsl(75 18% 96%);
-  }
-  
-  .light .surface-2 {
-    background: hsl(75 18% 94%);
-  }
-  
-  .light .surface-3 {
-    background: hsl(75 18% 92%);
-  }
-  
-  /* Message bubbles in light mode */
-  .light .message-user {
-    background: linear-gradient(145deg, hsl(152 45% 38%) 0%, hsl(152 50% 30%) 100%);
-  }
-  
-  .light .message-companion {
-    background: hsl(75 15% 94%);
-    border-color: hsl(150 15% 85%);
-  }
-  
-  /* Override white background fix for light mode */
-  .light .bg-white {
-    background: hsl(75 15% 98%) !important;
+    box-shadow: 0 4px 12px hsl(0 0% 0% / 0.08);
   }
 }
 
+/* ============================================================
+   DARK MODE SPECIFIC OVERRIDES
+   ============================================================ */
+
+@layer components {
+  .dark .surface-2 {
+    box-shadow: 
+      0 1px 3px hsl(0 0% 0% / 0.2),
+      0 1px 2px hsl(0 0% 0% / 0.15);
+  }
+  
+  .dark .companion-card {
+    box-shadow: 
+      0 1px 3px hsl(0 0% 0% / 0.15),
+      0 1px 2px hsl(0 0% 0% / 0.1);
+  }
+  
+  .dark .companion-card:hover {
+    box-shadow: 
+      0 20px 25px -5px hsl(0 0% 0% / 0.2),
+      0 10px 10px -5px hsl(0 0% 0% / 0.15),
+      0 0 0 1px hsl(var(--primary) / 0.15);
+  }
+}
+
+/* ============================================================
+   UTILITY OVERRIDES - Clean Up Any Rainbow Remnants
+   ============================================================ */
+
+@layer utilities {
+  /* Kill any lingering multi-color gradients */
+  [class*="from-pink"][class*="to-blue"],
+  [class*="from-purple"][class*="to-pink"],
+  [class*="from-pink"][class*="via-purple"] {
+    background: hsl(var(--primary)) !important;
+  }
+  
+  .text-kirra-500,
+  .text-kirra-forest-light,
+  .text-kirra-forest-lighter {
+    color: hsl(var(--primary)) !important;
+  }
+  
+  /* Glow utilities - all use primary color */
+  .kirra-glow,
+  .glow-purple,
+  .glow-pink {
+    box-shadow: 0 0 40px hsl(var(--primary) / 0.1) !important;
+  }
+}

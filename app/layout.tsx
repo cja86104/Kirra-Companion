@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
+import { Inter, Playfair_Display, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import './globals.css';
@@ -10,7 +10,7 @@ const inter = Inter({
   display: 'swap',
 });
 
-const spaceGrotesk = Space_Grotesk({
+const playfair = Playfair_Display({
   subsets: ['latin'],
   variable: '--font-display',
   display: 'swap',
@@ -25,11 +25,11 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
   title: {
-    default: 'Kirra Companion - Your AI Companion That Actually Lives',
-    template: '%s | Kirra Companion',
+    default: 'Kirra — AI Companion That Actually Remembers You',
+    template: '%s | Kirra',
   },
   description:
-    'Experience the next generation of AI companionship. Kirra companions have their own lives, memories, and personalities that evolve with you.',
+    'Meet Kirra — an AI companion with their own life, memories, and evolving personality. Not just responses. Genuine connection.',
   keywords: [
     'AI companion',
     'virtual friend',
@@ -39,9 +39,9 @@ export const metadata: Metadata = {
     'emotional AI',
     'personal AI',
   ],
-  authors: [{ name: 'Kirra Companion' }],
-  creator: 'Kirra Companion',
-  publisher: 'Kirra Companion',
+  authors: [{ name: 'Kirra' }],
+  creator: 'Kirra',
+  publisher: 'Kirra',
   robots: {
     index: true,
     follow: true,
@@ -57,36 +57,36 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: process.env.NEXT_PUBLIC_APP_URL,
-    siteName: 'Kirra Companion',
-    title: 'Kirra Companion - Your AI Companion That Actually Lives',
+    siteName: 'Kirra',
+    title: 'Kirra — AI Companion That Actually Remembers You',
     description:
-      'Experience the next generation of AI companionship. Kirra companions have their own lives, memories, and personalities that evolve with you.',
+      'Meet Kirra — an AI companion with their own life, memories, and evolving personality. Not just responses. Genuine connection.',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Kirra Companion',
+        alt: 'Kirra',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Kirra Companion - Your AI Companion That Actually Lives',
+    title: 'Kirra — AI Companion That Actually Remembers You',
     description:
-      'Experience the next generation of AI companionship. Kirra companions have their own lives, memories, and personalities that evolve with you.',
-    images: ['/og-image.svg'],
-    creator: '@kirracompanion',
+      'Meet Kirra — an AI companion with their own life, memories, and evolving personality. Not just responses. Genuine connection.',
+    images: ['/og-image.png'],
+    creator: '@kirra',
   },
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Kirra Companion',
+    title: 'Kirra',
   },
   formatDetection: {
     telephone: false,
@@ -95,8 +95,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f5e6d3' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a1610' },
+    { media: '(prefers-color-scheme: light)', color: '#f8f6f3' },
+    { media: '(prefers-color-scheme: dark)', color: '#1a1816' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -114,7 +114,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${playfair.variable} ${jetbrainsMono.variable}`}
     >
       <head>
         {/* Prevent flash of wrong theme */}
@@ -140,16 +140,16 @@ export default function RootLayout({
           {children}
         </ThemeProvider>
         <Toaster
-          position="top-right"
-          expand={true}
+          position="top-center"
+          expand={false}
           richColors
           closeButton
           toastOptions={{
             duration: 4000,
             classNames: {
-              toast: 'group',
-              title: 'font-medium',
-              description: 'text-muted-foreground',
+              toast: 'group rounded-xl border-border shadow-lg',
+              title: 'font-medium text-sm',
+              description: 'text-muted-foreground text-sm',
             },
           }}
         />

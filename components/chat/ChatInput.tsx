@@ -1,14 +1,20 @@
 'use client';
 
+/**
+ * CHAT INPUT v2.0
+ * ================
+ * Text and voice input for chatting with companions.
+ * Voice uses browser's FREE speech recognition (no server costs).
+ */
+
 import { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Image, Paperclip, Smile, X } from 'lucide-react';
+import { Send, Mic, Image, Paperclip, Smile } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils/cn';
 import { VoiceMessageRecorder, useVoiceRecordingSupported } from '@/components/chat/VoiceMessageRecorder';
-import { AudioPlayer } from '@/components/chat/AudioPlayer';
 
 interface ChatInputProps {
-  onSend: (message: string, voiceBlob?: Blob, voiceDuration?: number) => void;
+  onSend: (message: string) => void;
   isLoading: boolean;
   companionName: string;
   voiceEnabled?: boolean;
@@ -22,10 +28,6 @@ export function ChatInput({
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [recordedAudio, setRecordedAudio] = useState<{
-    blob: Blob;
-    duration: number;
-  } | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isVoiceSupported = useVoiceRecordingSupported();
@@ -40,15 +42,8 @@ export function ChatInput({
   }, [message]);
 
   const handleSubmit = () => {
-    if (recordedAudio) {
-      // Send voice message
-      onSend('', recordedAudio.blob, recordedAudio.duration);
-      setRecordedAudio(null);
-      return;
-    }
-
     if (message.trim() && !isLoading) {
-      onSend(message);
+      onSend(message.trim());
       setMessage('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -63,23 +58,20 @@ export function ChatInput({
     }
   };
 
-  const handleRecordingComplete = (blob: Blob, duration: number) => {
-    setRecordedAudio({ blob, duration });
+  const handleTranscriptionComplete = (text: string) => {
+    // Send the transcribed voice message directly
+    if (text.trim()) {
+      onSend(text.trim());
+    }
     setIsRecording(false);
   };
 
   const handleCancelRecording = () => {
     setIsRecording(false);
-    setRecordedAudio(null);
-  };
-
-  const clearRecordedAudio = () => {
-    setRecordedAudio(null);
   };
 
   const startRecording = () => {
     setIsRecording(true);
-    setRecordedAudio(null);
   };
 
   // Show voice recorder when recording
@@ -88,49 +80,10 @@ export function ChatInput({
       <div className="border-t border-border bg-card p-4">
         <div className="mx-auto max-w-3xl">
           <VoiceMessageRecorder
-            onRecordingComplete={handleRecordingComplete}
+            onTranscriptionComplete={handleTranscriptionComplete}
             onCancel={handleCancelRecording}
-            maxDuration={60}
+            maxDuration={120}
           />
-        </div>
-      </div>
-    );
-  }
-
-  // Show recorded audio preview
-  if (recordedAudio) {
-    return (
-      <div className="border-t border-border bg-card p-4">
-        <div className="mx-auto max-w-3xl">
-          <div className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
-            <div className="flex-1">
-              <AudioPlayer
-                audioBlob={recordedAudio.blob}
-                compact
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={clearRecordedAudio}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-              <Button
-                size="icon-sm"
-                onClick={handleSubmit}
-                disabled={isLoading}
-                className="bg-primary text-primary-foreground"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            {Math.round(recordedAudio.duration)}s voice message ready to send
-          </p>
         </div>
       </div>
     );

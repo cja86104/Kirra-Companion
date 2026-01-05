@@ -51,6 +51,7 @@ import {
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { TypingIndicator } from './TypingIndicator';
+import { VoiceConversationMode, useVoiceConversationSupported } from './VoiceConversationMode';
 import { getClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils/cn';
 import type { CompanionWithDNA, Conversation, Message, VoiceConfig, MoodState } from '@/types/database';
@@ -117,10 +118,12 @@ export function ChatWindow({
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [autoPlayVoice, setAutoPlayVoice] = useState(false);
+  const [autoPlayVoice, setAutoPlayVoice] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [voiceConversationActive, setVoiceConversationActive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const supabase = getClient();
+  const isVoiceConversationSupported = useVoiceConversationSupported();
 
   const voiceConfig = companion.voice_config as VoiceConfig | null;
   const hasVoiceEnabled = !!voiceConfig?.voiceId;
@@ -193,13 +196,12 @@ export function ChatWindow({
     };
   }, [conversation, supabase]);
 
-  const sendMessage = async (content: string, voiceBlob?: Blob, voiceDuration?: number) => {
-    if ((!content.trim() && !voiceBlob) || !conversation) return;
+  const sendMessage = async (content: string) => {
+    if (!content.trim() || !conversation) return;
 
     setIsLoading(true);
 
-    const contentType = voiceBlob ? 'voice' : 'text';
-    const messageContent = voiceBlob ? '[Voice message]' : content.trim();
+    const messageContent = content.trim();
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: Message = {
@@ -209,10 +211,10 @@ export function ChatWindow({
       user_id: userId,
       role: 'user',
       content: messageContent,
-      content_type: contentType,
+      content_type: 'text',
       attachments: [],
       voice_url: null,
-      voice_duration_seconds: voiceDuration || null,
+      voice_duration_seconds: null,
       emotion_analysis: {},
       response_context: {},
       memory_triggers: [],
@@ -232,35 +234,12 @@ export function ChatWindow({
     setIsTyping(true);
 
     try {
-      let voiceUrl = null;
-      if (voiceBlob) {
-        const formData = new FormData();
-        formData.append('audio', voiceBlob, 'voice-message.webm');
-        formData.append('companionId', companion.id);
-        formData.append('conversationId', conversation.id);
-
-        const uploadResponse = await fetch('/api/voice/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload voice message');
-        }
-
-        const uploadData = await uploadResponse.json();
-        voiceUrl = uploadData.url;
-      }
-
       const response = await fetch(`/api/companion/${companion.id}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: messageContent,
           conversationId: conversation.id,
-          voiceUrl,
-          voiceDuration,
-          contentType,
         }),
       });
 
@@ -299,7 +278,11 @@ export function ChatWindow({
     }
   };
 
-  const playCompanionResponse = async (text: string) => {
+  // Track if audio has been unlocked by user interaction
+  const audioUnlockedRef = useRef(false);
+  const pendingAudioRef = useRef<string | null>(null);
+
+  const playCompanionResponse = useCallback(async (text: string) => {
     try {
       const response = await fetch(`/api/companion/${companion.id}/speak`, {
         method: 'POST',
@@ -307,18 +290,70 @@ export function ChatWindow({
         body: JSON.stringify({ text, companionId: companion.id }),
       });
 
-      if (!response.ok) return;
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        console.error('TTS API error:', response.status, error);
+        return;
+      }
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       
       audio.onended = () => URL.revokeObjectURL(url);
-      await audio.play();
+      
+      try {
+        await audio.play();
+        audioUnlockedRef.current = true;
+      } catch (playError) {
+        // Browser blocked autoplay - store for later and notify user
+        console.warn('Autoplay blocked:', playError);
+        pendingAudioRef.current = text;
+        URL.revokeObjectURL(url);
+        
+        if (!audioUnlockedRef.current) {
+          toast.info('Click anywhere to enable voice', {
+            duration: 3000,
+            id: 'audio-unlock', // Prevent duplicate toasts
+          });
+        }
+      }
     } catch (error) {
       console.error('Auto-play error:', error);
     }
-  };
+  }, [companion.id]);
+
+  // Unlock audio on first user interaction
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (audioUnlockedRef.current) return;
+      
+      // Create and play a silent audio to unlock
+      const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      silentAudio.volume = 0;
+      silentAudio.play().then(() => {
+        audioUnlockedRef.current = true;
+        // If there was pending audio, play it now
+        if (pendingAudioRef.current) {
+          playCompanionResponse(pendingAudioRef.current);
+          pendingAudioRef.current = null;
+        }
+      }).catch(() => {
+        // Still not unlocked, that's ok
+      });
+    };
+
+    // Listen for any user interaction
+    document.addEventListener('click', unlockAudio, { once: false });
+    document.addEventListener('keydown', unlockAudio, { once: false });
+    document.addEventListener('touchstart', unlockAudio, { once: false });
+
+    return () => {
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('keydown', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+    };
+  }, [playCompanionResponse]);
 
   const getInitials = (name: string) => {
     return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -412,6 +447,19 @@ export function ChatWindow({
                 ) : (
                   <VolumeX className="h-5 w-5" />
                 )}
+              </Button>
+            )}
+
+            {/* Voice Conversation Mode Button */}
+            {hasVoiceEnabled && isVoiceConversationSupported && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setVoiceConversationActive(true)}
+                className="rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10"
+                title="Start hands-free voice conversation"
+              >
+                <Phone className="h-5 w-5" />
               </Button>
             )}
 
@@ -598,6 +646,23 @@ export function ChatWindow({
         companionName={companion.name}
         voiceEnabled={true}
       />
+
+      {/* ================================================================
+          VOICE CONVERSATION MODE OVERLAY
+          ================================================================ */}
+      {isVoiceConversationSupported && (
+        <VoiceConversationMode
+          isActive={voiceConversationActive}
+          onStart={() => setVoiceConversationActive(true)}
+          onEnd={() => setVoiceConversationActive(false)}
+          onSendMessage={async (text) => {
+            await sendMessage(text);
+          }}
+          companionName={companion.name}
+          companionId={companion.id}
+          hasVoiceEnabled={hasVoiceEnabled}
+        />
+      )}
     </div>
   );
 }
