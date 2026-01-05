@@ -115,7 +115,7 @@ export async function getUserCompanions(): Promise<Companion[]> {
     .from('companions')
     .select('*')
     .eq('user_id', user.id)
-    .eq('is_archived', false)
+    .eq('is_active', true)
     .order('last_interaction', { ascending: false });
   
   if (error) {

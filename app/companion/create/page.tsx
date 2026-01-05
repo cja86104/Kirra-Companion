@@ -315,10 +315,10 @@ export default function CreateCompanionPage() {
         throw new Error('Failed to create companion');
       }
 
-      // Create companion DNA
+      // Create companion DNA (upsert to handle retries gracefully)
       const { error: dnaError } = await supabase
         .from('companion_dna')
-        .insert({
+        .upsert({
           companion_id: companion.id,
           learning_style_matrix: {
             traits: companionData.traits,
@@ -351,10 +351,12 @@ export default function CreateCompanionPage() {
             importance_weight: 0.5,
             emotional_weight: 0.2,
           },
-        } as never);
+        } as never, {
+          onConflict: 'companion_id',
+        });
 
       if (dnaError) {
-        console.error('DNA insert error:', JSON.stringify(dnaError, null, 2));
+        console.error('DNA upsert error:', JSON.stringify(dnaError, null, 2));
         throw new Error(dnaError.message || 'Failed to create companion DNA');
       }
 

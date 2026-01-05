@@ -379,6 +379,23 @@ export async function getLifeEventsForUser(
 ) {
   const supabase = await createClient();
   
+  // First get the user's companion IDs
+  const { data: companions, error: companionsError } = await supabase
+    .from('companions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('is_active', true);
+  
+  if (companionsError || !companions || companions.length === 0) {
+    if (companionsError) {
+      console.error('Error fetching companions:', companionsError);
+    }
+    return [];
+  }
+  
+  const companionIds = companions.map(c => c.id);
+  
+  // Now get life events for those companions
   const { data, error } = await supabase
     .from('life_events')
     .select(`
@@ -389,8 +406,8 @@ export async function getLifeEventsForUser(
         avatar_url
       )
     `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .in('companion_id', companionIds)
+    .order('occurred_at', { ascending: false })
     .limit(limit);
   
   if (error) {

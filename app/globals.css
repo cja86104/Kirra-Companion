@@ -231,8 +231,15 @@
   }
   
   html {
-    color-scheme: dark;
     scroll-behavior: smooth;
+  }
+  
+  html.dark {
+    color-scheme: dark;
+  }
+  
+  html.light {
+    color-scheme: light;
   }
   
   body {
@@ -1058,3 +1065,104 @@
     100% { left: 150%; }
   }
 }
+
+/* ============================================================
+   LIGHT MODE SPECIFIC OVERRIDES
+   ============================================================ */
+
+@layer components {
+  /* Navigation in light mode */
+  .light .nav-item {
+    color: hsl(150 20% 35%);
+  }
+  
+  .light .nav-item:hover {
+    background: hsl(150 20% 92%);
+    color: hsl(150 25% 20%);
+  }
+  
+  .light .nav-item.active {
+    background: hsl(152 45% 32% / 0.1);
+    color: hsl(152 50% 28%);
+  }
+  
+  /* Quick actions in light mode */
+  .light .quick-action {
+    background: hsl(75 15% 96%);
+    border-color: hsl(150 15% 85%);
+  }
+  
+  .light .quick-action:hover {
+    background: hsl(75 15% 94%);
+    border-color: hsl(152 35% 70%);
+  }
+  
+  /* Life event cards in light mode */
+  .light .life-event-card {
+    background: hsl(75 15% 96%);
+    border-color: hsl(150 15% 85%);
+  }
+  
+  .light .life-event-card:hover {
+    background: hsl(75 15% 94%);
+    border-color: hsl(152 35% 70%);
+  }
+  
+  /* Input fields in light mode */
+  .light .input-forest {
+    background: hsl(75 15% 98%);
+    border-color: hsl(150 15% 80%);
+    color: hsl(150 25% 15%);
+  }
+  
+  .light .input-forest:focus {
+    border-color: hsl(152 45% 40%);
+    box-shadow: 
+      0 0 0 3px hsl(152 45% 40% / 0.1),
+      0 0 20px hsl(152 45% 40% / 0.05);
+  }
+  
+  .light .input-forest::placeholder {
+    color: hsl(150 10% 55%);
+  }
+  
+  /* Glass effects in light mode */
+  .light .glass {
+    background: hsl(75 18% 95% / 0.8);
+    border-color: hsl(150 12% 80% / 0.6);
+  }
+  
+  .light .glass-heavy {
+    background: hsl(75 18% 92% / 0.9);
+    border-color: hsl(150 12% 78% / 0.7);
+  }
+  
+  /* Surface utilities in light mode */
+  .light .surface-1 {
+    background: hsl(75 18% 96%);
+  }
+  
+  .light .surface-2 {
+    background: hsl(75 18% 94%);
+  }
+  
+  .light .surface-3 {
+    background: hsl(75 18% 92%);
+  }
+  
+  /* Message bubbles in light mode */
+  .light .message-user {
+    background: linear-gradient(145deg, hsl(152 45% 38%) 0%, hsl(152 50% 30%) 100%);
+  }
+  
+  .light .message-companion {
+    background: hsl(75 15% 94%);
+    border-color: hsl(150 15% 85%);
+  }
+  
+  /* Override white background fix for light mode */
+  .light .bg-white {
+    background: hsl(75 15% 98%) !important;
+  }
+}
+

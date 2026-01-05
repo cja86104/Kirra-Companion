@@ -34,6 +34,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { AffectionMeter } from '@/components/ui/progress';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import type { Profile, Companion, MoodState } from '@/types/database';
 
 interface SidebarProps {
@@ -373,6 +374,25 @@ export function Sidebar({ user, companions }: SidebarProps) {
             return NavLink;
           })}
         </nav>
+
+        {/* Theme Toggle */}
+        <div className={cn(
+          'mb-3 flex items-center rounded-xl bg-secondary/20 transition-colors',
+          isCollapsed ? 'justify-center p-1' : 'justify-between px-3 py-2'
+        )}>
+          {!isCollapsed && (
+            <span className="text-xs text-muted-foreground">Theme</span>
+          )}
+          {isCollapsed ? (
+            <SimpleTooltip content="Toggle theme" side="right">
+              <div>
+                <ThemeToggle />
+              </div>
+            </SimpleTooltip>
+          ) : (
+            <ThemeToggle showLabel />
+          )}
+        </div>
 
         {/* User Profile Card */}
         <div

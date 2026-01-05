@@ -37,6 +37,8 @@ import {
   TreePine,
   Sunrise,
   Plus,
+  Trash2,
+  X,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -261,6 +263,8 @@ export default function DashboardPage() {
   const [currentActivity, setCurrentActivity] = useState<CompanionActivity | null>(null);
   const [proactiveMessages, setProactiveMessages] = useState<ProactiveMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState<Companion | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const timeGreeting = useMemo(() => getTimeOfDayGreeting(), []);
 
@@ -341,6 +345,44 @@ export default function DashboardPage() {
 
     } catch (error) {
       console.error('Failed to load companion data:', error);
+    }
+  };
+
+  const deleteCompanion = async (companion: Companion) => {
+    setIsDeleting(true);
+    try {
+      const supabase = getClient();
+      
+      // Delete in order: DNA, memories, messages, conversations, life_events, activities, proactive_messages, then companion
+      // Using cascade would be better but let's be explicit for safety
+      
+      await supabase.from('companion_dna').delete().eq('companion_id', companion.id);
+      await supabase.from('companion_memories').delete().eq('companion_id', companion.id);
+      await supabase.from('messages').delete().eq('companion_id', companion.id);
+      await supabase.from('conversations').delete().eq('companion_id', companion.id);
+      await (supabase.from('life_events') as any).delete().eq('companion_id', companion.id);
+      await (supabase.from('companion_activities') as any).delete().eq('companion_id', companion.id);
+      await (supabase.from('proactive_messages') as any).delete().eq('companion_id', companion.id);
+      
+      // Finally delete the companion
+      const { error } = await supabase.from('companions').delete().eq('id', companion.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setCompanions(prev => prev.filter(c => c.id !== companion.id));
+      
+      // If we deleted the selected companion, select another
+      if (selectedCompanion?.id === companion.id) {
+        const remaining = companions.filter(c => c.id !== companion.id);
+        setSelectedCompanion(remaining[0] || null);
+      }
+      
+      setDeleteConfirm(null);
+    } catch (error) {
+      console.error('Failed to delete companion:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -707,39 +749,53 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* ============================================================ */}
-        {/* COMPANION SWITCHER (if multiple) */}
+        {/* COMPANION MANAGER */}
         {/* ============================================================ */}
-        {companions.length > 1 && (
+        {companions.length >= 1 && (
           <motion.div variants={itemVariants} className="surface-2 rounded-2xl p-5">
             <h2 className="font-display text-lg font-semibold mb-4">Your Companions</h2>
             <div className="flex flex-wrap gap-3">
               {companions.map((companion) => (
-                <button
+                <div
                   key={companion.id}
-                  onClick={() => setSelectedCompanion(companion)}
                   className={cn(
-                    'flex items-center gap-3 rounded-xl p-3 transition-all',
+                    'group relative flex items-center gap-3 rounded-xl p-3 transition-all',
                     selectedCompanion?.id === companion.id
                       ? 'bg-primary/12 ring-2 ring-primary/40'
                       : 'bg-secondary/30 hover:bg-secondary/50'
                   )}
                 >
-                  <Avatar className="h-10 w-10">
-                    {companion.avatar_url ? (
-                      <AvatarImage src={companion.avatar_url} alt={companion.name} />
-                    ) : (
-                      <AvatarFallback className="bg-kirra-gradient text-white text-sm">
-                        {companion.name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  <div className="text-left">
-                    <p className="font-medium text-sm text-foreground">{companion.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {companion.relationship_type}
-                    </p>
-                  </div>
-                </button>
+                  <button
+                    onClick={() => setSelectedCompanion(companion)}
+                    className="flex items-center gap-3"
+                  >
+                    <Avatar className="h-10 w-10">
+                      {companion.avatar_url ? (
+                        <AvatarImage src={companion.avatar_url} alt={companion.name} />
+                      ) : (
+                        <AvatarFallback className="bg-kirra-gradient text-white text-sm">
+                          {companion.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div className="text-left">
+                      <p className="font-medium text-sm text-foreground">{companion.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {companion.relationship_type}
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm(companion);
+                    }}
+                    className="ml-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                    title={`Delete ${companion.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               ))}
               
               <Link href="/companion/create">
@@ -752,6 +808,64 @@ export default function DashboardPage() {
               </Link>
             </div>
           </motion.div>
+        )}
+
+        {/* DELETE CONFIRMATION MODAL */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative w-full max-w-md mx-4 rounded-2xl bg-background border border-border p-6 shadow-xl"
+            >
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="absolute right-4 top-4 p-1 rounded-lg hover:bg-secondary/50 text-muted-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/15">
+                  <Trash2 className="h-7 w-7 text-destructive" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Delete {deleteConfirm.name}?</h3>
+                <p className="text-muted-foreground mb-6">
+                  This will permanently delete {deleteConfirm.name} and all their memories, conversations, and data. This cannot be undone.
+                </p>
+                
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setDeleteConfirm(null)}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    onClick={() => deleteCompanion(deleteConfirm)}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                          className="mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full"
+                        />
+                        Deleting...
+                      </>
+                    ) : (
+                      'Delete Forever'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </div>
     </motion.div>
