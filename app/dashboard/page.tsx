@@ -37,6 +37,7 @@ import {
   Plus,
   Trash2,
   X,
+  Settings,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -715,6 +716,19 @@ export default function DashboardPage() {
               <ChevronRight className="h-4 w-4 text-muted-foreground/40 opacity-0 transition-all group-hover:opacity-100" />
             </div>
           </Link>
+
+          <Link href={`/companion/${selectedCompanion?.id}`}>
+            <div className="quick-action group">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 transition-all group-hover:bg-violet-500 group-hover:text-white">
+                <Settings className="h-5 w-5 text-violet-600 dark:text-violet-500 group-hover:text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-sm text-foreground">Settings</p>
+                <p className="text-xs text-muted-foreground">Edit & 3D Avatar</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground/40 opacity-0 transition-all group-hover:opacity-100" />
+            </div>
+          </Link>
         </motion.div>
 
         {/* ============================================================ */}
@@ -754,12 +768,20 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </button>
+                  <Link
+                    href={`/companion/${companion.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="ml-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                    title={`Edit ${companion.name}`}
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                  </Link>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setDeleteConfirm(companion);
                     }}
-                    className="ml-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                     title={`Delete ${companion.name}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

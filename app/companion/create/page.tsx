@@ -25,16 +25,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { getClient } from '@/lib/supabase/client';
-import { AvatarSelector, resolveAvatarUrl, getGradientConfig } from '@/components/companion/AvatarSelector';
 import { BackstoryGenerator } from '@/components/companion/BackstoryGenerator';
 import { VoiceSelector } from '@/components/companion/VoiceSelector';
+import { NiceAvatarCustomizer } from '@/components/avatar/NiceAvatarCustomizer';
 import type { Profile, Companion, VoiceConfig } from '@/types/database';
+import type { NiceAvatarConfig } from '@/types/nice-avatar';
 
 type RelationshipType = 'friend' | 'mentor' | 'romantic' | 'family' | 'custom';
 
 interface CompanionData {
   name: string;
-  avatarSelection: string | null;
+  avatarConfig: NiceAvatarConfig | null;
   relationshipType: RelationshipType;
   backstory: string;
   traits: {
@@ -89,7 +90,7 @@ export default function CreateCompanionPage() {
   
   const [companionData, setCompanionData] = useState<CompanionData>({
     name: '',
-    avatarSelection: null,
+    avatarConfig: null,
     relationshipType: 'friend',
     backstory: '',
     traits: {
@@ -174,13 +175,13 @@ export default function CreateCompanionPage() {
 
   const canProceed = () => {
     switch (currentStep) {
-      case 0: return companionData.name.trim().length >= 2;
-      case 1: return true;
-      case 2: return true;
-      case 3: return companionData.interests.length >= 1;
+      case 0: return companionData.name.trim().length >= 2; // Basics - name required
+      case 1: return true; // Relationship
+      case 2: return true; // Personality
+      case 3: return companionData.interests.length >= 1; // Style - interests required
       case 4: return true; // Backstory is optional
       case 5: return true; // Voice is optional
-      case 6: return true;
+      case 6: return true; // Review
       default: return false;
     }
   };
@@ -260,10 +261,6 @@ export default function CreateCompanionPage() {
         return;
       }
 
-      // Resolve avatar URL
-      const avatarUrl = resolveAvatarUrl(companionData.avatarSelection);
-      const gradientConfig = getGradientConfig(companionData.avatarSelection);
-
       // Initialize companion needs
       const now = new Date().toISOString();
       const initialNeeds = {
@@ -294,8 +291,8 @@ export default function CreateCompanionPage() {
           intensity: 0.7,
         },
         needs: initialNeeds,
-        avatar_url: avatarUrl,
-        avatar_3d_config: gradientConfig ? { gradient: gradientConfig } : null,
+        avatar_url: null,
+        avatar_3d_config: companionData.avatarConfig,
         voice_config: companionData.voiceConfig,
       };
       
@@ -375,7 +372,7 @@ export default function CreateCompanionPage() {
     switch (currentStep) {
       case 0:
         return (
-          <div className="space-y-8">
+          <div className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="name">What would you like to call your companion?</Label>
               <Input
@@ -391,11 +388,17 @@ export default function CreateCompanionPage() {
               </p>
             </div>
 
-            <AvatarSelector
-              selectedAvatar={companionData.avatarSelection}
-              onSelect={(avatar) => updateData('avatarSelection', avatar)}
-              companionName={companionData.name}
-            />
+            <div className="space-y-2">
+              <Label>Design your companion&apos;s avatar</Label>
+              <p className="text-xs text-muted-foreground">
+                Customize how {companionData.name || 'your companion'} looks. You can always edit this later.
+              </p>
+              <NiceAvatarCustomizer
+                initialConfig={companionData.avatarConfig}
+                onChange={(config) => updateData('avatarConfig', config)}
+                compact={false}
+              />
+            </div>
           </div>
         );
 
@@ -537,21 +540,9 @@ export default function CreateCompanionPage() {
           <div className="space-y-6">
             <div className="rounded-lg border border-border bg-muted/30 p-6">
               <div className="mb-4 flex items-center gap-4">
-                {companionData.avatarSelection?.startsWith('gradient:') ? (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-kirra-gradient text-2xl text-white">
-                    {companionData.name[0]?.toUpperCase() || '?'}
-                  </div>
-                ) : companionData.avatarSelection ? (
-                  <img
-                    src={companionData.avatarSelection}
-                    alt={companionData.name}
-                    className="h-16 w-16 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-kirra-gradient text-2xl text-white">
-                    {companionData.name[0]?.toUpperCase() || '?'}
-                  </div>
-                )}
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-kirra-gradient text-2xl text-white">
+                  {companionData.name[0]?.toUpperCase() || '?'}
+                </div>
                 <div>
                   <h3 className="text-xl font-bold">{companionData.name}</h3>
                   <div className="flex items-center gap-2">
@@ -562,6 +553,12 @@ export default function CreateCompanionPage() {
                       <Badge variant="outline" className="gap-1">
                         <Volume2 className="h-3 w-3" />
                         Voice enabled
+                      </Badge>
+                    )}
+                    {companionData.avatarConfig && (
+                      <Badge variant="outline" className="gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        Custom Avatar
                       </Badge>
                     )}
                   </div>
