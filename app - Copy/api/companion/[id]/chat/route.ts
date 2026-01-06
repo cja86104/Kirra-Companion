@@ -28,9 +28,6 @@ import {
 } from '@/lib/safety/age-verification';
 import { processLifeEventFromChat } from '@/lib/companion/life-events';
 import { processMemoriesFromChat } from '@/lib/companion/memory-extraction';
-import { processEvolutionTrigger, quickShouldCheck } from '@/lib/companion/evolution-triggers';
-import { processSkillTeaching, findRelevantSkills } from '@/lib/companion/skill-detection';
-import { trackSkillUsage } from '@/lib/companion/skill-usage';
 import type { Profile, Companion, CompanionDNA, Message } from '@/types/database';
 
 interface ChatRequestBody {
@@ -279,9 +276,6 @@ export async function POST(
       .order('importance_score', { ascending: false })
       .limit(10);
 
-    // Get relevant skills based on the message content
-    const relevantSkills = await findRelevantSkills(companionId, message.trim(), 5);
-
     // Build system prompt with SAFETY INSTRUCTIONS
     let systemPrompt = SAFETY_SYSTEM_PROMPT + '\n\n' + buildCompanionSystemPrompt(
       {
@@ -299,14 +293,7 @@ export async function POST(
         } : undefined,
       },
       ((memories as Array<{ title: string | null; content: string; importance_score: number }>) || [])
-        .map(m => ({ title: m.title || '', content: m.content, importance_score: m.importance_score })),
-      relevantSkills.length > 0 ? relevantSkills.map(s => ({
-        skill_name: s.skill_name,
-        skill_summary: s.skill_summary,
-        skill_content: s.skill_content,
-        skill_category: s.skill_category,
-        proficiency: s.proficiency,
-      })) : undefined
+        .map(m => ({ title: m.title || '', content: m.content, importance_score: m.importance_score }))
     );
 
     // Add mood influence from needs system
@@ -431,52 +418,6 @@ export async function POST(
       console.error('Memory extraction error:', err);
     });
 
-    // DNA Evolution trigger (non-blocking)
-    // Evolves companion personality based on conversation patterns
-    const sessionMsgCount = (recentMessages?.length || 0) + 2;
-    const totalMsgCount = companion.total_messages + 2;
-    if (quickShouldCheck(totalMsgCount, sessionMsgCount)) {
-      processEvolutionTrigger({
-        companionId,
-        totalMessages: totalMsgCount,
-        sessionMessages: sessionMsgCount,
-        userMessage: message.trim(),
-        companionResponse: completion.content,
-      }).catch(err => {
-        console.error('DNA evolution trigger error:', err);
-      });
-    }
-
-    // Skill teaching detection (non-blocking)
-    // Detects when user is teaching the companion new skills
-    let skillLearned: { name: string; id: string } | null = null;
-    processSkillTeaching(companionId, message.trim(), completion.content)
-      .then(result => {
-        if (result.saved && result.skill_name) {
-          console.log(`[Chat] Companion learned skill: ${result.skill_name}`);
-          skillLearned = { name: result.skill_name, id: result.skill_id! };
-        }
-      })
-      .catch(err => {
-        console.error('Skill teaching error:', err);
-      });
-
-    // Track skill usage (non-blocking)
-    // Records when skills are referenced in the conversation
-    if (relevantSkills.length > 0) {
-      trackSkillUsage(
-        companionId,
-        relevantSkills.map(s => ({
-          skill_id: s.id,
-          skill_name: s.skill_name,
-          usage_type: 'referenced' as const,
-        })),
-        companionMessage?.id
-      ).catch(err => {
-        console.error('Skill usage tracking error:', err);
-      });
-    }
-
     return NextResponse.json({
       userMessage: userMessage as unknown as Message,
       companionMessage: companionMessage as unknown as Message,
@@ -485,8 +426,6 @@ export async function POST(
       minorDetected: behavioralDetection.shouldFlag,
       minorMessage: minorDetectionMessage,
       isMinorMode: treatAsMinor,
-      // Include skill info if relevant skills were used
-      skillsUsed: relevantSkills.length > 0 ? relevantSkills.map(s => s.skill_name) : undefined,
     });
   } catch (error) {
     console.error('Chat error:', error);

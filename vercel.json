@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/life-simulation",
       "schedule": "30 */2 * * *"
+    },
+    {
+      "path": "/api/cron/dna-evolution",
+      "schedule": "0 */12 * * *"
     }
   ]
 }
