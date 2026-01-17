@@ -43,9 +43,9 @@ export default async function MemoryPalacePage({ params }: MemoryPalacePageProps
 
   const memories = await getCompanionMemories(companionId, 50);
 
-  // Group memories by category
+  // Group memories by type
   const memoriesByCategory = memories.reduce((acc, memory) => {
-    const category = memory.memory_categories?.name || 'Uncategorized';
+    const category = memory.memory_type || 'general';
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -53,12 +53,11 @@ export default async function MemoryPalacePage({ params }: MemoryPalacePageProps
     return acc;
   }, {} as Record<string, typeof memories>);
 
-  // Calculate stats
+  // Calculate stats using actual database fields
   const totalMemories = memories.length;
-  const coreMemories = memories.filter(m => m.is_core_identity).length;
-  const pinnedMemories = memories.filter(m => m.is_pinned).length;
+  const coreMemories = memories.filter(m => m.is_core_memory).length;
   const avgImportance = memories.length > 0 
-    ? memories.reduce((sum, m) => sum + (m.importance_score || 0), 0) / memories.length 
+    ? memories.reduce((sum, m) => sum + (m.importance || 0), 0) / memories.length 
     : 0;
 
   const getInitials = (name: string) => {
@@ -140,8 +139,8 @@ export default async function MemoryPalacePage({ params }: MemoryPalacePageProps
                 <Star className="h-6 w-6 text-yellow-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{pinnedMemories}</p>
-                <p className="text-sm text-muted-foreground">Pinned</p>
+                <p className="text-2xl font-bold">{memories.filter(m => m.is_active).length}</p>
+                <p className="text-sm text-muted-foreground">Active</p>
               </div>
             </CardContent>
           </Card>

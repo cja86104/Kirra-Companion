@@ -33,7 +33,7 @@ interface SpeechRecognitionErrorEvent extends Event {
   message?: string;
 }
 
-interface SpeechRecognition extends EventTarget {
+interface ISpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
@@ -47,11 +47,14 @@ interface SpeechRecognition extends EventTarget {
   onspeechend: (() => void) | null;
 }
 
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
-  }
+// Type for accessing browser speech recognition
+type SpeechRecognitionConstructor = new () => ISpeechRecognition;
+
+// Helper to get speech recognition constructor
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
 }
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -80,7 +83,7 @@ export function VoiceConversationMode({
   const [interimTranscript, setInterimTranscript] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -125,8 +128,8 @@ export function VoiceConversationMode({
 
   // Start listening
   const startListening = useCallback(async () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    const SpeechRecognitionCtor = getSpeechRecognition();
+    if (!SpeechRecognitionCtor) {
       toast.error('Voice not supported in this browser');
       return;
     }
@@ -157,7 +160,7 @@ export function VoiceConversationMode({
       updateAudioLevel();
 
       // Speech recognition
-      const recognition = new SpeechRecognition();
+      const recognition = new SpeechRecognitionCtor();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
@@ -411,11 +414,10 @@ export function useVoiceConversationSupported(): boolean {
   useEffect(() => {
     const checkSupport = () => {
       try {
-        const hasSpeechRecognition = typeof window !== 'undefined' && 
-          (window.SpeechRecognition || window.webkitSpeechRecognition);
+        const hasSpeechRecognition = getSpeechRecognition() !== null;
         const hasMediaDevices = typeof navigator !== 'undefined' && 
           navigator.mediaDevices !== undefined;
-        setIsSupported(!!hasSpeechRecognition && hasMediaDevices);
+        setIsSupported(hasSpeechRecognition && hasMediaDevices);
       } catch {
         setIsSupported(false);
       }

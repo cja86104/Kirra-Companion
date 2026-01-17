@@ -471,7 +471,7 @@ export async function POST(
           skill_name: s.skill_name,
           usage_type: 'referenced' as const,
         })),
-        companionMessage?.id
+        (companionMessage as Message | null)?.id
       ).catch(err => {
         console.error('Skill usage tracking error:', err);
       });

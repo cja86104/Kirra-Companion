@@ -32,13 +32,21 @@ import { Slider } from '@/components/ui/slider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClient } from '@/lib/supabase/client';
 import { NiceAvatarCustomizer } from '@/components/avatar/NiceAvatarCustomizer';
-import type { Companion } from '@/types/database';
+import type { Companion, Json } from '@/types/database';
 import type { NiceAvatarConfig } from '@/types/nice-avatar';
 import { DEFAULT_NICE_AVATAR_CONFIG } from '@/types/nice-avatar';
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+interface PersonalityBase {
+  openness?: number;
+  conscientiousness?: number;
+  extraversion?: number;
+  agreeableness?: number;
+  neuroticism?: number;
+}
 
 type TabId = 'overview' | 'avatar' | 'personality' | 'appearance';
 
@@ -99,13 +107,14 @@ export default function CompanionDetailsPage() {
       setCompanion(comp);
       setName(comp.name);
       setAvatarConfig(comp.avatar_3d_config as NiceAvatarConfig | null);
-      if (comp.personality_base) {
+      const personalityBase = comp.personality_base as PersonalityBase | null;
+      if (personalityBase) {
         setTraits({
-          openness: comp.personality_base.openness ?? 50,
-          conscientiousness: comp.personality_base.conscientiousness ?? 50,
-          extraversion: comp.personality_base.extraversion ?? 50,
-          agreeableness: comp.personality_base.agreeableness ?? 50,
-          neuroticism: comp.personality_base.neuroticism ?? 30,
+          openness: personalityBase.openness ?? 50,
+          conscientiousness: personalityBase.conscientiousness ?? 50,
+          extraversion: personalityBase.extraversion ?? 50,
+          agreeableness: personalityBase.agreeableness ?? 50,
+          neuroticism: personalityBase.neuroticism ?? 30,
         });
       }
       setIsLoading(false);
@@ -128,7 +137,7 @@ export default function CompanionDetailsPage() {
         avatar_3d_config: avatarConfig,
         personality_base: traits,
         updated_at: new Date().toISOString(),
-      })
+      } as never)
       .eq('id', companion.id);
 
     if (error) {
@@ -137,7 +146,7 @@ export default function CompanionDetailsPage() {
     } else {
       toast.success('Changes saved!');
       setHasChanges(false);
-      setCompanion((prev) => prev ? { ...prev, name, avatar_3d_config: avatarConfig, personality_base: traits } : null);
+      setCompanion((prev) => prev ? { ...prev, name, avatar_3d_config: avatarConfig as unknown as Json, personality_base: traits as unknown as Json } : null);
     }
     setIsSaving(false);
   };

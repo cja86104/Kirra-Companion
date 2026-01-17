@@ -101,7 +101,7 @@ export function VoiceSelector({
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [loadingVoiceId, setLoadingVoiceId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [speed, setSpeed] = useState(selectedVoice?.speed ?? 1.0);
+  const [speed, setSpeed] = useState(selectedVoice?.speakingRate ?? 1.0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Check if user has voice access
@@ -470,9 +470,9 @@ export function isValidVoiceConfig(config: unknown): config is VoiceConfig {
     if (!OPENAI_VOICES.find(v => v.voice_id === c.voiceId)) return false;
   }
   
-  // Validate speed if present (OpenAI)
-  if (c.speed !== undefined) {
-    if (typeof c.speed !== 'number' || c.speed < 0.25 || c.speed > 4.0) {
+  // Validate speakingRate if present (OpenAI)
+  if (c.speakingRate !== undefined) {
+    if (typeof c.speakingRate !== 'number' || c.speakingRate < 0.25 || c.speakingRate > 4.0) {
       return false;
     }
   }

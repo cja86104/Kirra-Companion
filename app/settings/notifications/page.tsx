@@ -61,6 +61,10 @@ const notificationOptions = [
   },
 ];
 
+interface ProfileWithPreferences {
+  preferences: Record<string, unknown> | null;
+}
+
 export default function NotificationsPage() {
   const [settings, setSettings] = useState<NotificationSettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,14 +80,18 @@ export default function NotificationsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      const { data: profileData } = await supabase
         .from('profiles')
-        .select('preferences')
+        .select('*')
         .eq('id', user.id)
         .single();
 
-      if (data?.preferences?.notifications) {
-        setSettings({ ...defaultSettings, ...data.preferences.notifications });
+      const profile = profileData as ProfileWithPreferences | null;
+      if (profile?.preferences && typeof profile.preferences === 'object' && !Array.isArray(profile.preferences)) {
+        const prefs = profile.preferences;
+        if (prefs.notifications) {
+          setSettings({ ...defaultSettings, ...(prefs.notifications as NotificationSettings) });
+        }
       }
     } catch (error) {
       console.error('Failed to load notification settings:', error);
@@ -99,13 +107,16 @@ export default function NotificationsPage() {
       if (!user) throw new Error('Not authenticated');
 
       // Get current preferences
-      const { data: currentProfile } = await supabase
+      const { data: profileData } = await supabase
         .from('profiles')
-        .select('preferences')
+        .select('*')
         .eq('id', user.id)
         .single();
 
-      const currentPrefs = currentProfile?.preferences || {};
+      const profile = profileData as ProfileWithPreferences | null;
+      const currentPrefs = (profile?.preferences && typeof profile.preferences === 'object' && !Array.isArray(profile.preferences))
+        ? profile.preferences
+        : {};
 
       // Update with new notification settings
       const { error } = await supabase

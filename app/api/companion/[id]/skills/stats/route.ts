@@ -15,6 +15,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getSkillUsageStats, getRecentSkillUsage } from '@/lib/companion/skill-usage';
 
+interface CompanionRow {
+  id: string;
+  user_id: string;
+  name: string;
+}
+
+interface SkillProficiency {
+  proficiency: string;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -37,13 +47,22 @@ export async function GET(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id, name')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as CompanionRow | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -74,7 +93,8 @@ export async function GET(
       .eq('is_active', true);
 
     const proficiencyDistribution: Record<string, number> = {};
-    for (const skill of proficiencyData || []) {
+    const skills = (proficiencyData || []) as SkillProficiency[];
+    for (const skill of skills) {
       proficiencyDistribution[skill.proficiency] = (proficiencyDistribution[skill.proficiency] || 0) + 1;
     }
 

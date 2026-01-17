@@ -19,10 +19,12 @@
  *   "crons": [
  *     {
  *       "path": "/api/cron/dna-evolution",
- *       "schedule": "0 */12 * * *"
+ *       "schedule": "0 0,12 * * *"
  *     }
  *   ]
  * }
+ * 
+ * Note: "0 0,12 * * *" runs at midnight and noon (every 12 hours)
  */
 
 import { NextRequest, NextResponse } from 'next/server';

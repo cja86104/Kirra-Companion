@@ -62,43 +62,43 @@ export async function trackSkillUsage(
   for (const usage of skillsUsed) {
     try {
       // Update the skill's usage stats
-      const { data: updatedSkill, error: updateError } = await supabase
+      const { data: updatedSkill, error: updateError } = await (supabase
         .from('companion_skills')
         .update({
-          times_used: supabase.rpc('increment_field', { row_id: usage.skill_id, field: 'times_used' }),
+          times_used: (supabase.rpc as any)('increment_field', { row_id: usage.skill_id, field: 'times_used' }),
           last_used_at: new Date().toISOString(),
           // If marked successful, increment successful_uses
           ...(usage.was_successful === true && {
-            successful_uses: supabase.rpc('increment_field', { row_id: usage.skill_id, field: 'successful_uses' }),
+            successful_uses: (supabase.rpc as any)('increment_field', { row_id: usage.skill_id, field: 'successful_uses' }),
           }),
           // If marked failed/corrected, increment failed_uses
           ...(usage.was_successful === false && {
-            failed_uses: supabase.rpc('increment_field', { row_id: usage.skill_id, field: 'failed_uses' }),
+            failed_uses: (supabase.rpc as any)('increment_field', { row_id: usage.skill_id, field: 'failed_uses' }),
           }),
         } as never)
         .eq('id', usage.skill_id)
         .select('times_used')
-        .single();
+        .single() as any);
 
       // Fallback: Direct increment if RPC doesn't exist
       if (updateError) {
         // Get current values first
-        const { data: currentSkill } = await supabase
+        const { data: currentSkill } = await (supabase
           .from('companion_skills')
           .select('times_used, successful_uses, failed_uses')
           .eq('id', usage.skill_id)
-          .single();
+          .single() as any);
 
         if (currentSkill) {
           const updates: Record<string, unknown> = {
-            times_used: (currentSkill.times_used || 0) + 1,
+            times_used: ((currentSkill as any).times_used || 0) + 1,
             last_used_at: new Date().toISOString(),
           };
 
           if (usage.was_successful === true) {
-            updates.successful_uses = (currentSkill.successful_uses || 0) + 1;
+            updates.successful_uses = ((currentSkill as any).successful_uses || 0) + 1;
           } else if (usage.was_successful === false) {
-            updates.failed_uses = (currentSkill.failed_uses || 0) + 1;
+            updates.failed_uses = ((currentSkill as any).failed_uses || 0) + 1;
           }
 
           await supabase
@@ -126,7 +126,7 @@ export async function trackSkillUsage(
         skill_id: usage.skill_id,
         skill_name: usage.skill_name,
         success: true,
-        new_times_used: updatedSkill?.times_used,
+        new_times_used: (updatedSkill as any)?.times_used,
       });
 
     } catch (error) {
@@ -180,11 +180,11 @@ export async function markSkillSuccess(
 
   try {
     // Get current stats
-    const { data: skill } = await supabase
+    const { data: skill } = await (supabase
       .from('companion_skills')
       .select('successful_uses')
       .eq('id', skillId)
-      .single();
+      .single() as any);
 
     if (!skill) return false;
 
@@ -192,7 +192,7 @@ export async function markSkillSuccess(
     await supabase
       .from('companion_skills')
       .update({
-        successful_uses: (skill.successful_uses || 0) + 1,
+        successful_uses: ((skill as any).successful_uses || 0) + 1,
       } as never)
       .eq('id', skillId);
 
@@ -226,11 +226,11 @@ export async function markSkillCorrection(
 
   try {
     // Get current stats
-    const { data: skill } = await supabase
+    const { data: skill } = await (supabase
       .from('companion_skills')
       .select('failed_uses, times_reinforced')
       .eq('id', skillId)
-      .single();
+      .single() as any);
 
     if (!skill) return false;
 
@@ -238,8 +238,8 @@ export async function markSkillCorrection(
     await supabase
       .from('companion_skills')
       .update({
-        failed_uses: (skill.failed_uses || 0) + 1,
-        times_reinforced: (skill.times_reinforced || 0) + 1,
+        failed_uses: ((skill as any).failed_uses || 0) + 1,
+        times_reinforced: ((skill as any).times_reinforced || 0) + 1,
       } as never)
       .eq('id', skillId);
 
@@ -306,9 +306,10 @@ export async function getSkillUsageStats(
     query = query.gte('used_at', dateFilter);
   }
 
-  const { data: logs } = await query;
+  const { data: logs } = await (query as any);
+  const typedLogs = (logs || []) as Array<{skill_id: string; usage_type: string; was_successful: boolean | null; used_at: string}>;
 
-  if (!logs || logs.length === 0) {
+  if (!typedLogs || typedLogs.length === 0) {
     return {
       total_uses: 0,
       unique_skills_used: 0,
@@ -319,13 +320,13 @@ export async function getSkillUsageStats(
   }
 
   // Calculate stats
-  const uniqueSkills = new Set(logs.map(l => l.skill_id));
-  const successfulUses = logs.filter(l => l.was_successful === true).length;
-  const evaluatedUses = logs.filter(l => l.was_successful !== null).length;
+  const uniqueSkills = new Set(typedLogs.map(l => l.skill_id));
+  const successfulUses = typedLogs.filter(l => l.was_successful === true).length;
+  const evaluatedUses = typedLogs.filter(l => l.was_successful !== null).length;
 
   // Get skill details for most used
   const skillCounts: Record<string, number> = {};
-  for (const log of logs) {
+  for (const log of typedLogs) {
     skillCounts[log.skill_id] = (skillCounts[log.skill_id] || 0) + 1;
   }
 
@@ -334,12 +335,13 @@ export async function getSkillUsageStats(
     .slice(0, 5)
     .map(([id]) => id);
 
-  const { data: topSkills } = await supabase
+  const { data: topSkills } = await (supabase
     .from('companion_skills')
     .select('id, skill_name, skill_category')
-    .in('id', topSkillIds);
+    .in('id', topSkillIds) as any);
 
-  const skillMap = new Map((topSkills || []).map(s => [s.id, s]));
+  const typedTopSkills = (topSkills || []) as Array<{id: string; skill_name: string; skill_category: string}>;
+  const skillMap = new Map(typedTopSkills.map(s => [s.id, s]));
   
   const mostUsed = topSkillIds.map(id => ({
     skill_name: skillMap.get(id)?.skill_name || 'Unknown',
@@ -348,7 +350,7 @@ export async function getSkillUsageStats(
 
   // Count by category
   const byCategory: Record<string, number> = {};
-  for (const log of logs) {
+  for (const log of typedLogs) {
     const skill = skillMap.get(log.skill_id);
     if (skill) {
       byCategory[skill.skill_category] = (byCategory[skill.skill_category] || 0) + 1;
@@ -379,7 +381,7 @@ export async function getRecentSkillUsage(
 }>> {
   const supabase = await createClient();
 
-  const { data: logs } = await supabase
+  const { data: logs } = await (supabase
     .from('skill_usage_log')
     .select(`
       skill_id,
@@ -393,13 +395,13 @@ export async function getRecentSkillUsage(
     `)
     .eq('companion_id', companionId)
     .order('used_at', { ascending: false })
-    .limit(limit);
+    .limit(limit) as any);
 
   if (!logs) return [];
 
-  return logs.map(log => ({
-    skill_name: (log.companion_skills as { skill_name: string })?.skill_name || 'Unknown',
-    skill_category: (log.companion_skills as { skill_category: string })?.skill_category || 'other',
+  return (logs as any[]).map((log: any) => ({
+    skill_name: log.companion_skills?.skill_name || 'Unknown',
+    skill_category: log.companion_skills?.skill_category || 'other',
     usage_type: log.usage_type,
     was_successful: log.was_successful,
     used_at: log.used_at,

@@ -14,6 +14,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { markSkillSuccess, markSkillCorrection } from '@/lib/companion/skill-usage';
 
+interface CompanionRow {
+  id: string;
+  user_id: string;
+}
+
+interface SkillRow {
+  id: string;
+  skill_name: string;
+  proficiency: string;
+  successful_uses: number;
+  failed_uses: number;
+}
+
+interface UpdatedSkillRow {
+  proficiency: string;
+  successful_uses: number;
+  failed_uses: number;
+  confidence_score: number;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; skillId: string }> }
@@ -56,13 +76,22 @@ export async function POST(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as CompanionRow | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -70,12 +99,14 @@ export async function POST(
     }
 
     // Verify skill exists and belongs to this companion
-    const { data: skill } = await supabase
+    const { data: skillData } = await supabase
       .from('companion_skills')
       .select('id, skill_name, proficiency, successful_uses, failed_uses')
       .eq('id', skillId)
       .eq('companion_id', companionId)
       .single();
+
+    const skill = skillData as SkillRow | null;
 
     if (!skill) {
       return NextResponse.json(
@@ -101,11 +132,13 @@ export async function POST(
     }
 
     // Get updated skill stats
-    const { data: updatedSkill } = await supabase
+    const { data: updatedSkillData } = await supabase
       .from('companion_skills')
       .select('proficiency, successful_uses, failed_uses, confidence_score')
       .eq('id', skillId)
       .single();
+
+    const updatedSkill = updatedSkillData as UpdatedSkillRow | null;
 
     console.log(`[SkillFeedback] ${feedback_type} recorded for skill "${skill.skill_name}"`);
 

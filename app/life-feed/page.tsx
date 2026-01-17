@@ -31,12 +31,16 @@ interface LifeEventWithCompanion {
 // ============================================================
 
 const EVENT_CONFIG: Record<EventType, { icon: typeof Sparkles; color: string; bg: string }> = {
-  thought: { icon: Brain, color: 'text-kirra-sage', bg: 'bg-kirra-sage/20' },
-  mood_change: { icon: Heart, color: 'text-kirra-warm', bg: 'bg-kirra-warm/20' },
-  milestone: { icon: Star, color: 'text-kirra-amber', bg: 'bg-kirra-amber/20' },
-  social: { icon: MessageCircle, color: 'text-kirra-forest-light', bg: 'bg-kirra-forest-light/20' },
-  activity: { icon: Sparkles, color: 'text-kirra-forest-lighter', bg: 'bg-kirra-forest-lighter/20' },
-  dream: { icon: Moon, color: 'text-kirra-stone', bg: 'bg-kirra-stone/20' },
+  discovery: { icon: Brain, color: 'text-kirra-sage', bg: 'bg-kirra-sage/20' },
+  achievement: { icon: Star, color: 'text-kirra-amber', bg: 'bg-kirra-amber/20' },
+  relationship: { icon: MessageCircle, color: 'text-kirra-forest-light', bg: 'bg-kirra-forest-light/20' },
+  mood_shift: { icon: Heart, color: 'text-kirra-warm', bg: 'bg-kirra-warm/20' },
+  growth: { icon: Sparkles, color: 'text-kirra-forest-lighter', bg: 'bg-kirra-forest-lighter/20' },
+  memory: { icon: Brain, color: 'text-kirra-stone', bg: 'bg-kirra-stone/20' },
+  skill_learned: { icon: Sparkles, color: 'text-kirra-forest-light', bg: 'bg-kirra-forest-light/20' },
+  interest_developed: { icon: Star, color: 'text-kirra-amber', bg: 'bg-kirra-amber/20' },
+  milestone: { icon: Star, color: 'text-kirra-gold', bg: 'bg-kirra-gold/20' },
+  daily_reflection: { icon: Moon, color: 'text-kirra-stone', bg: 'bg-kirra-stone/20' },
 };
 
 // ============================================================
@@ -95,7 +99,7 @@ function groupEventsByTime(events: LifeEventWithCompanion[]): Record<string, Lif
 // ============================================================
 
 function EventCard({ event }: { event: LifeEventWithCompanion }) {
-  const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.thought;
+  const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.growth;
   const Icon = config.icon;
   const companion = event.companions;
 

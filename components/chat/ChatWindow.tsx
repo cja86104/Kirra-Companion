@@ -127,7 +127,8 @@ export function ChatWindow({
 
   const voiceConfig = companion.voice_config as VoiceConfig | null;
   const hasVoiceEnabled = !!voiceConfig?.voiceId;
-  const currentMood = (companion.current_mood as MoodState)?.primary || 'neutral';
+  const moodData = companion.current_mood as { primary?: string } | null;
+  const currentMood = moodData?.primary || 'neutral';
   const moodInfo = MOOD_CONFIG[currentMood] || MOOD_CONFIG.neutral;
   const starters = CONVERSATION_STARTERS[companion.relationship_type] || CONVERSATION_STARTERS.custom;
 
@@ -212,22 +213,14 @@ export function ChatWindow({
       role: 'user',
       content: messageContent,
       content_type: 'text',
-      attachments: [],
-      voice_url: null,
-      voice_duration_seconds: null,
-      emotion_analysis: {},
-      response_context: {},
-      memory_triggers: [],
+      audio_url: null,
+      audio_duration: null,
       tokens_used: 0,
       is_edited: false,
-      edited_at: null,
-      original_content: null,
       is_deleted: false,
-      deleted_at: null,
-      user_rating: null,
-      user_feedback: null,
       metadata: null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, optimisticMessage]);

@@ -3,11 +3,9 @@
 import { useState } from 'react';
 import { 
   Heart, 
-  Star, 
   MoreVertical, 
   Trash2, 
   Edit, 
-  Pin,
   Calendar,
   Eye,
 } from 'lucide-react';
@@ -26,10 +24,26 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { cn, formatRelativeTime } from '@/lib/utils/cn';
 import { getClient } from '@/lib/supabase/client';
-import type { MemoryWithCategory } from '@/types/database';
+
+// Local interface matching actual database schema
+interface MemoryData {
+  id: string;
+  companion_id: string;
+  content: string;
+  summary: string | null;
+  memory_type: string;
+  importance: number;
+  emotional_weight: number;
+  is_core_memory: boolean;
+  is_active: boolean;
+  access_count: number;
+  tags: string[];
+  created_at: string;
+  category?: string;
+}
 
 interface MemoryCardProps {
-  memory: MemoryWithCategory;
+  memory: MemoryData;
   companionId: string;
   onUpdate?: () => void;
 }
@@ -38,20 +52,8 @@ export function MemoryCard({ memory, companionId, onUpdate }: MemoryCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const supabase = getClient();
 
-  const handleTogglePin = async () => {
-    try {
-      const { error } = await supabase
-        .from('memories')
-        .update({ is_pinned: !memory.is_pinned } as never)
-        .eq('id', memory.id);
-
-      if (error) throw error;
-      toast.success(memory.is_pinned ? 'Memory unpinned' : 'Memory pinned');
-      onUpdate?.();
-    } catch (error) {
-      toast.error('Failed to update memory');
-    }
-  };
+  // Suppress unused parameter warning - companionId could be used for validation
+  void companionId;
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this memory?')) return;
@@ -66,37 +68,36 @@ export function MemoryCard({ memory, companionId, onUpdate }: MemoryCardProps) {
       if (error) throw error;
       toast.success('Memory deleted');
       onUpdate?.();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete memory');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const importancePercent = Math.round((memory.importance_score || 0) * 100);
+  const importancePercent = Math.round((memory.importance || 0) * 100);
+
+  // Display title - use summary or first part of content
+  const displayTitle = memory.summary || memory.content.slice(0, 60) + (memory.content.length > 60 ? '...' : '');
 
   return (
     <Card 
       className={cn(
         'group relative transition-all hover:shadow-md',
-        memory.is_core_identity && 'ring-2 ring-glow-pink/50',
-        memory.is_pinned && 'bg-yellow-500/5'
+        memory.is_core_memory && 'ring-2 ring-glow-pink/50'
       )}
     >
-      {/* Indicators */}
-      <div className="absolute right-2 top-2 flex items-center gap-1">
-        {memory.is_core_identity && (
+      {/* Core Memory Indicator */}
+      {memory.is_core_memory && (
+        <div className="absolute right-2 top-2 flex items-center gap-1">
           <Heart className="h-4 w-4 fill-glow-pink text-glow-pink" />
-        )}
-        {memory.is_pinned && (
-          <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-        )}
-      </div>
+        </div>
+      )}
 
       <CardContent className="p-4">
         {/* Title */}
         <h3 className="mb-2 pr-12 font-medium leading-tight">
-          {memory.title}
+          {displayTitle}
         </h3>
 
         {/* Content Preview */}
@@ -104,16 +105,16 @@ export function MemoryCard({ memory, companionId, onUpdate }: MemoryCardProps) {
           {memory.content}
         </p>
 
-        {/* Category & Source */}
+        {/* Type & Tags */}
         <div className="mb-3 flex flex-wrap gap-2">
-          {memory.memory_categories && (
-            <Badge variant="secondary" className="text-xs">
-              {memory.memory_categories.name}
-            </Badge>
-          )}
-          <Badge variant="outline" className="text-xs">
-            {memory.source}
+          <Badge variant="secondary" className="text-xs">
+            {memory.memory_type}
           </Badge>
+          {memory.tags?.slice(0, 2).map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
         </div>
 
         {/* Importance Bar */}
@@ -154,10 +155,6 @@ export function MemoryCard({ memory, companionId, onUpdate }: MemoryCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleTogglePin}>
-                <Pin className="mr-2 h-4 w-4" />
-                {memory.is_pinned ? 'Unpin' : 'Pin'} Memory
-              </DropdownMenuItem>
               <DropdownMenuItem>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit Memory

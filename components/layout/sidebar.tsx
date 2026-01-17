@@ -247,7 +247,8 @@ export function Sidebar({ user, companions }: SidebarProps) {
             ) : (
               companions.map((companion) => {
                 const isActive = pathname.includes(companion.id);
-                const mood = (companion.current_mood as MoodState)?.primary || 'neutral';
+                const moodData = companion.current_mood as { primary?: string } | null;
+                const mood = moodData?.primary || 'neutral';
                 const moodEmoji = MOOD_EMOJI[mood] || '😐';
                 
                 const CompanionLink = (

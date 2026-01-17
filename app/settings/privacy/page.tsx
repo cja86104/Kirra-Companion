@@ -51,6 +51,10 @@ const privacyOptions = [
   },
 ];
 
+interface ProfileWithPreferences {
+  preferences: Record<string, unknown> | null;
+}
+
 export default function PrivacyPage() {
   const [settings, setSettings] = useState<PrivacySettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,14 +70,18 @@ export default function PrivacyPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      const { data: profileData } = await supabase
         .from('profiles')
-        .select('preferences')
+        .select('*')
         .eq('id', user.id)
         .single();
 
-      if (data?.preferences?.privacy) {
-        setSettings({ ...defaultSettings, ...data.preferences.privacy });
+      const profile = profileData as ProfileWithPreferences | null;
+      if (profile?.preferences && typeof profile.preferences === 'object' && !Array.isArray(profile.preferences)) {
+        const prefs = profile.preferences;
+        if (prefs.privacy) {
+          setSettings({ ...defaultSettings, ...(prefs.privacy as PrivacySettings) });
+        }
       }
     } catch (error) {
       console.error('Failed to load privacy settings:', error);
@@ -88,13 +96,16 @@ export default function PrivacyPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data: currentProfile } = await supabase
+      const { data: profileData } = await supabase
         .from('profiles')
-        .select('preferences')
+        .select('*')
         .eq('id', user.id)
         .single();
 
-      const currentPrefs = currentProfile?.preferences || {};
+      const profile = profileData as ProfileWithPreferences | null;
+      const currentPrefs = (profile?.preferences && typeof profile.preferences === 'object' && !Array.isArray(profile.preferences))
+        ? profile.preferences
+        : {};
 
       const { error } = await supabase
         .from('profiles')

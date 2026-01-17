@@ -366,7 +366,8 @@ export default function DashboardPage() {
     }
   };
 
-  const currentMood = (selectedCompanion?.current_mood as MoodState)?.primary || 'neutral';
+  const moodData = selectedCompanion?.current_mood as { primary?: string } | null;
+  const currentMood = moodData?.primary || 'neutral';
   const moodConfig = MOOD_CONFIGS[currentMood] || MOOD_CONFIGS.neutral;
   const needs = selectedCompanion?.needs as CompanionNeeds | null;
 

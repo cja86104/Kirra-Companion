@@ -9,12 +9,22 @@ import {
   type OpenAIVoiceId,
   type VoiceConfig,
 } from '@/lib/tts/openai-tts';
-import type { Profile, Companion } from '@/types/database';
+import type { Json } from '@/types/database';
 
 interface TTSRequest {
   text: string;
   companionId: string;
   messageId?: string;
+}
+
+interface ProfileRow {
+  subscription_tier: 'free' | 'basic' | 'pro' | 'ultimate';
+}
+
+interface CompanionVoiceRow {
+  voice_config: Json | null;
+  name: string;
+  total_voice_minutes: number;
 }
 
 /**
@@ -59,11 +69,11 @@ export async function POST(
     // Get user profile for tier check
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('subscription_tier, voice_characters_used, voice_characters_reset_at')
+      .select('subscription_tier')
       .eq('id', user.id)
       .single();
 
-    const profile = profileData as Pick<Profile, 'subscription_tier' | 'voice_characters_used' | 'voice_characters_reset_at'> | null;
+    const profile = profileData as ProfileRow | null;
     const tier = profile?.subscription_tier || 'free';
 
     // Check if user has voice access
@@ -74,40 +84,8 @@ export async function POST(
       );
     }
 
-    // Check voice character limits
+    // Get character limit for tier (for informational purposes)
     const characterLimit = getVoiceLimitForTier(tier);
-    let charactersUsed = profile?.voice_characters_used || 0;
-    const resetAt = profile?.voice_characters_reset_at ? new Date(profile.voice_characters_reset_at) : null;
-    const now = new Date();
-
-    // Reset counter if it's a new month
-    if (resetAt && resetAt.getMonth() !== now.getMonth()) {
-      charactersUsed = 0;
-      await supabase
-        .from('profiles')
-        .update({
-          voice_characters_used: 0,
-          voice_characters_reset_at: now.toISOString(),
-        } as never)
-        .eq('id', user.id);
-    }
-
-    // Check if user has exceeded their limit
-    if (charactersUsed + truncatedText.length > characterLimit) {
-      const remaining = Math.max(0, characterLimit - charactersUsed);
-      return NextResponse.json(
-        { 
-          error: 'Monthly voice limit exceeded',
-          limit: characterLimit,
-          used: charactersUsed,
-          remaining,
-          upgradeMessage: tier !== 'ultimate' 
-            ? 'Upgrade your plan for more voice time.' 
-            : 'You have reached your monthly limit. It will reset next month.',
-        },
-        { status: 429 }
-      );
-    }
 
     // Get companion's voice config
     const { data: companionData } = await supabase
@@ -117,7 +95,7 @@ export async function POST(
       .eq('user_id', user.id)
       .single();
 
-    const companion = companionData as Pick<Companion, 'voice_config' | 'name' | 'total_voice_minutes'> | null;
+    const companion = companionData as CompanionVoiceRow | null;
 
     if (!companion) {
       return NextResponse.json(
@@ -166,20 +144,9 @@ export async function POST(
       format: 'mp3',
     });
 
-    // Update usage tracking
-    const newCharactersUsed = charactersUsed + speechResult.characterCount;
+    // Update companion voice minutes
     const newVoiceMinutes = (companion.total_voice_minutes || 0) + (speechResult.estimatedDuration / 60);
 
-    // Update profile character usage
-    await supabase
-      .from('profiles')
-      .update({
-        voice_characters_used: newCharactersUsed,
-        voice_characters_reset_at: profile?.voice_characters_reset_at || now.toISOString(),
-      } as never)
-      .eq('id', user.id);
-
-    // Update companion voice minutes
     await supabase
       .from('companions')
       .update({
@@ -199,7 +166,7 @@ export async function POST(
         'Content-Type': speechResult.contentType,
         'X-Audio-Duration': String(Math.round(speechResult.estimatedDuration)),
         'X-Characters-Used': String(speechResult.characterCount),
-        'X-Characters-Remaining': String(Math.max(0, characterLimit - newCharactersUsed)),
+        'X-Characters-Limit': String(characterLimit),
         'Cache-Control': 'private, max-age=3600', // Cache for 1 hour
       },
     });
@@ -256,11 +223,11 @@ export async function GET(
     // Get user profile
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('subscription_tier, voice_characters_used')
+      .select('subscription_tier')
       .eq('id', user.id)
       .single();
 
-    const profile = profileData as Pick<Profile, 'subscription_tier' | 'voice_characters_used'> | null;
+    const profile = profileData as ProfileRow | null;
     const tier = profile?.subscription_tier || 'free';
 
     // Get companion
@@ -271,7 +238,7 @@ export async function GET(
       .eq('user_id', user.id)
       .single();
 
-    const companion = companionData as Pick<Companion, 'voice_config' | 'name' | 'total_voice_minutes'> | null;
+    const companion = companionData as CompanionVoiceRow | null;
 
     if (!companion) {
       return NextResponse.json(
@@ -281,7 +248,6 @@ export async function GET(
     }
 
     const characterLimit = getVoiceLimitForTier(tier);
-    const charactersUsed = profile?.voice_characters_used || 0;
 
     return NextResponse.json({
       hasVoice: !!companion.voice_config,
@@ -289,10 +255,7 @@ export async function GET(
       hasAccess: hasVoiceAccess(tier),
       tier,
       usage: {
-        charactersUsed,
         characterLimit,
-        charactersRemaining: Math.max(0, characterLimit - charactersUsed),
-        percentUsed: characterLimit > 0 ? Math.round((charactersUsed / characterLimit) * 100) : 0,
       },
       companionStats: {
         totalVoiceMinutes: companion.total_voice_minutes || 0,

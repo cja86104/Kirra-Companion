@@ -15,6 +15,20 @@ import type {
   SkillCategory,
 } from '@/types/skills';
 
+interface CompanionRow {
+  id: string;
+  user_id: string;
+  name: string;
+}
+
+interface ExistingSkillRow {
+  id: string;
+  skill_name: string;
+  skill_category: string;
+  skill_content: string;
+  times_reinforced: number;
+}
+
 // ============================================================================
 // GET - Get Single Skill
 // ============================================================================
@@ -37,13 +51,22 @@ export async function GET(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as { id: string; user_id: string } | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -110,13 +133,22 @@ export async function PUT(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id, name')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as CompanionRow | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -124,12 +156,14 @@ export async function PUT(
     }
 
     // Verify skill exists and belongs to this companion
-    const { data: existingSkill } = await supabase
+    const { data: existingSkillData } = await supabase
       .from('companion_skills')
-      .select('*')
+      .select('id, skill_name, skill_category, skill_content, times_reinforced')
       .eq('id', skillId)
       .eq('companion_id', companionId)
       .single();
+
+    const existingSkill = existingSkillData as ExistingSkillRow | null;
 
     if (!existingSkill) {
       return NextResponse.json(
@@ -248,13 +282,22 @@ export async function DELETE(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id, name')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as CompanionRow | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -262,12 +305,14 @@ export async function DELETE(
     }
 
     // Verify skill exists
-    const { data: existingSkill } = await supabase
+    const { data: existingSkillData } = await supabase
       .from('companion_skills')
       .select('id, skill_name')
       .eq('id', skillId)
       .eq('companion_id', companionId)
       .single();
+
+    const existingSkill = existingSkillData as { id: string; skill_name: string } | null;
 
     if (!existingSkill) {
       return NextResponse.json(

@@ -14,11 +14,19 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { EventType, MoodState, LifeEventInsert } from '@/types/database';
+import type { MoodState } from '@/types/database';
 
 // ============================================================
 // TYPES
 // ============================================================
+
+type LifeEventType = 
+  | 'thought'
+  | 'mood_change'
+  | 'milestone'
+  | 'social'
+  | 'activity'
+  | 'dream';
 
 interface ChatContext {
   companionId: string;
@@ -32,7 +40,7 @@ interface ChatContext {
 }
 
 interface GeneratedEvent {
-  event_type: EventType;
+  event_type: LifeEventType;
   title: string;
   description: string;
   should_notify_user: boolean;
@@ -102,7 +110,7 @@ const MILESTONES: MilestoneCheck[] = [
   {
     condition: (ctx) => ctx.totalMessages === 50,
     title: '50 Messages Together',
-    description: (ctx) => `We've exchanged 50 messages! Our conversations are becoming more meaningful.`,
+    description: () => `We've exchanged 50 messages! Our conversations are becoming more meaningful.`,
   },
   {
     condition: (ctx) => ctx.totalMessages === 100,
@@ -112,7 +120,7 @@ const MILESTONES: MilestoneCheck[] = [
   {
     condition: (ctx) => ctx.totalMessages === 500,
     title: 'Deep Connection',
-    description: (ctx) => `500 messages shared. Our bond has grown incredibly strong.`,
+    description: () => `500 messages shared. Our bond has grown incredibly strong.`,
   },
 ];
 
@@ -170,7 +178,7 @@ export async function generateLifeEventFromChat(
   // Check for social/learning patterns
   for (const pattern of EVENT_PATTERNS.social) {
     if (pattern.test(response)) {
-      return extractSocialEvent(context);
+      return extractSocialEvent();
     }
   }
   
@@ -240,7 +248,7 @@ function extractDreamEvent(context: ChatContext): GeneratedEvent {
   };
 }
 
-function extractSocialEvent(context: ChatContext): GeneratedEvent {
+function extractSocialEvent(): GeneratedEvent {
   return {
     event_type: 'social',
     title: 'Learned Something New',
@@ -256,7 +264,7 @@ function extractSocialEvent(context: ChatContext): GeneratedEvent {
 
 /**
  * Save a life event to the database.
- * Returns the saved event or null on error.
+ * Returns true if saved successfully.
  */
 export async function saveLifeEvent(
   companionId: string,
@@ -267,20 +275,32 @@ export async function saveLifeEvent(
   try {
     const supabase = await createClient();
     
-    const eventData: LifeEventInsert = {
+    // Suppress unused parameter warning - userId could be used for triggered_by
+    void userId;
+    
+    // Map event significance based on type
+    const significanceMap: Record<LifeEventType, 'trivial' | 'minor' | 'moderate' | 'major' | 'milestone'> = {
+      thought: 'trivial',
+      mood_change: 'minor',
+      social: 'minor',
+      activity: 'minor',
+      dream: 'moderate',
+      milestone: 'milestone',
+    };
+    
+    const eventData = {
       companion_id: companionId,
-      user_id: userId,
       event_type: event.event_type,
       title: event.title,
       description: event.description,
-      mood_before: currentMood,
-      mood_after: currentMood, // Could be different if we track mood changes
-      scheduled_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
-      should_notify_user: event.should_notify_user,
-      notification_message: event.notification_message,
-      notification_sent: false,
-      metadata: {},
+      significance: significanceMap[event.event_type],
+      emotional_impact: currentMood ? { mood: currentMood } : null,
+      metadata: {
+        should_notify_user: event.should_notify_user,
+        notification_message: event.notification_message,
+        notification_sent: false,
+      },
+      is_shared: false,
     };
     
     const { error } = await supabase
@@ -346,13 +366,27 @@ export async function processLifeEventFromChat(
 // FETCH: Get Life Events for Display
 // ============================================================
 
+interface LifeEventRow {
+  id: string;
+  companion_id: string;
+  event_type: string;
+  title: string;
+  description: string;
+  significance: string;
+  emotional_impact: unknown;
+  triggered_by: string | null;
+  metadata: unknown;
+  is_shared: boolean;
+  created_at: string;
+}
+
 /**
  * Get recent life events for a companion.
  */
 export async function getLifeEvents(
   companionId: string,
   limit: number = 20
-) {
+): Promise<LifeEventRow[]> {
   const supabase = await createClient();
   
   const { data, error } = await supabase
@@ -367,7 +401,15 @@ export async function getLifeEvents(
     return [];
   }
   
-  return data || [];
+  return (data || []) as LifeEventRow[];
+}
+
+interface LifeEventWithCompanion extends LifeEventRow {
+  companions: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  } | null;
 }
 
 /**
@@ -376,7 +418,7 @@ export async function getLifeEvents(
 export async function getLifeEventsForUser(
   userId: string,
   limit: number = 50
-) {
+): Promise<LifeEventWithCompanion[]> {
   const supabase = await createClient();
   
   // First get the user's companion IDs
@@ -393,7 +435,7 @@ export async function getLifeEventsForUser(
     return [];
   }
   
-  const companionIds = companions.map(c => c.id);
+  const companionIds = (companions as { id: string }[]).map(c => c.id);
   
   // Now get life events for those companions
   const { data, error } = await supabase
@@ -407,7 +449,7 @@ export async function getLifeEventsForUser(
       )
     `)
     .in('companion_id', companionIds)
-    .order('occurred_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(limit);
   
   if (error) {
@@ -415,5 +457,5 @@ export async function getLifeEventsForUser(
     return [];
   }
   
-  return data || [];
+  return (data || []) as LifeEventWithCompanion[];
 }

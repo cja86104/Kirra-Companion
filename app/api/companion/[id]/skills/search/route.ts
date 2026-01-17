@@ -9,11 +9,56 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import type {
-  CompanionSkill,
-  SkillSearchResult,
-  SkillCategory,
-} from '@/types/skills';
+import type { Json } from '@/types/database';
+
+// Local types matching actual database schema
+interface CompanionRow {
+  id: string;
+  user_id: string;
+}
+
+interface SkillRow {
+  id: string;
+  companion_id: string;
+  skill_name: string;
+  skill_category: string;
+  proficiency_level: number;
+  times_used: number;
+  last_used: string | null;
+  learned_from: string | null;
+  metadata: Json | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RpcSkillResult {
+  id: string;
+  skill_name: string;
+  skill_category: string;
+  skill_content: string;
+  skill_summary: string | null;
+  proficiency: string;
+  confidence_score: number;
+  relevance_rank: number;
+}
+
+interface SearchResult {
+  skill: SkillRow;
+  relevance_score: number;
+  match_reason: string;
+}
+
+type SkillCategory = 
+  | 'coding'
+  | 'recipes'
+  | 'domain'
+  | 'traditions'
+  | 'games'
+  | 'creative'
+  | 'language'
+  | 'procedures'
+  | 'trivia'
+  | 'other';
 
 // ============================================================================
 // POST - Search Skills
@@ -32,8 +77,7 @@ export async function POST(
       query,               // Search query text
       categories,          // Optional: filter by categories
       limit = 5,           // Max results
-      min_confidence = 0,  // Minimum confidence score
-      include_inactive = false,
+      min_confidence = 0,  // Minimum confidence score (unused with current schema)
     } = body as {
       query: string;
       categories?: SkillCategory[];
@@ -41,6 +85,9 @@ export async function POST(
       min_confidence?: number;
       include_inactive?: boolean;
     };
+
+    // Suppress unused variable
+    void min_confidence;
 
     if (!query?.trim()) {
       return NextResponse.json(
@@ -59,13 +106,22 @@ export async function POST(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as CompanionRow | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -73,33 +129,22 @@ export async function POST(
     }
 
     // Try to use the database function first
-    const { data: functionResults, error: functionError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: functionResults, error: functionError } = await (supabase as any)
       .rpc('get_relevant_skills', {
         p_companion_id: companionId,
         p_search_text: query.trim(),
         p_limit: limit,
       });
 
-    if (!functionError && functionResults && functionResults.length > 0) {
-      // Filter and format results from function
-      let results = functionResults as Array<{
-        id: string;
-        skill_name: string;
-        skill_category: SkillCategory;
-        skill_content: string;
-        skill_summary: string | null;
-        proficiency: string;
-        confidence_score: number;
-        relevance_rank: number;
-      }>;
+    const rpcResults = functionResults as RpcSkillResult[] | null;
 
-      // Apply additional filters
-      if (min_confidence > 0) {
-        results = results.filter(r => r.confidence_score >= min_confidence);
-      }
+    if (!functionError && rpcResults && rpcResults.length > 0) {
+      // Filter by categories if provided
+      let results = rpcResults;
 
       if (categories && categories.length > 0) {
-        results = results.filter(r => categories.includes(r.skill_category));
+        results = results.filter(r => categories.includes(r.skill_category as SkillCategory));
       }
 
       // Get full skill data for the results
@@ -109,13 +154,18 @@ export async function POST(
         .select('*')
         .in('id', skillIds);
 
-      const skillMap = new Map((fullSkills || []).map(s => [s.id, s]));
+      const skillMap = new Map((fullSkills || []).map(s => {
+        const skill = s as SkillRow;
+        return [skill.id, skill];
+      }));
 
-      const searchResults: SkillSearchResult[] = results.map(r => ({
-        skill: skillMap.get(r.id) as CompanionSkill,
-        relevance_score: r.relevance_rank,
-        match_reason: `Matched on content search`,
-      })).filter(r => r.skill);
+      const searchResults: SearchResult[] = results
+        .map(r => ({
+          skill: skillMap.get(r.id) as SkillRow,
+          relevance_score: r.relevance_rank,
+          match_reason: `Matched on content search`,
+        }))
+        .filter(r => r.skill);
 
       return NextResponse.json({
         results: searchResults,
@@ -128,25 +178,17 @@ export async function POST(
     let fallbackQuery = supabase
       .from('companion_skills')
       .select('*')
-      .eq('companion_id', companionId)
-      .gte('confidence_score', min_confidence);
-
-    if (!include_inactive) {
-      fallbackQuery = fallbackQuery.eq('is_active', true);
-    }
+      .eq('companion_id', companionId);
 
     if (categories && categories.length > 0) {
       fallbackQuery = fallbackQuery.in('skill_category', categories);
     }
 
-    // Search in name, description, and content
+    // Search in name
     const searchTerm = query.trim().toLowerCase();
-    fallbackQuery = fallbackQuery.or(
-      `skill_name.ilike.%${searchTerm}%,skill_description.ilike.%${searchTerm}%,skill_content.ilike.%${searchTerm}%,tags.cs.{${searchTerm}}`
-    );
+    fallbackQuery = fallbackQuery.ilike('skill_name', `%${searchTerm}%`);
 
     const { data: skills, error: searchError } = await fallbackQuery
-      .order('confidence_score', { ascending: false })
       .order('times_used', { ascending: false })
       .limit(limit);
 
@@ -159,8 +201,8 @@ export async function POST(
     }
 
     // Calculate relevance scores manually
-    const searchResults: SkillSearchResult[] = (skills || []).map(skill => {
-      const s = skill as CompanionSkill;
+    const searchResults: SearchResult[] = (skills || []).map(skill => {
+      const s = skill as SkillRow;
       let relevance = 0;
       let matchReason = '';
 
@@ -168,19 +210,10 @@ export async function POST(
       if (s.skill_name.toLowerCase().includes(searchTerm)) {
         relevance += 1.0;
         matchReason = 'Matched in skill name';
-      } else if (s.skill_description?.toLowerCase().includes(searchTerm)) {
-        relevance += 0.7;
-        matchReason = 'Matched in description';
-      } else if (s.skill_content.toLowerCase().includes(searchTerm)) {
-        relevance += 0.5;
-        matchReason = 'Matched in content';
-      } else if (s.tags?.some(t => t.toLowerCase().includes(searchTerm))) {
-        relevance += 0.6;
-        matchReason = 'Matched in tags';
       }
 
-      // Boost by confidence
-      relevance *= (0.5 + s.confidence_score * 0.5);
+      // Boost by proficiency level
+      relevance *= (0.5 + (s.proficiency_level / 10) * 0.5);
 
       return {
         skill: s,

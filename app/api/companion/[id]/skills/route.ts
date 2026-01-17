@@ -22,8 +22,13 @@ import type {
   TeachSkillRequest,
   TeachSkillResponse,
   SkillsSummary,
-  SKILL_CATEGORY_INFO,
 } from '@/types/skills';
+
+interface CompanionRow {
+  id: string;
+  user_id: string;
+  name: string;
+}
 
 // ============================================================================
 // GET - List Skills
@@ -56,13 +61,22 @@ export async function GET(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id, name')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as CompanionRow | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -160,13 +174,22 @@ export async function POST(
     }
 
     // Verify user owns this companion
-    const { data: companion } = await supabase
+    const { data: companionData } = await supabase
       .from('companions')
       .select('id, user_id, name')
       .eq('id', companionId)
       .single();
 
-    if (!companion || companion.user_id !== user.id) {
+    const companion = companionData as CompanionRow | null;
+
+    if (!companion) {
+      return NextResponse.json(
+        { error: 'Companion not found' },
+        { status: 404 }
+      );
+    }
+
+    if (companion.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Companion not found' },
         { status: 404 }
@@ -185,7 +208,7 @@ export async function POST(
       return NextResponse.json(
         { 
           error: 'A skill with this name already exists',
-          existing_skill_id: existing.id,
+          existing_skill_id: (existing as { id: string }).id,
         },
         { status: 409 }
       );

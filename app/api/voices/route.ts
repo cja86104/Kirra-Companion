@@ -6,7 +6,6 @@ import {
   getVoiceLimitForTier,
   type OpenAIVoiceId,
 } from '@/lib/tts/openai-tts';
-import type { Profile } from '@/types/database';
 
 /**
  * Voice option returned to client
@@ -19,6 +18,10 @@ interface VoiceOption {
   personality: string;
   available: boolean;
   preview_text: string;
+}
+
+interface ProfileTier {
+  subscription_tier: 'free' | 'basic' | 'pro' | 'ultimate';
 }
 
 /**
@@ -43,11 +46,11 @@ export async function GET(request: NextRequest) {
     // Get user profile for tier
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('subscription_tier, voice_characters_used')
+      .select('subscription_tier')
       .eq('id', user.id)
       .single();
 
-    const profile = profileData as Pick<Profile, 'subscription_tier' | 'voice_characters_used'> | null;
+    const profile = profileData as ProfileTier | null;
     const tier = profile?.subscription_tier || 'free';
     const hasAccess = hasVoiceAccess(tier);
 
@@ -62,9 +65,9 @@ export async function GET(request: NextRequest) {
       preview_text: voice.previewText,
     }));
 
-    // Calculate usage stats
+    // Calculate usage stats (character tracking would need separate table/field)
     const characterLimit = getVoiceLimitForTier(tier);
-    const charactersUsed = profile?.voice_characters_used || 0;
+    const charactersUsed = 0; // TODO: Track via separate voice_usage table if needed
 
     return NextResponse.json({
       voices: voiceOptions,
@@ -145,7 +148,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    const profile = profileData as Pick<Profile, 'subscription_tier'> | null;
+    const profile = profileData as ProfileTier | null;
     const tier = profile?.subscription_tier || 'free';
 
     if (!hasVoiceAccess(tier)) {

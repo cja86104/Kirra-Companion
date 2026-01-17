@@ -14,12 +14,42 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
-import type { 
-  CompanionDNA, 
-  CommunicationDialect,
-  Companion,
-  Message 
-} from '@/types/database';
+import type { CompanionDNA } from '@/types/database';
+
+// ============================================================================
+// LOCAL TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * Extended dialect structure used internally by the evolution engine
+ */
+interface ExtendedCommunicationDialect {
+  uniquePhrases: string[];
+  favoriteExpressions: string[];
+  speechPatterns: string[];
+  vocabularyLevel: string;
+  formalityLevel: number;
+  sentenceComplexity: number;
+  emojiUsage: number;
+  avoidedWords: string[];
+}
+
+/**
+ * Message row from database
+ */
+interface MessageRow {
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+/**
+ * Companion with DNA join result
+ */
+interface CompanionWithDNAJoin {
+  name: string;
+  companion_dna: CompanionDNA[] | null;
+}
 
 // ============================================================================
 // TYPES
@@ -270,7 +300,7 @@ async function fetchRecentConversations(
   const userMessages: string[] = [];
   const companionMessages: string[] = [];
   
-  for (const msg of messages) {
+  for (const msg of messages as MessageRow[]) {
     if (msg.role === 'user') {
       userMessages.push(msg.content);
     } else if (msg.role === 'assistant') {
@@ -302,6 +332,9 @@ function analyzeHumorReactions(
   let positive = 0;
   let negative = 0;
   let neutrals = 0;
+  
+  // Suppress unused parameter warning
+  void companionMessages;
   
   for (const msg of userMessages) {
     const isPositive = positiveIndicators.some(p => p.test(msg));
@@ -373,6 +406,9 @@ function analyzeEmotionalPatterns(
   triggerTopics: Record<string, string[]>;
   expressiveness: number;
 } {
+  // Suppress unused parameter warning
+  void userMessages;
+  
   const emotionKeywords: Record<string, RegExp[]> = {
     joy: [/happy/i, /excited/i, /love/i, /amazing/i, /wonderful/i, /😊/, /❤️/, /🎉/],
     empathy: [/understand/i, /feel for you/i, /sorry to hear/i, /that must be/i, /i'm here/i],
@@ -454,6 +490,9 @@ function analyzeMemoryPreferences(
   companionMessages: string[],
   userMessages: string[]
 ): MemoryEvolution {
+  // Suppress unused parameter warning
+  void userMessages;
+  
   const topicMentions: Record<string, number> = {};
   let emotionalReferences = 0;
   let recentReferences = 0;
@@ -504,11 +543,14 @@ function analyzeMemoryPreferences(
  */
 async function updateDialectDNA(
   companionId: string,
-  currentDialect: CommunicationDialect | null,
+  currentDialect: ExtendedCommunicationDialect | null,
   evolution: DialectEvolution,
   aiAnalysis?: AIAnalysisResult | null
-): Promise<CommunicationDialect> {
-  const dialect: CommunicationDialect = currentDialect || {
+): Promise<ExtendedCommunicationDialect> {
+  // Suppress unused parameter warning
+  void companionId;
+  
+  const dialect: ExtendedCommunicationDialect = currentDialect || {
     favoriteExpressions: [],
     vocabularyLevel: 'adaptive',
     sentenceComplexity: 0.5,
@@ -702,7 +744,7 @@ function updateLearningDNA(
     }
     
     // Set detail depth based on AI analysis
-    const depthMap = { brief: 0.3, moderate: 0.5, detailed: 0.8 };
+    const depthMap: Record<string, number> = { brief: 0.3, moderate: 0.5, detailed: 0.8 };
     const targetDepth = depthMap[style.detailLevel] || 0.5;
     learning.detail_depth = learning.detail_depth * 0.7 + targetDepth * 0.3;
   }
@@ -813,8 +855,9 @@ export async function evolveCompanionDNA(
     return null;
   }
   
-  const companionName = companionData.name || 'Companion';
-  const dnaArray = companionData.companion_dna as CompanionDNA[] | null;
+  const typedCompanionData = companionData as unknown as CompanionWithDNAJoin;
+  const companionName = typedCompanionData.name || 'Companion';
+  const dnaArray = typedCompanionData.companion_dna;
   const currentDNA = dnaArray?.[0] || null;
   
   if (!currentDNA) {
@@ -853,9 +896,10 @@ export async function evolveCompanionDNA(
   const memoryAnalysis = analyzeMemoryPreferences(companionMessages, userMessages);
   
   // Extract phrases (regex-based fallback)
+  const currentDialect = currentDNA.communication_dialect as ExtendedCommunicationDialect | null;
   const existingPhrases = [
-    ...(currentDNA.communication_dialect?.favoriteExpressions || []),
-    ...(currentDNA.communication_dialect?.uniquePhrases || []),
+    ...(currentDialect?.favoriteExpressions || []),
+    ...(currentDialect?.uniquePhrases || []),
   ];
   const regexPhrases = extractUniquePhrases(companionMessages, existingPhrases);
   
@@ -890,15 +934,31 @@ export async function evolveCompanionDNA(
   // Update DNA components with AI analysis
   const updatedDialect = await updateDialectDNA(
     companionId,
-    currentDNA.communication_dialect,
+    currentDialect,
     dialectEvolution,
     aiAnalysis
   );
   
-  const updatedHumor = updateHumorDNA(currentDNA.humor_genome, humorEvolution, aiAnalysis);
-  const updatedEmotional = updateEmotionalDNA(currentDNA.emotional_resonance_map, emotionalEvolution, aiAnalysis);
-  const updatedLearning = updateLearningDNA(currentDNA.learning_style_matrix, learningAnalysis, aiAnalysis);
-  const updatedMemory = updateMemoryDNA(currentDNA.memory_weighting_algorithm, memoryAnalysis, aiAnalysis);
+  const updatedHumor = updateHumorDNA(
+    currentDNA.humor_genome as Record<string, number> | null,
+    humorEvolution,
+    aiAnalysis
+  );
+  const updatedEmotional = updateEmotionalDNA(
+    currentDNA.emotional_resonance_map as Record<string, number> | null,
+    emotionalEvolution,
+    aiAnalysis
+  );
+  const updatedLearning = updateLearningDNA(
+    currentDNA.learning_style_matrix as Record<string, number> | null,
+    learningAnalysis,
+    aiAnalysis
+  );
+  const updatedMemory = updateMemoryDNA(
+    currentDNA.memory_weighting_algorithm as Record<string, number> | null,
+    memoryAnalysis,
+    aiAnalysis
+  );
   
   // Save updated DNA
   const { error: updateError } = await supabase
@@ -912,7 +972,7 @@ export async function evolveCompanionDNA(
       personality_version: (currentDNA.personality_version || 0) + 1,
       last_evolution: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    })
+    } as never)
     .eq('companion_id', companionId);
   
   if (updateError) {
@@ -950,9 +1010,11 @@ export async function getEvolutionHistory(
   
   if (!data) return null;
   
+  const typedData = data as { personality_version: number; last_evolution: string | null };
+  
   return {
-    version: data.personality_version || 0,
-    lastEvolution: data.last_evolution,
+    version: typedData.personality_version || 0,
+    lastEvolution: typedData.last_evolution,
   };
 }
 

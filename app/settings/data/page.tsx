@@ -243,11 +243,6 @@ export default function DataPage() {
                       <a href={exp.file_url} download>
                         <Download className="mr-2 h-4 w-4" />
                         Download
-                        {exp.file_size && (
-                          <span className="ml-1 text-muted-foreground">
-                            ({formatBytes(exp.file_size)})
-                          </span>
-                        )}
                       </a>
                     </Button>
                   )}

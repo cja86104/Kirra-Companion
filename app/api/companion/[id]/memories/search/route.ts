@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateEmbedding, cosineSimilarity } from '@/lib/ai/embeddings';
-import type { Memory, MemoryCategoryRow } from '@/types/database';
 
 interface SearchRequestBody {
   query: string;
@@ -9,8 +8,13 @@ interface SearchRequestBody {
 }
 
 // Type for memory with category joined
-interface MemoryWithCategory extends Pick<Memory, 'id' | 'title' | 'content' | 'importance_score' | 'embedding'> {
-  memory_categories: Pick<MemoryCategoryRow, 'name'> | null;
+interface MemorySearchResult {
+  id: string;
+  summary: string | null;
+  content: string;
+  importance: number;
+  embedding: number[] | null;
+  memory_type: string;
 }
 
 export async function POST(
@@ -57,18 +61,10 @@ export async function POST(
     // Get all memories for this companion
     const { data: memoriesData, error: memoriesError } = await supabase
       .from('memories')
-      .select(`
-        id,
-        title,
-        content,
-        importance_score,
-        embedding,
-        memory_categories (
-          name
-        )
-      `)
+      .select('id, summary, content, importance, embedding, memory_type')
       .eq('companion_id', companionId)
-      .order('importance_score', { ascending: false });
+      .eq('is_active', true)
+      .order('importance', { ascending: false });
 
     if (memoriesError) {
       console.error('Error fetching memories:', memoriesError);
@@ -78,7 +74,7 @@ export async function POST(
       );
     }
 
-    const memories = memoriesData as MemoryWithCategory[] | null;
+    const memories = memoriesData as MemorySearchResult[] | null;
 
     if (!memories || memories.length === 0) {
       return NextResponse.json({ results: [] });
@@ -93,9 +89,9 @@ export async function POST(
       id: string;
       title: string | null;
       content: string;
-      importance_score: number;
+      importance: number;
       similarity: number;
-      category?: string;
+      category: string;
     }>;
 
     if (memoriesWithEmbeddings.length > 0) {
@@ -105,11 +101,11 @@ export async function POST(
       results = memoriesWithEmbeddings
         .map((memory) => ({
           id: memory.id,
-          title: memory.title,
+          title: memory.summary,
           content: memory.content,
-          importance_score: memory.importance_score || 0,
+          importance: memory.importance,
           similarity: cosineSimilarity(queryEmbedding, memory.embedding as number[]),
-          category: memory.memory_categories?.name,
+          category: memory.memory_type,
         }))
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, limit);
@@ -119,29 +115,19 @@ export async function POST(
       
       results = memories
         .filter((m) => 
-          (m.title?.toLowerCase().includes(lowerQuery)) ||
+          (m.summary?.toLowerCase().includes(lowerQuery)) ||
           m.content.toLowerCase().includes(lowerQuery)
         )
         .map((memory) => ({
           id: memory.id,
-          title: memory.title,
+          title: memory.summary,
           content: memory.content,
-          importance_score: memory.importance_score || 0,
+          importance: memory.importance,
           similarity: 1, // Perfect match for text search
-          category: memory.memory_categories?.name,
+          category: memory.memory_type,
         }))
         .slice(0, limit);
     }
-
-    // Log search for analytics
-    await supabase
-      .from('memory_access_log')
-      .insert({
-        memory_id: results[0]?.id || null,
-        companion_id: companionId,
-        access_type: 'search',
-        context: { query, results_count: results.length },
-      } as never);
 
     return NextResponse.json({ results });
   } catch (error) {

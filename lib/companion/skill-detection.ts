@@ -15,16 +15,51 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
-import type {
-  SkillCategory,
-  TeachingDetection,
-  SkillUsageDetection,
-  CompanionSkillInsert,
-  RecipeStructuredData,
-  CodingStructuredData,
-  ProcedureStructuredData,
-  GenericStructuredData,
-} from '@/types/skills';
+
+// ============================================================================
+// LOCAL TYPES
+// ============================================================================
+
+type SkillCategory =
+  | 'coding'
+  | 'recipes'
+  | 'domain'
+  | 'traditions'
+  | 'games'
+  | 'creative'
+  | 'language'
+  | 'procedures'
+  | 'trivia'
+  | 'other';
+
+interface TeachingDetection {
+  is_teaching: boolean;
+  confidence: number;
+  detected_category: SkillCategory | null;
+  detected_name: string | null;
+  extracted_content: string | null;
+  teaching_phrases: string[];
+}
+
+interface SkillUsageDetection {
+  should_use_skills: boolean;
+  relevant_topics: string[];
+  suggested_skills: string[];
+}
+
+interface ExtractedSkill {
+  skill_name: string;
+  skill_category: SkillCategory;
+  skill_description: string;
+  skill_content: string;
+  structured_data: Record<string, unknown>;
+  tags: string[];
+}
+
+interface SkillRow {
+  id: string;
+  skill_name: string;
+}
 
 // ============================================================================
 // TEACHING DETECTION PATTERNS
@@ -221,14 +256,7 @@ export function detectSkillUsageNeed(userMessage: string): SkillUsageDetection {
 export async function extractSkillWithAI(
   userMessage: string,
   detection: TeachingDetection
-): Promise<{
-  skill_name: string;
-  skill_category: SkillCategory;
-  skill_description: string;
-  skill_content: string;
-  structured_data: RecipeStructuredData | CodingStructuredData | ProcedureStructuredData | GenericStructuredData;
-  tags: string[];
-} | null> {
+): Promise<ExtractedSkill | null> {
   const systemPrompt = `You are a skill extraction assistant. Analyze the user's message and extract the skill/knowledge they are teaching.
 
 Return a JSON object with this structure:
@@ -269,7 +297,7 @@ ${detection.detected_category ? `Hint: This appears to be a ${detection.detected
       return null;
     }
 
-    const extracted = JSON.parse(jsonMatch[0]);
+    const extracted = JSON.parse(jsonMatch[0]) as ExtractedSkill;
 
     // Validate required fields
     if (!extracted.skill_name || !extracted.skill_content) {
@@ -312,6 +340,9 @@ export async function processSkillTeaching(
   skill_id?: string;
   message?: string;
 }> {
+  // Suppress unused parameter warning
+  void companionResponse;
+  
   try {
     // Step 1: Detect teaching moment
     const detection = detectTeachingMoment(userMessage);
@@ -337,22 +368,30 @@ export async function processSkillTeaching(
     // Step 3: Check if skill already exists
     const supabase = await createClient();
     
-    const { data: existing } = await supabase
+    const { data: existingData } = await supabase
       .from('companion_skills')
       .select('id, skill_name')
       .eq('companion_id', companionId)
       .ilike('skill_name', extracted.skill_name)
       .single();
 
+    const existing = existingData as SkillRow | null;
+
     if (existing) {
       // Update existing skill (reinforce)
       const { error: updateError } = await supabase
         .from('companion_skills')
         .update({
-          skill_content: extracted.skill_content,
-          structured_data: extracted.structured_data,
-          times_reinforced: existing.skill_name ? 1 : 1, // Will use SQL increment
-          teaching_context: userMessage.slice(0, 500),
+          times_used: 1, // Will increment
+          learned_from: 'chat_reinforcement',
+          metadata: {
+            skill_content: extracted.skill_content,
+            skill_description: extracted.skill_description,
+            structured_data: extracted.structured_data,
+            tags: extracted.tags,
+            teaching_context: userMessage.slice(0, 500),
+            last_reinforced: new Date().toISOString(),
+          },
         } as never)
         .eq('id', existing.id);
 
@@ -370,25 +409,31 @@ export async function processSkillTeaching(
     }
 
     // Step 4: Save new skill
-    const skillInsert: CompanionSkillInsert = {
+    const skillInsert = {
       companion_id: companionId,
       skill_name: extracted.skill_name,
       skill_category: extracted.skill_category,
-      skill_description: extracted.skill_description,
-      skill_content: extracted.skill_content,
-      structured_data: extracted.structured_data,
-      tags: extracted.tags || [],
-      taught_via: 'chat',
-      teaching_context: userMessage.slice(0, 500),
+      proficiency_level: 1,
+      times_used: 0,
+      learned_from: 'chat',
+      metadata: {
+        skill_content: extracted.skill_content,
+        skill_description: extracted.skill_description,
+        structured_data: extracted.structured_data,
+        tags: extracted.tags,
+        teaching_context: userMessage.slice(0, 500),
+      },
     };
 
-    const { data: newSkill, error: insertError } = await supabase
+    const { data: newSkillData, error: insertError } = await supabase
       .from('companion_skills')
       .insert(skillInsert as never)
       .select()
       .single();
 
-    if (insertError) {
+    const newSkill = newSkillData as SkillRow | null;
+
+    if (insertError || !newSkill) {
       console.error('[Skills] Failed to save new skill:', insertError);
       return {
         detected: true,
@@ -418,49 +463,117 @@ export async function processSkillTeaching(
 }
 
 /**
- * Find relevant skills for a conversation topic
+ * Get skills for context injection into chat
  */
-export async function findRelevantSkills(
+export async function getSkillsForContext(
   companionId: string,
-  userMessage: string,
-  limit: number = 3
-): Promise<Array<{
-  id: string;
-  skill_name: string;
-  skill_summary: string | null;
-  skill_content: string;
-  skill_category: SkillCategory;
-  proficiency: string;
-  confidence_score: number;
-}>> {
-  const detection = detectSkillUsageNeed(userMessage);
-
-  if (!detection.should_use_skills && detection.relevant_topics.length === 0) {
+  relevantTopics: string[],
+  limit: number = 5
+): Promise<Array<{ name: string; content: string; category: string }>> {
+  if (relevantTopics.length === 0) {
     return [];
   }
 
   const supabase = await createClient();
 
-  // Search for relevant skills
-  const searchTerms = detection.relevant_topics.join(' ');
-  
-  const { data: skills } = await supabase
+  // Build OR query for topics
+  const searchTerms = relevantTopics.map(t => `skill_name.ilike.%${t}%`).join(',');
+
+  const { data: skills, error } = await supabase
     .from('companion_skills')
-    .select('id, skill_name, skill_summary, skill_content, skill_category, proficiency, confidence_score')
+    .select('skill_name, skill_category, metadata')
     .eq('companion_id', companionId)
-    .eq('is_active', true)
-    .or(`skill_name.ilike.%${searchTerms}%,skill_content.ilike.%${searchTerms}%,tags.cs.{${detection.relevant_topics.join(',')}}`)
-    .order('confidence_score', { ascending: false })
+    .or(searchTerms)
+    .limit(limit);
+
+  if (error || !skills) {
+    console.error('[Skills] Failed to fetch skills for context:', error);
+    return [];
+  }
+
+  interface SkillContextResult {
+    skill_name: string;
+    skill_category: string;
+    metadata: { skill_content?: string } | null;
+  }
+
+  return (skills as SkillContextResult[]).map(s => {
+    return {
+      name: s.skill_name,
+      content: s.metadata?.skill_content || '',
+      category: s.skill_category,
+    };
+  });
+}
+
+/**
+ * Find relevant skills based on message content.
+ * Used by chat route to inject skill context into responses.
+ */
+export async function findRelevantSkills(
+  companionId: string,
+  messageContent: string,
+  limit: number = 5
+): Promise<Array<{
+  id: string;
+  skill_name: string;
+  skill_summary: string | null;
+  skill_content: string;
+  skill_category: string;
+  proficiency: string;
+}>> {
+  const supabase = await createClient();
+
+  // Extract keywords from message for search
+  const words = messageContent.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3);
+
+  if (words.length === 0) {
+    return [];
+  }
+
+  // Search for skills matching keywords
+  const searchTerms = words.slice(0, 5).map(w => `skill_name.ilike.%${w}%`).join(',');
+
+  const { data: skills, error } = await supabase
+    .from('companion_skills')
+    .select('id, skill_name, skill_category, proficiency_level, metadata')
+    .eq('companion_id', companionId)
+    .or(searchTerms)
     .order('times_used', { ascending: false })
     .limit(limit);
 
-  return (skills || []) as Array<{
+  if (error || !skills) {
+    return [];
+  }
+
+  // Map proficiency level to string
+  const proficiencyMap: Record<number, string> = {
+    1: 'novice',
+    2: 'familiar',
+    3: 'competent',
+    4: 'proficient',
+    5: 'expert',
+  };
+
+  interface SkillQueryResult {
     id: string;
     skill_name: string;
-    skill_summary: string | null;
-    skill_content: string;
-    skill_category: SkillCategory;
-    proficiency: string;
-    confidence_score: number;
-  }>;
+    skill_category: string;
+    proficiency_level: number;
+    metadata: { skill_content?: string; skill_summary?: string } | null;
+  }
+
+  return (skills as SkillQueryResult[]).map(s => {
+    return {
+      id: s.id,
+      skill_name: s.skill_name,
+      skill_summary: s.metadata?.skill_summary || null,
+      skill_content: s.metadata?.skill_content || '',
+      skill_category: s.skill_category,
+      proficiency: proficiencyMap[s.proficiency_level] || 'novice',
+    };
+  });
 }

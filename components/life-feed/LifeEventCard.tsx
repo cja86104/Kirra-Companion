@@ -24,19 +24,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn, formatRelativeTime } from '@/lib/utils/cn';
-import type { MoodState } from '@/types/database';
+import type { Json } from '@/types/database';
 
 interface LifeEventCardProps {
   event: {
     id: string;
     event_type: string;
     title: string;
-    description: string | null;
-    mood_before?: MoodState | null;
-    mood_after?: MoodState | null;
-    scheduled_at: string | null;
-    completed_at: string | null;
-    should_notify_user?: boolean;
+    description: string;
+    significance: 'trivial' | 'minor' | 'moderate' | 'major' | 'milestone';
+    emotional_impact: Json | null;
+    metadata: Json | null;
+    is_shared: boolean;
+    created_at: string;
   };
   companion: {
     id: string;
@@ -91,32 +91,26 @@ export function LifeEventCard({ event, companion }: LifeEventCardProps) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const getMoodLabel = (moodState: MoodState | null | undefined) => {
-    if (!moodState) return { label: 'Neutral', color: 'text-muted-foreground' };
-    const primary = moodState.primary || 'neutral';
-    
-    if (primary === 'happy' || primary === 'excited') return { label: 'Happy', color: 'text-green-500' };
-    if (primary === 'sad' || primary === 'melancholy') return { label: 'Sad', color: 'text-yellow-600' };
-    if (primary === 'angry' || primary === 'frustrated') return { label: 'Upset', color: 'text-red-500' };
-    return { label: 'Neutral', color: 'text-muted-foreground' };
+  const getSignificanceColor = (significance: string) => {
+    switch (significance) {
+      case 'milestone': return { label: 'Milestone', color: 'text-purple-500' };
+      case 'major': return { label: 'Major', color: 'text-green-500' };
+      case 'moderate': return { label: 'Moderate', color: 'text-blue-500' };
+      case 'minor': return { label: 'Minor', color: 'text-yellow-500' };
+      default: return { label: 'Trivial', color: 'text-muted-foreground' };
+    }
   };
 
-  const mood = getMoodLabel(event.mood_after || event.mood_before);
-  const isCompleted = event.completed_at !== null;
-  const notifyUser = event.should_notify_user ?? false;
+  const significanceInfo = getSignificanceColor(event.significance);
 
   return (
     <div className="relative">
       {/* Timeline Dot */}
       <div className={cn(
-        'absolute -left-[31px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-background',
-        isCompleted ? 'bg-primary' : 'bg-muted'
+        'absolute -left-[31px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-background bg-primary'
       )} />
 
-      <Card className={cn(
-        'transition-all hover:shadow-md',
-        !isCompleted && 'opacity-60'
-      )}>
+      <Card className="transition-all hover:shadow-md">
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
             {/* Event Icon */}
@@ -153,26 +147,26 @@ export function LifeEventCard({ event, companion }: LifeEventCardProps) {
               {/* Footer */}
               <div className="mt-3 flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
-                  {event.scheduled_at ? formatRelativeTime(event.scheduled_at) : 'Unscheduled'}
+                  {formatRelativeTime(event.created_at)}
                 </span>
                 
                 <Badge variant="outline" className="text-xs">
                   {event.event_type.replace(/_/g, ' ')}
                 </Badge>
 
-                <span className={cn('text-xs', mood.color)}>
-                  {mood.label}
+                <span className={cn('text-xs', significanceInfo.color)}>
+                  {significanceInfo.label}
                 </span>
 
-                {notifyUser && !isCompleted && (
+                {event.is_shared && (
                   <Badge variant="secondary" className="text-xs">
-                    Will notify you
+                    Shared
                   </Badge>
                 )}
               </div>
 
               {/* Action */}
-              {notifyUser && companion && (
+              {companion && (
                 <div className="mt-3">
                   <Button size="sm" variant="outline" asChild>
                     <Link href={`/chat/${companion.id}`}>
