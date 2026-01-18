@@ -1,17 +1,15 @@
 'use client';
 
 /**
- * KIRRA CHAT WINDOW v3.0
- * ======================
- * This is where the magic happens. 95% of user time.
- * Every pixel must earn its place.
+ * KIRRA IMMERSIVE CHAT v8.0
+ * =========================
+ * NO CHAT BOX. Your companion is IN THE ROOM with you.
  * 
- * Design Philosophy:
- * - The companion is PRESENT, not just responding
- * - Conversations feel intimate, like texting someone you love
- * - Beautiful empty state that invites interaction
- * - Contextual actions that make sense
- * - Premium feel worth paying for
+ * - Full scene background
+ * - Companion avatar positioned IN the scene
+ * - Their speech appears near them
+ * - Your messages appear at bottom as your voice
+ * - It's a CONVERSATION, not a chat app
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -23,38 +21,30 @@ import {
   Volume2,
   VolumeX,
   Heart,
-  Sparkles,
-  MessageCircle,
-  Smile,
-  Clock,
-  ChevronDown,
-  Info,
+  ChevronLeft,
   MoreHorizontal,
-  Mic,
   Phone,
-  Video,
-  ImageIcon,
-  Gift,
   Star,
+  Settings,
+  Send,
+  Mic,
+  Paperclip,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MessageBubble } from './MessageBubble';
-import { ChatInput } from './ChatInput';
-import { TypingIndicator } from './TypingIndicator';
 import { VoiceConversationMode, useVoiceConversationSupported } from './VoiceConversationMode';
 import { getClient } from '@/lib/supabase/client';
+import { uploadMultipleAttachments } from '@/lib/supabase/storage';
 import { cn } from '@/lib/utils/cn';
-import type { CompanionWithDNA, Conversation, Message, VoiceConfig, MoodState } from '@/types/database';
+import type { CompanionWithDNA, Conversation, Message, VoiceConfig } from '@/types/database';
+import type { Attachment } from './ChatInput';
 
 interface ChatWindowProps {
   companion: CompanionWithDNA;
@@ -63,51 +53,53 @@ interface ChatWindowProps {
   userId: string;
 }
 
-// Mood configurations with colors and emojis
-const MOOD_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
-  happy: { emoji: '😊', label: 'Happy', color: 'text-kirra-forest-lighter' },
-  excited: { emoji: '🤩', label: 'Excited', color: 'text-kirra-gold' },
-  content: { emoji: '😌', label: 'Content', color: 'text-kirra-sage' },
-  playful: { emoji: '😜', label: 'Playful', color: 'text-kirra-forest-light' },
-  curious: { emoji: '🤔', label: 'Curious', color: 'text-info' },
-  loving: { emoji: '🥰', label: 'Loving', color: 'text-kirra-warm' },
-  neutral: { emoji: '😐', label: 'Neutral', color: 'text-muted-foreground' },
-  lonely: { emoji: '🥺', label: 'Missing you', color: 'text-kirra-copper' },
+// =============================================================================
+// SCENE BACKGROUNDS
+// =============================================================================
+
+function getTimeOfDay(): 'morning' | 'day' | 'evening' | 'night' {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return 'morning';
+  if (hour >= 11 && hour < 17) return 'day';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
+function getSceneBackground(relationshipType: string, timeOfDay: string): string {
+  // Map to scene images in /public/scenes/
+  const validTypes = ['romantic', 'friend', 'mentor', 'family', 'custom'];
+  const type = validTypes.includes(relationshipType) ? relationshipType : 'custom';
+  return `/scenes/${type}-${timeOfDay}.jpg`;
+}
+
+// =============================================================================
+// MOOD CONFIG
+// =============================================================================
+
+interface MoodConfig {
+  emoji: string;
+  label: string;
+  bubbleColor: string;
+}
+
+const MOOD_CONFIG: Record<string, MoodConfig> = {
+  happy: { emoji: '😊', label: 'Happy', bubbleColor: 'from-amber-100 to-orange-100 border-amber-200' },
+  excited: { emoji: '🤩', label: 'Excited', bubbleColor: 'from-rose-100 to-pink-100 border-rose-200' },
+  loving: { emoji: '🥰', label: 'Loving', bubbleColor: 'from-rose-100 to-red-100 border-rose-200' },
+  calm: { emoji: '😌', label: 'Calm', bubbleColor: 'from-emerald-100 to-teal-100 border-emerald-200' },
+  playful: { emoji: '😜', label: 'Playful', bubbleColor: 'from-violet-100 to-purple-100 border-violet-200' },
+  curious: { emoji: '🤔', label: 'Curious', bubbleColor: 'from-blue-100 to-cyan-100 border-blue-200' },
+  thoughtful: { emoji: '🧐', label: 'Thoughtful', bubbleColor: 'from-slate-100 to-gray-100 border-slate-200' },
+  sad: { emoji: '😢', label: 'Sad', bubbleColor: 'from-blue-100 to-indigo-100 border-blue-200' },
+  neutral: { emoji: '😐', label: 'Neutral', bubbleColor: 'from-gray-100 to-slate-100 border-gray-200' },
+  proud: { emoji: '😤', label: 'Proud', bubbleColor: 'from-emerald-100 to-green-100 border-emerald-200' },
+  grateful: { emoji: '🙏', label: 'Grateful', bubbleColor: 'from-rose-100 to-orange-100 border-rose-200' },
+  anxious: { emoji: '😰', label: 'Anxious', bubbleColor: 'from-amber-100 to-yellow-100 border-amber-200' },
 };
 
-// Conversation starters based on relationship type
-const CONVERSATION_STARTERS: Record<string, string[]> = {
-  romantic: [
-    "Tell me about your day 💕",
-    "I've been thinking about you...",
-    "What's on your mind?",
-    "I missed talking to you",
-  ],
-  friend: [
-    "What's up? 👋",
-    "Got any plans today?",
-    "Tell me something interesting!",
-    "How's life treating you?",
-  ],
-  mentor: [
-    "What would you like to learn today?",
-    "Any challenges I can help with?",
-    "What's your goal for today?",
-    "Let's grow together 🌱",
-  ],
-  family: [
-    "How are you feeling today?",
-    "Tell me what's new!",
-    "I'm here for you 💛",
-    "What's happening in your world?",
-  ],
-  custom: [
-    "Hey there! 👋",
-    "What's on your mind?",
-    "Let's chat!",
-    "Tell me anything",
-  ],
-};
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
 
 export function ChatWindow({
   companion,
@@ -119,90 +111,82 @@ export function ChatWindow({
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [autoPlayVoice, setAutoPlayVoice] = useState(true);
-  const [showScrollButton, setShowScrollButton] = useState(false);
   const [voiceConversationActive, setVoiceConversationActive] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [inputValue, setInputValue] = useState('');
+  const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening' | 'night'>('day');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const supabase = getClient();
   const isVoiceConversationSupported = useVoiceConversationSupported();
+
+  // Set time on client
+  useEffect(() => {
+    setTimeOfDay(getTimeOfDay());
+  }, []);
 
   const voiceConfig = companion.voice_config as VoiceConfig | null;
   const hasVoiceEnabled = !!voiceConfig?.voiceId;
   const moodData = companion.current_mood as { primary?: string } | null;
   const currentMood = moodData?.primary || 'neutral';
-  const moodInfo = MOOD_CONFIG[currentMood] || MOOD_CONFIG.neutral;
-  const starters = CONVERSATION_STARTERS[companion.relationship_type] || CONVERSATION_STARTERS.custom;
+  const mood = MOOD_CONFIG[currentMood] || MOOD_CONFIG.neutral;
 
-  // Scroll handling
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior,
-      });
-    }
-  }, []);
+  // Get last few messages for display
+  const recentMessages = messages.slice(-6); // Show last 6 messages
+  const lastCompanionMessage = [...messages].reverse().find(m => m.role === 'assistant');
+  const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
 
-  const handleScroll = useCallback(() => {
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      setShowScrollButton(scrollHeight - scrollTop - clientHeight > 200);
-    }
-  }, []);
+  // Scene background
+  const sceneUrl = getSceneBackground(companion.relationship_type, timeOfDay);
 
-  useEffect(() => {
-    scrollToBottom('auto');
-  }, [messages, scrollToBottom]);
-
-  // Subscribe to new messages
+  // Subscribe to messages
   useEffect(() => {
     if (!conversation) return;
 
     const channel = supabase
       .channel(`messages:${conversation.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversation.id}`,
-        },
-        (payload) => {
-          const newMessage = payload.new as Message;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMessage.id)) return prev;
-            const hasTempVersion = prev.some(
-              (m) => m.id.startsWith('temp-') && 
-                     m.content === newMessage.content && 
-                     m.role === newMessage.role
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversation.id}`,
+      }, (payload) => {
+        const newMessage = payload.new as Message;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === newMessage.id)) return prev;
+          const hasTempVersion = prev.some(
+            (m) => m.id.startsWith('temp-') && m.content === newMessage.content && m.role === newMessage.role
+          );
+          if (hasTempVersion) {
+            return prev.map((m) =>
+              m.id.startsWith('temp-') && m.content === newMessage.content && m.role === newMessage.role
+                ? newMessage : m
             );
-            if (hasTempVersion) {
-              return prev.map((m) => 
-                m.id.startsWith('temp-') && 
-                m.content === newMessage.content && 
-                m.role === newMessage.role 
-                  ? newMessage 
-                  : m
-              );
-            }
-            return [...prev, newMessage];
-          });
-          setIsTyping(false);
-        }
-      )
+          }
+          return [...prev, newMessage];
+        });
+        setIsTyping(false);
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [conversation, supabase]);
 
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || !conversation) return;
+  const sendMessage = async (content: string, attachments?: Attachment[]) => {
+    if ((!content.trim() && (!attachments || attachments.length === 0)) || !conversation) return;
 
     setIsLoading(true);
-
+    setInputValue('');
     const messageContent = content.trim();
+
+    let uploadedAttachments: { url: string; filename: string; type: string; size: number }[] = [];
+
+    if (attachments && attachments.length > 0) {
+      const files = attachments.map(a => a.file);
+      const { uploaded, failed } = await uploadMultipleAttachments(supabase, userId, companion.id, files);
+      if (failed.length > 0) toast.error(`Failed to upload: ${failed.join(', ')}`);
+      uploadedAttachments = uploaded.filter(u => u.success && u.url).map((u, i) => ({
+        url: u.url!, filename: files[i].name, type: attachments[i].type, size: files[i].size,
+      }));
+    }
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: Message = {
@@ -211,14 +195,14 @@ export function ChatWindow({
       companion_id: companion.id,
       user_id: userId,
       role: 'user',
-      content: messageContent,
+      content: messageContent || `[Sent ${uploadedAttachments.length} attachment(s)]`,
       content_type: 'text',
       audio_url: null,
       audio_duration: null,
       tokens_used: 0,
       is_edited: false,
       is_deleted: false,
-      metadata: null,
+      metadata: uploadedAttachments.length > 0 ? { attachments: uploadedAttachments } : null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -233,6 +217,7 @@ export function ChatWindow({
         body: JSON.stringify({
           message: messageContent,
           conversationId: conversation.id,
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
         }),
       });
 
@@ -242,12 +227,11 @@ export function ChatWindow({
       }
 
       const data = await response.json();
-      
+
       setMessages((prev) => {
+        if (!data.userMessage) return prev.filter((m) => m.id !== tempId);
         const hasRealMessage = prev.some((m) => m.id === data.userMessage.id);
-        if (hasRealMessage) {
-          return prev.filter((m) => m.id !== tempId);
-        }
+        if (hasRealMessage) return prev.filter((m) => m.id !== tempId);
         return prev.map((m) => (m.id === tempId ? data.userMessage : m));
       });
 
@@ -271,7 +255,6 @@ export function ChatWindow({
     }
   };
 
-  // Track if audio has been unlocked by user interaction
   const audioUnlockedRef = useRef(false);
   const pendingAudioRef = useRef<string | null>(null);
 
@@ -283,374 +266,326 @@ export function ChatWindow({
         body: JSON.stringify({ text, companionId: companion.id }),
       });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        console.error('TTS API error:', response.status, error);
-        return;
-      }
+      if (!response.ok) return;
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
-      
       audio.onended = () => URL.revokeObjectURL(url);
-      
+
       try {
         await audio.play();
         audioUnlockedRef.current = true;
-      } catch (playError) {
-        // Browser blocked autoplay - store for later and notify user
-        console.warn('Autoplay blocked:', playError);
+      } catch {
         pendingAudioRef.current = text;
         URL.revokeObjectURL(url);
-        
-        if (!audioUnlockedRef.current) {
-          toast.info('Click anywhere to enable voice', {
-            duration: 3000,
-            id: 'audio-unlock', // Prevent duplicate toasts
-          });
-        }
       }
     } catch (error) {
       console.error('Auto-play error:', error);
     }
   }, [companion.id]);
 
-  // Unlock audio on first user interaction
-  useEffect(() => {
-    const unlockAudio = () => {
-      if (audioUnlockedRef.current) return;
-      
-      // Create and play a silent audio to unlock
-      const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-      silentAudio.volume = 0;
-      silentAudio.play().then(() => {
-        audioUnlockedRef.current = true;
-        // If there was pending audio, play it now
-        if (pendingAudioRef.current) {
-          playCompanionResponse(pendingAudioRef.current);
-          pendingAudioRef.current = null;
-        }
-      }).catch(() => {
-        // Still not unlocked, that's ok
-      });
-    };
-
-    // Listen for any user interaction
-    document.addEventListener('click', unlockAudio, { once: false });
-    document.addEventListener('keydown', unlockAudio, { once: false });
-    document.addEventListener('touchstart', unlockAudio, { once: false });
-
-    return () => {
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('keydown', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-    };
-  }, [playCompanionResponse]);
-
-  const getInitials = (name: string) => {
-    return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(inputValue);
+    }
   };
 
-  const handleStarterClick = (starter: string) => {
-    sendMessage(starter);
-  };
+  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   return (
-    <div className="flex h-full flex-col bg-gradient-to-b from-background via-background to-muted/20">
-      {/* ================================================================
-          PREMIUM CHAT HEADER
-          ================================================================ */}
-      <header className="relative border-b border-border/50 bg-card/80 backdrop-blur-xl">
-        {/* Subtle gradient line at top */}
-        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-        
-        <div className="flex items-center justify-between px-4 py-3 lg:px-6">
-          {/* Companion Info */}
-          <div className="flex items-center gap-4">
-            {/* Avatar with presence */}
-            <div className="relative">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="relative"
-              >
-                <Avatar className="h-12 w-12 ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
-                  {companion.avatar_url ? (
-                    <AvatarImage src={companion.avatar_url} alt={companion.name} />
-                  ) : (
-                    <AvatarFallback className="bg-kirra-gradient text-white text-lg font-medium">
-                      {getInitials(companion.name)}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                {/* Online pulse */}
-                <motion.span 
-                  className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card bg-kirra-forest-lighter"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
-              </motion.div>
-            </div>
+    <div className="relative h-full w-full overflow-hidden">
+      {/* =================================================================
+          SCENE BACKGROUND - Full screen
+          ================================================================= */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${sceneUrl})` }}
+      >
+        {/* Subtle vignette for depth */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
+      </div>
 
-            {/* Name & Status */}
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-display text-lg font-semibold">{companion.name}</h1>
-                <motion.span 
-                  className={cn("text-lg", moodInfo.color)}
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                >
-                  {moodInfo.emoji}
-                </motion.span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="capitalize">{companion.relationship_type}</span>
-                <span>•</span>
-                <span className={moodInfo.color}>{moodInfo.label}</span>
-                {hasVoiceEnabled && (
-                  <>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <Volume2 className="h-3 w-3" />
-                      Voice
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* =================================================================
+          TOP BAR - Minimal, floating
+          ================================================================= */}
+      <div className="absolute top-0 left-0 right-0 z-30 p-4">
+        <div className="flex items-center justify-between">
+          <Link href="/chat">
+            <Button variant="ghost" size="icon" className="rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm">
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+          </Link>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1">
-            {/* Voice Toggle */}
+          <div className="flex items-center gap-2">
             {hasVoiceEnabled && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setAutoPlayVoice(!autoPlayVoice)}
                 className={cn(
-                  "rounded-xl transition-all",
-                  autoPlayVoice && "bg-primary/10 text-primary"
+                  "rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm",
+                  autoPlayVoice && "bg-white/30"
                 )}
-                title={autoPlayVoice ? 'Disable auto-play voice' : 'Enable auto-play voice'}
               >
-                {autoPlayVoice ? (
-                  <Volume2 className="h-5 w-5" />
-                ) : (
-                  <VolumeX className="h-5 w-5" />
-                )}
+                {autoPlayVoice ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
               </Button>
             )}
-
-            {/* Voice Conversation Mode Button */}
             {hasVoiceEnabled && isVoiceConversationSupported && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setVoiceConversationActive(true)}
-                className="rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10"
-                title="Start hands-free voice conversation"
+                className="rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm"
               >
                 <Phone className="h-5 w-5" />
               </Button>
             )}
-
-            {/* Affection Level */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary/30">
-              <Heart className={cn(
-                "h-4 w-4",
-                companion.affection_level > 70 ? "text-kirra-warm fill-kirra-warm" : 
-                companion.affection_level > 40 ? "text-kirra-amber" : "text-muted-foreground"
-              )} />
-              <span className="text-sm font-medium">{companion.affection_level}%</span>
-            </div>
-
-            {/* More Options */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-xl">
+                <Button variant="ghost" size="icon" className="rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm">
                   <MoreHorizontal className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-48 rounded-xl">
                 <DropdownMenuItem asChild>
-                  <Link href={`/companion/${companion.id}/memory-palace`} className="flex items-center gap-2">
-                    <Brain className="h-4 w-4" />
-                    Memory Palace
+                  <Link href={`/companion/${companion.id}`} className="cursor-pointer">
+                    <Settings className="h-4 w-4 mr-2" /> Settings
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/life-feed" className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    View Life Feed
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href={`/companion/${companion.id}/edit`} className="flex items-center gap-2">
-                    <Info className="h-4 w-4" />
-                    Companion Details
+                  <Link href={`/companion/${companion.id}/memory-palace`} className="cursor-pointer">
+                    <Brain className="h-4 w-4 mr-2" /> Memories
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
-      </header>
-
-      {/* ================================================================
-          MESSAGES AREA
-          ================================================================ */}
-      <div 
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto scroll-smooth"
-      >
-        <div className="mx-auto max-w-3xl px-4 py-6">
-          {messages.length === 0 ? (
-            /* ============================================================
-               BEAUTIFUL EMPTY STATE
-               ============================================================ */
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-12 text-center"
-            >
-              {/* Animated Avatar */}
-              <motion.div 
-                className="relative mb-6"
-                animate={{ y: [0, -8, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <div className="absolute -inset-4 bg-primary/10 rounded-full blur-2xl" />
-                <Avatar className="relative h-24 w-24 ring-4 ring-primary/20 ring-offset-4 ring-offset-background">
-                  {companion.avatar_url ? (
-                    <AvatarImage src={companion.avatar_url} alt={companion.name} />
-                  ) : (
-                    <AvatarFallback className="bg-kirra-gradient text-white text-3xl font-medium">
-                      {getInitials(companion.name)}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                <motion.div
-                  className="absolute -bottom-1 -right-1 rounded-full bg-card p-1.5 shadow-lg"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  <span className="text-2xl">{moodInfo.emoji}</span>
-                </motion.div>
-              </motion.div>
-
-              {/* Welcome Text */}
-              <h2 className="font-display text-2xl font-semibold mb-2">
-                {companion.name} is here for you
-              </h2>
-              <p className="text-muted-foreground max-w-md mb-8">
-                {companion.backstory ? 
-                  companion.backstory.slice(0, 120) + (companion.backstory.length > 120 ? '...' : '') :
-                  `Start a conversation with ${companion.name}. They're excited to get to know you better!`
-                }
-              </p>
-
-              {/* Quick Starters */}
-              <div className="space-y-3 w-full max-w-sm">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                  Start with
-                </p>
-                <div className="grid gap-2">
-                  {starters.map((starter, i) => (
-                    <motion.button
-                      key={starter}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      onClick={() => handleStarterClick(starter)}
-                      className="group flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 px-4 py-3 text-left transition-all hover:border-primary/30 hover:bg-primary/5 hover:shadow-lg"
-                    >
-                      <MessageCircle className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                      <span className="text-sm">{starter}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Features hint */}
-              <div className="mt-10 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Brain className="h-3.5 w-3.5" />
-                  Remembers everything
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Heart className="h-3.5 w-3.5" />
-                  Bond grows over time
-                </span>
-                {hasVoiceEnabled && (
-                  <span className="flex items-center gap-1.5">
-                    <Mic className="h-3.5 w-3.5" />
-                    Voice messages
-                  </span>
-                )}
-              </div>
-            </motion.div>
-          ) : (
-            /* ============================================================
-               MESSAGE LIST
-               ============================================================ */
-            <div className="space-y-4">
-              {messages.map((message, index) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  companion={companion}
-                  isUser={message.role === 'user'}
-                />
-              ))}
-
-              {isTyping && (
-                <TypingIndicator companionName={companion.name} />
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Scroll to bottom button */}
-      <AnimatePresence>
-        {showScrollButton && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            onClick={() => scrollToBottom()}
-            className="absolute bottom-24 right-6 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-110"
+      {/* =================================================================
+          RELATIONSHIP STATS - Floating top right
+          ================================================================= */}
+      <div className="absolute top-16 right-4 z-20">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="bg-black/40 backdrop-blur-md rounded-2xl p-3 text-white"
+        >
+          <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-1">
+              <Heart className="h-4 w-4 text-rose-400" />
+              <span>{companion.affection_level}%</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Star className="h-4 w-4 text-amber-400" />
+              <span>{companion.trust_level}%</span>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* =================================================================
+          COMPANION - In the scene, left side
+          ================================================================= */}
+      <div className="absolute left-8 bottom-32 z-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center"
+        >
+          {/* Companion Avatar - Large */}
+          <motion.div
+            animate={{ y: [0, -5, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            className="relative"
           >
-            <ChevronDown className="h-5 w-5" />
-          </motion.button>
+            <Avatar className="h-32 w-32 ring-4 ring-white/50 shadow-2xl">
+              {companion.avatar_url ? (
+                <AvatarImage src={companion.avatar_url} alt={companion.name} className="object-cover" />
+              ) : (
+                <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white text-4xl font-bold">
+                  {getInitials(companion.name)}
+                </AvatarFallback>
+              )}
+            </Avatar>
+
+            {/* Mood emoji */}
+            <motion.div
+              className="absolute -top-2 -right-2 text-3xl bg-white rounded-full p-1 shadow-lg"
+              animate={{ rotate: [-5, 5, -5] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              {mood.emoji}
+            </motion.div>
+          </motion.div>
+
+          {/* Name */}
+          <div className="mt-3 text-center">
+            <h2 className="text-xl font-bold text-white drop-shadow-lg">{companion.name}</h2>
+            <p className="text-sm text-white/80 drop-shadow">{mood.label}</p>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* =================================================================
+          COMPANION'S SPEECH - Bubble near them
+          ================================================================= */}
+      <AnimatePresence mode="wait">
+        {(lastCompanionMessage || isTyping) && (
+          <motion.div
+            key={lastCompanionMessage?.id || 'typing'}
+            initial={{ opacity: 0, x: -20, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -20, scale: 0.9 }}
+            className="absolute left-44 bottom-48 z-20 max-w-md"
+          >
+            <div className={cn(
+              "relative px-5 py-4 rounded-3xl rounded-bl-lg shadow-xl border-2 bg-gradient-to-br",
+              mood.bubbleColor
+            )}>
+              {/* Speech pointer */}
+              <div className="absolute -left-3 bottom-4 w-4 h-4 bg-white border-l-2 border-b-2 border-inherit transform rotate-45" />
+
+              {isTyping ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    <motion.div
+                      className="w-2 h-2 bg-gray-400 rounded-full"
+                      animate={{ y: [0, -6, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
+                    />
+                    <motion.div
+                      className="w-2 h-2 bg-gray-400 rounded-full"
+                      animate={{ y: [0, -6, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }}
+                    />
+                    <motion.div
+                      className="w-2 h-2 bg-gray-400 rounded-full"
+                      animate={{ y: [0, -6, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-800 text-base leading-relaxed">
+                  {lastCompanionMessage?.content}
+                </p>
+              )}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ================================================================
-          CHAT INPUT
-          ================================================================ */}
-      <ChatInput
-        onSend={sendMessage}
-        isLoading={isLoading}
-        companionName={companion.name}
-        voiceEnabled={true}
-      />
+      {/* =================================================================
+          YOUR LAST MESSAGE - Shows what you said
+          ================================================================= */}
+      <AnimatePresence>
+        {lastUserMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="absolute right-8 bottom-48 z-20 max-w-sm"
+          >
+            <div className="px-5 py-3 rounded-3xl rounded-br-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-xl">
+              <p className="text-base leading-relaxed">{lastUserMessage.content}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* ================================================================
-          VOICE CONVERSATION MODE OVERLAY
-          ================================================================ */}
+      {/* =================================================================
+          CONVERSATION HISTORY - Scrollable, semi-transparent
+          ================================================================= */}
+      {messages.length > 2 && (
+        <div className="absolute right-4 top-32 bottom-48 w-80 z-10 overflow-hidden">
+          <div className="h-full overflow-y-auto scrollbar-hide px-2 py-4 space-y-3">
+            {messages.slice(0, -2).map((message) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.7 }}
+                className={cn(
+                  "text-sm px-3 py-2 rounded-xl max-w-full",
+                  message.role === 'user'
+                    ? "bg-white/20 text-white ml-8"
+                    : "bg-black/20 text-white mr-8"
+                )}
+              >
+                <p className="line-clamp-2">{message.content}</p>
+              </motion.div>
+            ))}
+          </div>
+          {/* Fade overlay */}
+          <div className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-black/30 to-transparent pointer-events-none" />
+          <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+        </div>
+      )}
+
+      {/* =================================================================
+          INPUT - Your voice, at the bottom
+          ================================================================= */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 p-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="relative flex items-end gap-2">
+            {/* Main input */}
+            <div className="flex-1 relative">
+              <textarea
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={`Say something to ${companion.name}...`}
+                rows={1}
+                className="w-full px-5 py-4 pr-24 rounded-3xl bg-white/90 backdrop-blur-md border-0 shadow-2xl resize-none focus:outline-none focus:ring-2 focus:ring-violet-400 text-gray-800 placeholder-gray-500"
+                style={{ minHeight: '56px', maxHeight: '120px' }}
+              />
+
+              {/* Input actions */}
+              <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                >
+                  <Paperclip className="h-5 w-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                >
+                  <Mic className="h-5 w-5" />
+                </Button>
+                <Button
+                  onClick={() => sendMessage(inputValue)}
+                  disabled={!inputValue.trim() || isLoading}
+                  size="icon"
+                  className="h-10 w-10 rounded-full bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shadow-lg"
+                >
+                  <Send className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Hint text */}
+          <p className="text-center text-white/60 text-xs mt-2 drop-shadow">
+            Press Enter to send • Shift+Enter for new line
+          </p>
+        </div>
+      </div>
+
+      {/* Voice conversation mode */}
       {isVoiceConversationSupported && (
         <VoiceConversationMode
           isActive={voiceConversationActive}
           onStart={() => setVoiceConversationActive(true)}
           onEnd={() => setVoiceConversationActive(false)}
-          onSendMessage={async (text) => {
-            await sendMessage(text);
-          }}
+          onSendMessage={sendMessage}
           companionName={companion.name}
           companionId={companion.id}
           hasVoiceEnabled={hasVoiceEnabled}

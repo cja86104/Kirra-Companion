@@ -31,11 +31,20 @@ import { processMemoriesFromChat } from '@/lib/companion/memory-extraction';
 import { processEvolutionTrigger, quickShouldCheck } from '@/lib/companion/evolution-triggers';
 import { processSkillTeaching, findRelevantSkills } from '@/lib/companion/skill-detection';
 import { trackSkillUsage } from '@/lib/companion/skill-usage';
-import type { Profile, Companion, CompanionDNA, Message } from '@/types/database';
+import { analyzeConversationMood, shouldUpdateMood } from '@/lib/companion/mood-analysis';
+import type { Profile, Companion, CompanionDNA, Message, MoodState } from '@/types/database';
+
+interface ChatAttachment {
+  url: string;
+  filename: string;
+  type: 'image' | 'file';
+  size: number;
+}
 
 interface ChatRequestBody {
   message: string;
   conversationId: string;
+  attachments?: ChatAttachment[];
 }
 
 // Type for companion with DNA joined
@@ -63,11 +72,12 @@ export async function POST(
   try {
     const { id: companionId } = await params;
     const body: ChatRequestBody = await request.json();
-    const { message, conversationId } = body;
+    const { message, conversationId, attachments } = body;
 
-    if (!message?.trim()) {
+    // Allow empty message if there are attachments
+    if (!message?.trim() && (!attachments || attachments.length === 0)) {
       return NextResponse.json(
-        { error: 'Message is required' },
+        { error: 'Message or attachments required' },
         { status: 400 }
       );
     }
@@ -333,11 +343,26 @@ export async function POST(
         content: msg.content,
       }));
 
+    // Build user message with attachment context
+    let userMessageForAI = message?.trim() || '';
+    if (attachments && attachments.length > 0) {
+      const attachmentDescriptions = attachments.map(a => {
+        if (a.type === 'image') {
+          return `[Shared image: ${a.filename}]`;
+        }
+        return `[Shared file: ${a.filename}]`;
+      }).join(' ');
+      
+      userMessageForAI = userMessageForAI 
+        ? `${userMessageForAI}\n\n${attachmentDescriptions}`
+        : attachmentDescriptions;
+    }
+
     // Call Anthropic Claude
     const completion = await createChatCompletion({
       systemPrompt,
       messages: conversationHistory,
-      userMessage: message.trim(),
+      userMessage: userMessageForAI,
       subscriptionTier,
       temperature: 0.8,
     });
@@ -348,6 +373,7 @@ export async function POST(
     }
 
     // Save user message
+    const userMessageContent = message?.trim() || (attachments?.length ? `[Shared ${attachments.length} file(s)]` : '');
     const { data: userMessage, error: userMsgError } = await supabase
       .from('messages')
       .insert({
@@ -355,9 +381,10 @@ export async function POST(
         companion_id: companionId,
         user_id: user.id,
         role: 'user',
-        content: message.trim(),
+        content: userMessageContent,
         content_type: 'text',
         tokens_used: completion.inputTokens,
+        attachments: attachments && attachments.length > 0 ? attachments : null,
       } as never)
       .select()
       .single();
@@ -394,12 +421,42 @@ export async function POST(
       } as never)
       .eq('id', conversationId);
 
-    // Update companion stats
+    // Calculate affection growth (small increase per exchange, capped at 100)
+    const currentAffection = companion.affection_level || 30;
+    const newAffection = Math.min(100, currentAffection + 1);
+
+    // Calculate trust growth (builds slightly slower, capped at 100)
+    const currentTrust = companion.trust_level || 20;
+    const newTrust = Math.min(100, currentTrust + 1);
+
+    // Analyze conversation and update mood
+    const currentMood = companion.current_mood as MoodState | null;
+    let newMood = currentMood;
+    
+    // Only run full analysis if there's a reason to update
+    if (shouldUpdateMood(userMessageContent, currentMood)) {
+      const moodAnalysis = analyzeConversationMood(
+        userMessageContent,
+        completion.content,
+        currentMood
+      );
+      
+      // Update mood if analysis has reasonable confidence
+      if (moodAnalysis.confidence > 0.2) {
+        newMood = moodAnalysis.suggestedMood;
+        console.log(`[Mood] ${companion.name}: ${currentMood?.primary || 'neutral'} → ${newMood.primary} (confidence: ${moodAnalysis.confidence.toFixed(2)})`);
+      }
+    }
+
+    // Update companion stats including affection, trust, and mood
     await supabase
       .from('companions')
       .update({
         total_messages: companion.total_messages + 2,
         last_interaction: new Date().toISOString(),
+        affection_level: newAffection,
+        trust_level: newTrust,
+        current_mood: newMood,
       } as never)
       .eq('id', companionId);
 
@@ -415,9 +472,9 @@ export async function POST(
       companionId,
       user.id,
       companion.name,
-      message.trim(),
+      message?.trim() || '',
       completion.content,
-      companion.current_mood as import('@/types/database').MoodState | null,
+      newMood, // Use the updated mood
       companion.total_messages + 2,
       (recentMessages?.length || 0) === 0
     ).catch(err => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -30,17 +30,121 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge, CountBadge } from '@/components/ui/badge';
-import { signOut } from '@/lib/supabase/client';
+import { signOut, getClient } from '@/lib/supabase/client';
 import type { Profile } from '@/types/database';
 
 interface NavbarProps {
   user: Profile;
 }
 
+interface Notification {
+  id: string;
+  title: string;
+  description: string | null;
+  emoji: string | null;
+  occurred_at: string;
+  companion_name: string;
+  notified_at: string | null;
+}
+
 export function Navbar({ user }: NavbarProps) {
   const router = useRouter();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [notificationCount] = useState(3); // TODO: Replace with real data
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(true);
+
+  // Fetch real notification count and data
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const supabase = getClient();
+        
+        // Get unread life events that should notify user
+        const { data, error } = await supabase
+          .from('life_events')
+          .select(`
+            id,
+            title,
+            description,
+            emoji,
+            occurred_at,
+            notified_at,
+            companions!inner(name)
+          `)
+          .eq('should_notify_user', true)
+          .is('notified_at', null)
+          .order('occurred_at', { ascending: false })
+          .limit(10);
+
+        if (error) {
+          console.error('Error fetching notifications:', error);
+          return;
+        }
+
+        if (data) {
+          const mapped = data.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            emoji: item.emoji,
+            occurred_at: item.occurred_at,
+            companion_name: item.companions?.name || 'Companion',
+            notified_at: item.notified_at,
+          }));
+          setNotifications(mapped);
+          setNotificationCount(mapped.length);
+        }
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error);
+      } finally {
+        setLoadingNotifications(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
+  const markAllAsRead = async () => {
+    try {
+      const supabase = getClient();
+      const now = new Date().toISOString();
+      
+      // Mark all unread notifications as read
+      const { error } = await supabase
+        .from('life_events')
+        .update({ notified_at: now })
+        .eq('should_notify_user', true)
+        .is('notified_at', null);
+
+      if (error) {
+        console.error('Error marking notifications as read:', error);
+        toast.error('Failed to mark notifications as read');
+        return;
+      }
+
+      setNotifications([]);
+      setNotificationCount(0);
+      toast.success('All notifications marked as read');
+    } catch (error) {
+      console.error('Failed to mark notifications as read:', error);
+    }
+  };
+
+  const formatTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffMs = now.getTime() - then.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return then.toLocaleDateString();
+  };
 
   const handleSignOut = async () => {
     try {
@@ -84,8 +188,9 @@ export function Navbar({ user }: NavbarProps) {
           <SearchInput
             placeholder="Search conversations, memories..."
             onSearch={(value) => {
-              console.log('Search:', value);
-              // TODO: Implement global search
+              if (value.trim()) {
+                router.push(`/search?q=${encodeURIComponent(value.trim())}`);
+              }
             }}
           />
         </div>
@@ -123,47 +228,53 @@ export function Navbar({ user }: NavbarProps) {
           <DropdownMenuContent align="end" className="w-[320px]">
             <DropdownMenuLabel className="flex items-center justify-between">
               Notifications
-              <Button variant="ghost" size="sm" className="h-auto p-0 text-xs">
-                Mark all as read
-              </Button>
+              {notificationCount > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-auto p-0 text-xs"
+                  onClick={markAllAsRead}
+                >
+                  Mark all as read
+                </Button>
+              )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {/* Notification Items */}
             <div className="max-h-[300px] overflow-y-auto">
-              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-primary" />
-                  <span className="font-medium">Luna sent you a message</span>
+              {loadingNotifications ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  &quot;I was thinking about you earlier...&quot;
-                </span>
-                <span className="text-xs text-muted-foreground">2 minutes ago</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-primary" />
-                  <span className="font-medium">Memory milestone reached!</span>
+              ) : notifications.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No new notifications
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  Luna has remembered 100 things about you
-                </span>
-                <span className="text-xs text-muted-foreground">1 hour ago</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-                  <span className="font-medium">New activity available</span>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  Try the new &quot;Watch Together&quot; feature
-                </span>
-                <span className="text-xs text-muted-foreground">Yesterday</span>
-              </DropdownMenuItem>
+              ) : (
+                notifications.map((notification) => (
+                  <DropdownMenuItem key={notification.id} className="flex flex-col items-start gap-1 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-primary" />
+                      <span className="font-medium">
+                        {notification.emoji && `${notification.emoji} `}
+                        {notification.title}
+                      </span>
+                    </div>
+                    {notification.description && (
+                      <span className="text-xs text-muted-foreground line-clamp-2">
+                        {notification.description}
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {notification.companion_name} • {formatTimeAgo(notification.occurred_at)}
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              )}
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild className="justify-center">
-              <Link href="/notifications">View all notifications</Link>
+              <Link href="/life-feed">View all activity</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -240,7 +351,9 @@ export function Navbar({ user }: NavbarProps) {
             placeholder="Search conversations, memories..."
             autoFocus
             onSearch={(value) => {
-              console.log('Search:', value);
+              if (value.trim()) {
+                router.push(`/search?q=${encodeURIComponent(value.trim())}`);
+              }
               setIsSearchOpen(false);
             }}
           />

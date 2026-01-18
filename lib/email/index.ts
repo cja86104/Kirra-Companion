@@ -29,31 +29,59 @@ const APP_NAME = 'Kirra';
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@kirra.app';
 
 /**
- * Send an email. Currently logs to console.
- * Uncomment the Resend section after: npm install resend
+ * Send an email via Resend API.
+ * No npm package required - uses fetch directly.
+ * 
+ * Setup: Add RESEND_API_KEY to .env.local
+ * Get your key at: https://resend.com/api-keys
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   const { to, subject, html, text, from = DEFAULT_FROM } = options;
+  const apiKey = process.env.RESEND_API_KEY;
 
-  // Uncomment after: npm install resend && add RESEND_API_KEY to .env
-  //
-  // import { Resend } from 'resend';
-  // const resend = new Resend(process.env.RESEND_API_KEY);
-  // try {
-  //   const { data, error } = await resend.emails.send({ from, to, subject, html, text });
-  //   if (error) return { success: false, error: error.message };
-  //   return { success: true, messageId: data?.id };
-  // } catch (err) {
-  //   return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-  // }
+  // If no API key, log but don't fail
+  if (!apiKey) {
+    console.warn('[Email] RESEND_API_KEY not configured - email not sent');
+    console.log('[Email] Would send to:', to);
+    console.log('[Email] Subject:', subject);
+    return { success: false, error: 'Email service not configured (RESEND_API_KEY missing)' };
+  }
 
-  console.log('=== EMAIL WOULD BE SENT ===');
-  console.log('To:', to);
-  console.log('From:', from);
-  console.log('Subject:', subject);
-  console.log('===========================');
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to,
+        subject,
+        html,
+        text,
+      }),
+    });
 
-  return { success: true, messageId: `dev-${Date.now()}` };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('[Email] Resend API error:', response.status, errorData);
+      return { 
+        success: false, 
+        error: errorData.message || `API error: ${response.status}` 
+      };
+    }
+
+    const data = await response.json();
+    console.log('[Email] Sent successfully to:', to, '| Subject:', subject);
+    return { success: true, messageId: data.id };
+  } catch (error) {
+    console.error('[Email] Failed to send:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
 }
 
 /**

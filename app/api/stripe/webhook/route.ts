@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { sendEmail, paymentFailedEmail } from '@/lib/email';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-02-24.acacia',
@@ -255,7 +256,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   // Get user by Stripe customer ID
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, email')
+    .select('id, email, full_name')
     .eq('stripe_customer_id', customerId)
     .single();
 
@@ -284,5 +285,20 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 
   console.log(`Payment failed for user ${profile.id}`);
 
-  // TODO: Send email notification about failed payment
+  // Send email notification about failed payment
+  const emailContent = paymentFailedEmail({
+    userName: profile.full_name || 'there',
+    amount: invoice.amount_due,
+    currency: invoice.currency,
+    invoiceId: invoice.id,
+  });
+
+  const emailResult = await sendEmail({
+    to: profile.email,
+    ...emailContent,
+  });
+
+  if (!emailResult.success) {
+    console.error(`Failed to send payment failed email to ${profile.email}:`, emailResult.error);
+  }
 }

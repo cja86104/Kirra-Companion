@@ -65,9 +65,23 @@ export async function GET(request: NextRequest) {
       preview_text: voice.previewText,
     }));
 
-    // Calculate usage stats (character tracking would need separate table/field)
+    // Calculate usage stats from actual companion voice minutes
     const characterLimit = getVoiceLimitForTier(tier);
-    const charactersUsed = 0; // TODO: Track via separate voice_usage table if needed
+    
+    // Get total voice minutes across all user's companions
+    const { data: companionsData } = await supabase
+      .from('companions')
+      .select('total_voice_minutes')
+      .eq('user_id', user.id);
+
+    // Sum total voice minutes and estimate characters
+    // Average speech rate is ~150 words/min, ~750 characters/min
+    const CHARS_PER_MINUTE = 750;
+    const totalVoiceMinutes = (companionsData || []).reduce(
+      (sum, c) => sum + (c.total_voice_minutes || 0),
+      0
+    );
+    const charactersUsed = Math.round(totalVoiceMinutes * CHARS_PER_MINUTE);
 
     return NextResponse.json({
       voices: voiceOptions,
