@@ -1,15 +1,12 @@
 'use client';
 
 /**
- * KIRRA IMMERSIVE CHAT v8.0
+ * KIRRA IMMERSIVE CHAT v8.1
  * =========================
- * NO CHAT BOX. Your companion is IN THE ROOM with you.
- * 
  * - Full scene background
- * - Companion avatar positioned IN the scene
- * - Their speech appears near them
- * - Your messages appear at bottom as your voice
- * - It's a CONVERSATION, not a chat app
+ * - Companion avatar on left with speech bubble
+ * - Floating conversation history on right (NO container box)
+ * - Input bar at bottom
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -66,7 +63,6 @@ function getTimeOfDay(): 'morning' | 'day' | 'evening' | 'night' {
 }
 
 function getSceneBackground(relationshipType: string, timeOfDay: string): string {
-  // Map to scene images in /public/scenes/
   const validTypes = ['romantic', 'friend', 'mentor', 'family', 'custom'];
   const type = validTypes.includes(relationshipType) ? relationshipType : 'custom';
   return `/scenes/${type}-${timeOfDay}.jpg`;
@@ -114,11 +110,11 @@ export function ChatWindow({
   const [voiceConversationActive, setVoiceConversationActive] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening' | 'night'>('day');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const supabase = getClient();
   const isVoiceConversationSupported = useVoiceConversationSupported();
 
-  // Set time on client
   useEffect(() => {
     setTimeOfDay(getTimeOfDay());
   }, []);
@@ -129,13 +125,13 @@ export function ChatWindow({
   const currentMood = moodData?.primary || 'neutral';
   const mood = MOOD_CONFIG[currentMood] || MOOD_CONFIG.neutral;
 
-  // Get last few messages for display
-  const recentMessages = messages.slice(-6); // Show last 6 messages
   const lastCompanionMessage = [...messages].reverse().find(m => m.role === 'assistant');
-  const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
-
-  // Scene background
   const sceneUrl = getSceneBackground(companion.relationship_type, timeOfDay);
+
+  // Auto scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Subscribe to messages
   useEffect(() => {
@@ -296,20 +292,15 @@ export function ChatWindow({
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {/* =================================================================
-          SCENE BACKGROUND - Full screen
-          ================================================================= */}
+      {/* SCENE BACKGROUND */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url(${sceneUrl})` }}
       >
-        {/* Subtle vignette for depth */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
       </div>
 
-      {/* =================================================================
-          TOP BAR - Minimal, floating
-          ================================================================= */}
+      {/* TOP BAR */}
       <div className="absolute top-0 left-0 right-0 z-30 p-4">
         <div className="flex items-center justify-between">
           <Link href="/chat">
@@ -365,9 +356,7 @@ export function ChatWindow({
         </div>
       </div>
 
-      {/* =================================================================
-          RELATIONSHIP STATS - Floating top right
-          ================================================================= */}
+      {/* RELATIONSHIP STATS */}
       <div className="absolute top-16 right-4 z-20">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
@@ -387,16 +376,13 @@ export function ChatWindow({
         </motion.div>
       </div>
 
-      {/* =================================================================
-          COMPANION - In the scene, left side
-          ================================================================= */}
+      {/* COMPANION AVATAR - Left side */}
       <div className="absolute left-8 bottom-32 z-20">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col items-center"
         >
-          {/* Companion Avatar - Large */}
           <motion.div
             animate={{ y: [0, -5, 0] }}
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
@@ -412,7 +398,6 @@ export function ChatWindow({
               )}
             </Avatar>
 
-            {/* Mood emoji */}
             <motion.div
               className="absolute -top-2 -right-2 text-3xl bg-white rounded-full p-1 shadow-lg"
               animate={{ rotate: [-5, 5, -5] }}
@@ -422,7 +407,6 @@ export function ChatWindow({
             </motion.div>
           </motion.div>
 
-          {/* Name */}
           <div className="mt-3 text-center">
             <h2 className="text-xl font-bold text-white drop-shadow-lg">{companion.name}</h2>
             <p className="text-sm text-white/80 drop-shadow">{mood.label}</p>
@@ -430,9 +414,7 @@ export function ChatWindow({
         </motion.div>
       </div>
 
-      {/* =================================================================
-          COMPANION'S SPEECH - Bubble near them
-          ================================================================= */}
+      {/* COMPANION'S SPEECH BUBBLE - Near avatar */}
       <AnimatePresence mode="wait">
         {(lastCompanionMessage || isTyping) && (
           <motion.div
@@ -446,7 +428,6 @@ export function ChatWindow({
               "relative px-5 py-4 rounded-3xl rounded-bl-lg shadow-xl border-2 bg-gradient-to-br",
               mood.bubbleColor
             )}>
-              {/* Speech pointer */}
               <div className="absolute -left-3 bottom-4 w-4 h-4 bg-white border-l-2 border-b-2 border-inherit transform rotate-45" />
 
               {isTyping ? (
@@ -479,59 +460,32 @@ export function ChatWindow({
         )}
       </AnimatePresence>
 
-      {/* =================================================================
-          YOUR LAST MESSAGE - Shows what you said
-          ================================================================= */}
-      <AnimatePresence>
-        {lastUserMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="absolute right-8 bottom-48 z-20 max-w-sm"
-          >
-            <div className="px-5 py-3 rounded-3xl rounded-br-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-xl">
-              <p className="text-base leading-relaxed">{lastUserMessage.content}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* =================================================================
-          CONVERSATION HISTORY - Scrollable, semi-transparent
-          ================================================================= */}
-      {messages.length > 2 && (
-        <div className="absolute right-4 top-32 bottom-48 w-80 z-10 overflow-hidden">
-          <div className="h-full overflow-y-auto scrollbar-hide px-2 py-4 space-y-3">
-            {messages.slice(0, -2).map((message) => (
-              <motion.div
-                key={message.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.7 }}
-                className={cn(
-                  "text-sm px-3 py-2 rounded-xl max-w-full",
-                  message.role === 'user'
-                    ? "bg-white/20 text-white ml-8"
-                    : "bg-black/20 text-white mr-8"
-                )}
-              >
-                <p className="line-clamp-2">{message.content}</p>
-              </motion.div>
-            ))}
-          </div>
-          {/* Fade overlay */}
-          <div className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-black/30 to-transparent pointer-events-none" />
-          <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+      {/* FLOATING CONVERSATION HISTORY - Right side, NO container box */}
+      <div className="absolute right-4 top-28 bottom-28 w-80 z-10 overflow-y-auto scrollbar-hide">
+        <div className="flex flex-col gap-3 p-2">
+          {messages.map((message) => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 0.85 }}
+              className={cn(
+                "text-sm px-4 py-2.5 rounded-2xl backdrop-blur-sm max-w-[90%]",
+                message.role === 'user'
+                  ? "bg-white/25 text-white ml-auto"
+                  : "bg-black/25 text-white mr-auto"
+              )}
+            >
+              <p>{message.content}</p>
+            </motion.div>
+          ))}
+          <div ref={messagesEndRef} />
         </div>
-      )}
+      </div>
 
-      {/* =================================================================
-          INPUT - Your voice, at the bottom
-          ================================================================= */}
+      {/* INPUT BAR */}
       <div className="absolute bottom-0 left-0 right-0 z-30 p-4">
         <div className="max-w-2xl mx-auto">
           <div className="relative flex items-end gap-2">
-            {/* Main input */}
             <div className="flex-1 relative">
               <textarea
                 ref={inputRef}
@@ -544,7 +498,6 @@ export function ChatWindow({
                 style={{ minHeight: '56px', maxHeight: '120px' }}
               />
 
-              {/* Input actions */}
               <div className="absolute right-2 bottom-2 flex items-center gap-1">
                 <Button
                   variant="ghost"
@@ -572,7 +525,6 @@ export function ChatWindow({
             </div>
           </div>
 
-          {/* Hint text */}
           <p className="text-center text-white/60 text-xs mt-2 drop-shadow">
             Press Enter to send • Shift+Enter for new line
           </p>

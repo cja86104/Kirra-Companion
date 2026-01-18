@@ -384,7 +384,7 @@ export async function POST(
         content: userMessageContent,
         content_type: 'text',
         tokens_used: completion.inputTokens,
-        attachments: attachments && attachments.length > 0 ? attachments : null,
+        metadata: attachments && attachments.length > 0 ? { attachments } : null,
       } as never)
       .select()
       .single();
