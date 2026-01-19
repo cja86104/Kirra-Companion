@@ -1,0 +1,198 @@
+/* ============================================================================
+   SCENE ANIMATION OVERLAYS
+   Subtle ambient animations - FILTER EFFECTS ONLY (no overlays)
+   ============================================================================ */
+
+/* Base animation container */
+.scene-animation-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* ============================================================================
+   FIRE / FLICKER EFFECT
+   For: fireplace, candles, campfire, cabin
+   ============================================================================ */
+
+.animation-flicker {
+  animation: flicker 2.5s ease-in-out infinite;
+}
+
+@keyframes flicker {
+  0%, 100% { filter: brightness(1); }
+  15% { filter: brightness(1.06); }
+  30% { filter: brightness(0.97); }
+  45% { filter: brightness(1.04); }
+  60% { filter: brightness(0.98); }
+  75% { filter: brightness(1.05); }
+  90% { filter: brightness(0.99); }
+}
+
+/* ============================================================================
+   RAIN EFFECT
+   For: rain, storm
+   ============================================================================ */
+
+.animation-rain-drops {
+  animation: rain-ambient 4s ease-in-out infinite;
+}
+
+@keyframes rain-ambient {
+  0%, 100% { filter: brightness(0.95) contrast(1.02); }
+  50% { filter: brightness(1) contrast(1); }
+}
+
+/* ============================================================================
+   WAVE / WATER SHIMMER
+   For: ocean, beach, water, lake
+   ============================================================================ */
+
+.animation-wave-shimmer {
+  animation: wave-shimmer 5s ease-in-out infinite;
+}
+
+@keyframes wave-shimmer {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  25% { filter: brightness(1.04) saturate(1.05); }
+  50% { filter: brightness(0.98) saturate(0.98); }
+  75% { filter: brightness(1.02) saturate(1.02); }
+}
+
+/* ============================================================================
+   RIPPLE EFFECT
+   For: water, pond, pool
+   ============================================================================ */
+
+.animation-ripple {
+  animation: ripple-ambient 6s ease-in-out infinite;
+}
+
+@keyframes ripple-ambient {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.03); }
+}
+
+/* ============================================================================
+   SNOW FALL
+   For: snow, winter
+   ============================================================================ */
+
+.animation-snow-fall {
+  animation: snow-ambient 4s ease-in-out infinite;
+}
+
+@keyframes snow-ambient {
+  0%, 100% { filter: brightness(1.02) contrast(0.98); }
+  50% { filter: brightness(1.06) contrast(1); }
+}
+
+/* ============================================================================
+   LIGHTNING FLASH
+   For: storm, thunder
+   ============================================================================ */
+
+.animation-lightning-flash {
+  animation: lightning 8s ease-in-out infinite;
+}
+
+@keyframes lightning {
+  0%, 88%, 92%, 100% { filter: brightness(1); }
+  90% { filter: brightness(1.4); }
+}
+
+/* ============================================================================
+   LEAF SWAY
+   For: forest, garden, trees
+   ============================================================================ */
+
+.animation-leaf-sway {
+  animation: leaf-sway 5s ease-in-out infinite;
+}
+
+@keyframes leaf-sway {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.03); }
+}
+
+/* ============================================================================
+   SWAY (WIND)
+   For: wind, breeze
+   ============================================================================ */
+
+.animation-sway {
+  animation: sway-ambient 4s ease-in-out infinite;
+}
+
+@keyframes sway-ambient {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.02); }
+}
+
+/* ============================================================================
+   TWINKLE (STARS/LIGHTS)
+   For: night, stars, city lights
+   ============================================================================ */
+
+.animation-twinkle {
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+  0%, 100% { filter: brightness(1) contrast(1); }
+  50% { filter: brightness(1.08) contrast(1.05); }
+}
+
+/* ============================================================================
+   SOFT GLOW
+   For: romantic, cozy, warm, sunset, mountain
+   ============================================================================ */
+
+.animation-soft-glow {
+  animation: soft-glow 4s ease-in-out infinite;
+}
+
+@keyframes soft-glow {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.05) saturate(1.08); }
+}
+
+/* ============================================================================
+   WARM PULSE
+   For: cozy, comfortable, safe, intimate, bedroom
+   ============================================================================ */
+
+.animation-warm-pulse {
+  animation: warm-pulse 5s ease-in-out infinite;
+}
+
+@keyframes warm-pulse {
+  0%, 100% { filter: brightness(1) sepia(0); }
+  50% { filter: brightness(1.04) sepia(0.05); }
+}
+
+/* ============================================================================
+   SUBTLE BREATHE (DEFAULT)
+   For: any scene, gentle ambient effect
+   ============================================================================ */
+
+.animation-subtle-breathe {
+  animation: subtle-breathe 6s ease-in-out infinite;
+}
+
+@keyframes subtle-breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.03); }
+}
+
+/* ============================================================================
+   UTILITY: Disable animations for reduced motion preference
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="animation-"] {
+    animation: none !important;
+  }
+}

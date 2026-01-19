@@ -1,12 +1,15 @@
 'use client';
 
 /**
- * KIRRA IMMERSIVE CHAT v8.1
+ * KIRRA IMMERSIVE CHAT v9.0
  * =========================
- * - Full scene background
- * - Companion avatar on left with speech bubble
- * - Floating conversation history on right (NO container box)
- * - Input bar at bottom
+ * DYNAMIC CONVERSATION-AWARE SCENES
+ * 
+ * - AI analyzes conversation every 5 minutes
+ * - Generates contextual scene images via Fal.ai
+ * - Ambient audio matched to scene theme
+ * - Dynamic AI-generated scene backgrounds
+ * - Falls back to time-based scenes when needed
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -26,6 +29,9 @@ import {
   Send,
   Mic,
   Paperclip,
+  Music,
+  Loader2,
+  ImageIcon,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -34,9 +40,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { VoiceConversationMode, useVoiceConversationSupported } from './VoiceConversationMode';
+import { useSceneUpdater, getFallbackSceneUrl } from './useSceneUpdater';
 import { getClient } from '@/lib/supabase/client';
 import { uploadMultipleAttachments } from '@/lib/supabase/storage';
 import { cn } from '@/lib/utils/cn';
@@ -48,24 +56,6 @@ interface ChatWindowProps {
   conversation: Conversation | null;
   initialMessages: Message[];
   userId: string;
-}
-
-// =============================================================================
-// SCENE BACKGROUNDS
-// =============================================================================
-
-function getTimeOfDay(): 'morning' | 'day' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return 'morning';
-  if (hour >= 11 && hour < 17) return 'day';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
-}
-
-function getSceneBackground(relationshipType: string, timeOfDay: string): string {
-  const validTypes = ['romantic', 'friend', 'mentor', 'family', 'custom'];
-  const type = validTypes.includes(relationshipType) ? relationshipType : 'custom';
-  return `/scenes/${type}-${timeOfDay}.jpg`;
 }
 
 // =============================================================================
@@ -103,30 +93,54 @@ export function ChatWindow({
   initialMessages,
   userId,
 }: ChatWindowProps) {
+  // Core state
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [autoPlayVoice, setAutoPlayVoice] = useState(true);
   const [voiceConversationActive, setVoiceConversationActive] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening' | 'night'>('day');
+  
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const supabase = getClient();
   const isVoiceConversationSupported = useVoiceConversationSupported();
 
-  useEffect(() => {
-    setTimeOfDay(getTimeOfDay());
-  }, []);
-
+  // Voice config
   const voiceConfig = companion.voice_config as VoiceConfig | null;
   const hasVoiceEnabled = !!voiceConfig?.voiceId;
+  
+  // Mood
   const moodData = companion.current_mood as { primary?: string } | null;
   const currentMood = moodData?.primary || 'neutral';
   const mood = MOOD_CONFIG[currentMood] || MOOD_CONFIG.neutral;
 
+  // Last companion message for speech bubble
   const lastCompanionMessage = [...messages].reverse().find(m => m.role === 'assistant');
-  const sceneUrl = getSceneBackground(companion.relationship_type, timeOfDay);
+
+  // =============================================================================
+  // DYNAMIC SCENE SYSTEM
+  // =============================================================================
+
+  const sceneState = useSceneUpdater(
+    {
+      companionId: companion.id,
+      conversationId: conversation?.id || '',
+      relationshipType: companion.relationship_type,
+      enabled: !!conversation,
+      cooldownMinutes: 20, // Generate new scene every 20 minutes max
+      checkIntervalSeconds: 60, // Check every minute
+    },
+    messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+  );
+
+  // Determine which scene URL to use
+  const sceneUrl = sceneState.currentScene?.image_url || sceneState.fallbackSceneUrl;
+
+  // =============================================================================
+  // MESSAGE HANDLING
+  // =============================================================================
 
   // Auto scroll
   useEffect(() => {
@@ -251,6 +265,10 @@ export function ChatWindow({
     }
   };
 
+  // =============================================================================
+  // VOICE PLAYBACK
+  // =============================================================================
+
   const audioUnlockedRef = useRef(false);
   const pendingAudioRef = useRef<string | null>(null);
 
@@ -290,17 +308,26 @@ export function ChatWindow({
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
+  // =============================================================================
+  // RENDER
+  // =============================================================================
+
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {/* SCENE BACKGROUND */}
+      {/* =================================================================
+          SCENE BACKGROUND - Dynamic or Fallback
+          ================================================================= */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000"
         style={{ backgroundImage: `url(${sceneUrl})` }}
       >
+        {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
       </div>
 
-      {/* TOP BAR */}
+      {/* =================================================================
+          TOP BAR
+          ================================================================= */}
       <div className="absolute top-0 left-0 right-0 z-30 p-4">
         <div className="flex items-center justify-between">
           <Link href="/chat">
@@ -310,6 +337,33 @@ export function ChatWindow({
           </Link>
 
           <div className="flex items-center gap-2">
+            {/* Scene generation indicator */}
+            {sceneState.isGenerating && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/80 text-white text-xs backdrop-blur-sm"
+              >
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Creating scene...</span>
+              </motion.div>
+            )}
+
+            {/* Ambient audio toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={sceneState.toggleAudio}
+              className={cn(
+                "rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm",
+                sceneState.audioEnabled && "bg-emerald-500/50"
+              )}
+              title={sceneState.audioEnabled ? "Mute ambient sound" : "Play ambient sound"}
+            >
+              <Music className="h-5 w-5" />
+            </Button>
+
+            {/* Voice toggle */}
             {hasVoiceEnabled && (
               <Button
                 variant="ghost"
@@ -323,6 +377,8 @@ export function ChatWindow({
                 {autoPlayVoice ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
               </Button>
             )}
+
+            {/* Voice call */}
             {hasVoiceEnabled && isVoiceConversationSupported && (
               <Button
                 variant="ghost"
@@ -333,13 +389,15 @@ export function ChatWindow({
                 <Phone className="h-5 w-5" />
               </Button>
             )}
+
+            {/* More options */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm">
                   <MoreHorizontal className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-xl">
+              <DropdownMenuContent align="end" className="w-56 rounded-xl">
                 <DropdownMenuItem asChild>
                   <Link href={`/companion/${companion.id}`} className="cursor-pointer">
                     <Settings className="h-4 w-4 mr-2" /> Settings
@@ -350,13 +408,40 @@ export function ChatWindow({
                     <Brain className="h-4 w-4 mr-2" /> Memories
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => sceneState.triggerGeneration()}
+                  disabled={sceneState.isGenerating}
+                  className="cursor-pointer"
+                >
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  {sceneState.isGenerating ? 'Generating...' : 'Generate New Scene'}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </div>
 
-      {/* RELATIONSHIP STATS */}
+      {/* =================================================================
+          SCENE INFO BADGE (shows current theme)
+          ================================================================= */}
+      {sceneState.currentScene?.theme && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute top-16 left-4 z-20"
+        >
+          <div className="px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-white text-xs flex items-center gap-2">
+            <ImageIcon className="h-3 w-3" />
+            <span className="capitalize">{sceneState.currentScene.theme}</span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* =================================================================
+          RELATIONSHIP STATS
+          ================================================================= */}
       <div className="absolute top-16 right-4 z-20">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
@@ -376,7 +461,9 @@ export function ChatWindow({
         </motion.div>
       </div>
 
-      {/* COMPANION AVATAR - Left side */}
+      {/* =================================================================
+          COMPANION AVATAR - Left side
+          ================================================================= */}
       <div className="absolute left-8 bottom-32 z-20">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -388,18 +475,18 @@ export function ChatWindow({
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
             className="relative"
           >
-            <Avatar className="h-32 w-32 ring-4 ring-white/50 shadow-2xl">
+            <Avatar className="h-32 w-32 ring-2 ring-white/30 shadow-2xl backdrop-blur-sm">
               {companion.avatar_url ? (
                 <AvatarImage src={companion.avatar_url} alt={companion.name} className="object-cover" />
               ) : (
-                <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white text-4xl font-bold">
+                <AvatarFallback className="bg-black/40 backdrop-blur-md text-white text-4xl font-bold">
                   {getInitials(companion.name)}
                 </AvatarFallback>
               )}
             </Avatar>
 
             <motion.div
-              className="absolute -top-2 -right-2 text-3xl bg-white rounded-full p-1 shadow-lg"
+              className="absolute -top-2 -right-2 text-2xl bg-black/30 backdrop-blur-md rounded-full p-1.5 shadow-lg ring-1 ring-white/20"
               animate={{ rotate: [-5, 5, -5] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
@@ -414,7 +501,9 @@ export function ChatWindow({
         </motion.div>
       </div>
 
-      {/* COMPANION'S SPEECH BUBBLE - Near avatar */}
+      {/* =================================================================
+          COMPANION'S SPEECH BUBBLE - Near avatar
+          ================================================================= */}
       <AnimatePresence mode="wait">
         {(lastCompanionMessage || isTyping) && (
           <motion.div
@@ -460,7 +549,9 @@ export function ChatWindow({
         )}
       </AnimatePresence>
 
-      {/* FLOATING CONVERSATION HISTORY - Right side, NO container box */}
+      {/* =================================================================
+          FLOATING CONVERSATION HISTORY - Right side
+          ================================================================= */}
       <div className="absolute right-4 top-28 bottom-28 w-80 z-10 overflow-y-auto scrollbar-hide">
         <div className="flex flex-col gap-3 p-2">
           {messages.map((message) => (
@@ -482,7 +573,9 @@ export function ChatWindow({
         </div>
       </div>
 
-      {/* INPUT BAR */}
+      {/* =================================================================
+          INPUT BAR
+          ================================================================= */}
       <div className="absolute bottom-0 left-0 right-0 z-30 p-4">
         <div className="max-w-2xl mx-auto">
           <div className="relative flex items-end gap-2">
@@ -494,7 +587,7 @@ export function ChatWindow({
                 onKeyDown={handleKeyDown}
                 placeholder={`Say something to ${companion.name}...`}
                 rows={1}
-                className="w-full px-5 py-4 pr-24 rounded-3xl bg-white/90 backdrop-blur-md border-0 shadow-2xl resize-none focus:outline-none focus:ring-2 focus:ring-violet-400 text-gray-800 placeholder-gray-500"
+                className="w-full px-5 py-4 pr-24 rounded-3xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl resize-none focus:outline-none focus:ring-2 focus:ring-white/30 text-white placeholder-white/50"
                 style={{ minHeight: '56px', maxHeight: '120px' }}
               />
 
@@ -502,14 +595,14 @@ export function ChatWindow({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  className="h-10 w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"
                 >
                   <Paperclip className="h-5 w-5" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  className="h-10 w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"
                 >
                   <Mic className="h-5 w-5" />
                 </Button>
@@ -517,7 +610,7 @@ export function ChatWindow({
                   onClick={() => sendMessage(inputValue)}
                   disabled={!inputValue.trim() || isLoading}
                   size="icon"
-                  className="h-10 w-10 rounded-full bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shadow-lg"
+                  className="h-10 w-10 rounded-full bg-white/20 hover:bg-white/30 text-white shadow-lg backdrop-blur-sm"
                 >
                   <Send className="h-5 w-5" />
                 </Button>
@@ -531,7 +624,9 @@ export function ChatWindow({
         </div>
       </div>
 
-      {/* Voice conversation mode */}
+      {/* =================================================================
+          VOICE CONVERSATION MODE
+          ================================================================= */}
       {isVoiceConversationSupported && (
         <VoiceConversationMode
           isActive={voiceConversationActive}
