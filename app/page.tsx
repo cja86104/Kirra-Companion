@@ -14,6 +14,7 @@ import {
   Star,
   ArrowRight,
   Check,
+  Trophy,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -244,8 +245,8 @@ export default function LandingPage() {
               { icon: MessageCircle, label: 'Unlimited conversations' },
               { icon: Brain, label: 'Long-term memory' },
               { icon: Heart, label: 'Emotional voice' },
-              { icon: Users, label: 'Group chats' },
-              { icon: Sparkles, label: 'AI-generated selfies' },
+              { icon: Trophy, label: 'Relationship milestones' },
+              { icon: Sparkles, label: 'AI-generated scenes' },
               { icon: Gamepad2, label: '10+ activities' },
               { icon: Shield, label: 'Data export' },
               { icon: Zap, label: 'Proactive messages' },
@@ -385,7 +386,7 @@ export default function LandingPage() {
                 <span className="text-muted-foreground">/month</span>
               </div>
               <ul className="mb-8 space-y-3">
-                {['Unlimited companions', 'All Plus features', 'Activities & games', 'Group chats', 'API access', 'Custom personality'].map((feature) => (
+                {['Unlimited companions', 'All Plus features', 'Activities & games', 'Relationship milestones', 'Custom personality', 'Priority support'].map((feature) => (
                   <li key={feature} className="flex items-center gap-3 text-sm">
                     <Check className="h-4 w-4 text-primary" />
                     <span>{feature}</span>

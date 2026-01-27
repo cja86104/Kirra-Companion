@@ -114,7 +114,7 @@ const pricingTiers: PricingTier[] = [
       'All activities',
       'Priority support',
       'Best AI model',
-      'API access',
+      'Relationship milestones',
       'Early features',
     ],
     limits: {

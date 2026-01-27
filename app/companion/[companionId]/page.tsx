@@ -20,6 +20,8 @@ import {
   Heart,
   Brain,
   Palette,
+  BookOpen,
+  Trophy,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -218,6 +220,24 @@ export default function CompanionDetailsPage() {
             <Link href={`/chat/${companion.id}`}>
               <MessageCircle className="mr-2 h-4 w-4" />
               Chat
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={`/companion/${companion.id}/journal`}>
+              <BookOpen className="mr-2 h-4 w-4" />
+              Journal
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={`/companion/${companion.id}/memory-palace`}>
+              <Brain className="mr-2 h-4 w-4" />
+              Memories
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={`/companion/${companion.id}/milestones`}>
+              <Trophy className="mr-2 h-4 w-4" />
+              Milestones
             </Link>
           </Button>
           {hasChanges && (

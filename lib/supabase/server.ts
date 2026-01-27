@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database, Profile, Companion, CompanionDNA, Message, Memory, MemoryCategoryRow, LifeEvent } from '@/types/database';
+import type { LifeEventRow } from '@/types/life-simulation-db';
 import type { CookieOptions } from '@supabase/ssr';
 
 interface CookieToSet {
@@ -244,6 +245,32 @@ export async function getCompanionLifeEvents(
   }
   
   return (events as LifeEvent[]) || [];
+}
+
+/**
+ * Get companion journal entries
+ * Journals are life_events from reflection/journaling activities
+ */
+export async function getCompanionJournals(
+  companionId: string,
+  limit = 50
+): Promise<LifeEventRow[]> {
+  const supabase = await createClient();
+  const { data: journals, error } = await supabase
+    .from('life_events')
+    .select('*')
+    .eq('companion_id', companionId)
+    .eq('event_type', 'activity_completed')
+    .ilike('title', '%journal%')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  
+  if (error) {
+    console.error('Error fetching journals:', error);
+    return [];
+  }
+  
+  return (journals as unknown as LifeEventRow[]) || [];
 }
 
 /**
