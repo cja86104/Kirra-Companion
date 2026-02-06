@@ -293,7 +293,7 @@ export async function DELETE(
       .delete({ count: 'exact' })
       .eq('companion_id', companionId)
       .lt('occurred_at', cutoffDate.toISOString())
-      .in('significance', ['minor', 'normal']);
+      .in('significance', ['minor', 'trivial']);
     
     if (deleteError) {
       console.error('Error deleting old events:', deleteError);

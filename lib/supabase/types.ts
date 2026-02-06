@@ -154,7 +154,7 @@ export function lifeEventsTable(supabase: TypedSupabaseClient) {
 export function activitiesTable(supabase: TypedSupabaseClient) {
   return {
     select: () => supabase.from('activities').select('*').eq('is_active', true) as unknown as Promise<{ data: Activity[] | null; error: Error | null }>,
-    selectByTier: (tier: string) => supabase.from('activities').select('*').eq('is_active', true).eq('min_tier', tier) as unknown as Promise<{ data: Activity[] | null; error: Error | null }>,
+    selectByTier: (tier: 'free' | 'basic' | 'pro' | 'ultimate') => supabase.from('activities').select('*').eq('is_active', true).eq('min_tier', tier) as unknown as Promise<{ data: Activity[] | null; error: Error | null }>,
   };
 }
 

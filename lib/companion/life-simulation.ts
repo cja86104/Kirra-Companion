@@ -669,7 +669,7 @@ export async function runSimulationTick(
     const context = await generateUserThinkingContext(
       companion as Companion & { companion_dna?: CompanionDNA },
       { name: activity.activity_name, category: activity.activity_category as ActivityCategory },
-      memories || []
+      (memories || []).map(m => ({ title: m.title || 'Memory', content: m.content }))
     );
     
     userThoughtEvent = await createUserThoughtEvent(

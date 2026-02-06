@@ -31,13 +31,14 @@ interface MemoryData {
   companion_id: string;
   content: string;
   summary: string | null;
-  memory_type: string;
-  importance: number;
-  emotional_weight: number;
+  memory_type: string | null;
+  importance: number | null;
+  importance_score?: number;
+  emotional_weight: number | null;
   is_core_memory: boolean;
   is_active: boolean;
   access_count: number;
-  tags: string[];
+  tags: string[] | null;
   created_at: string;
   category?: string;
 }
@@ -75,7 +76,8 @@ export function MemoryCard({ memory, companionId, onUpdate }: MemoryCardProps) {
     }
   };
 
-  const importancePercent = Math.round((memory.importance || 0) * 100);
+  // importance is 1-5 from database, convert to percentage
+  const importancePercent = Math.round(((memory.importance || memory.importance_score || 0) / 5) * 100);
 
   // Display title - use summary or first part of content
   const displayTitle = memory.summary || memory.content.slice(0, 60) + (memory.content.length > 60 ? '...' : '');

@@ -59,8 +59,8 @@ export interface CompanionSkill {
   skill_content: string;
   skill_summary: string | null;
   
-  // Structured data for specific categories
-  structured_data: SkillStructuredData;
+  // Structured data for specific categories (JSON from database)
+  structured_data: SkillStructuredData | Record<string, unknown> | null;
   
   // Learning metadata
   proficiency: SkillProficiency;
@@ -79,7 +79,7 @@ export interface CompanionSkill {
   confidence_score: number;
   
   // Organization
-  tags: string[];
+  tags: string[] | null;
   is_favorite: boolean;
   is_active: boolean;
   

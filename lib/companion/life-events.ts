@@ -14,7 +14,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { MoodState } from '@/types/database';
+import type { MoodState, LifeEvent } from '@/types/database';
 
 // ============================================================
 // TYPES
@@ -366,19 +366,7 @@ export async function processLifeEventFromChat(
 // FETCH: Get Life Events for Display
 // ============================================================
 
-interface LifeEventRow {
-  id: string;
-  companion_id: string;
-  event_type: string;
-  title: string;
-  description: string;
-  significance: string;
-  emotional_impact: unknown;
-  triggered_by: string | null;
-  metadata: unknown;
-  is_shared: boolean;
-  created_at: string;
-}
+// Using LifeEvent type from @/types/database
 
 /**
  * Get recent life events for a companion.
@@ -386,7 +374,7 @@ interface LifeEventRow {
 export async function getLifeEvents(
   companionId: string,
   limit: number = 20
-): Promise<LifeEventRow[]> {
+): Promise<LifeEvent[]> {
   const supabase = await createClient();
   
   const { data, error } = await supabase
@@ -401,10 +389,10 @@ export async function getLifeEvents(
     return [];
   }
   
-  return (data || []) as LifeEventRow[];
+  return (data || []) as LifeEvent[];
 }
 
-interface LifeEventWithCompanion extends LifeEventRow {
+interface LifeEventWithCompanion extends LifeEvent {
   companions: {
     id: string;
     name: string;

@@ -117,7 +117,7 @@ export function ChatWindow({
   const mood = MOOD_CONFIG[currentMood] || MOOD_CONFIG.neutral;
 
   // Last companion message for speech bubble
-  const lastCompanionMessage = [...messages].reverse().find(m => m.role === 'assistant');
+  const lastCompanionMessage = [...messages].reverse().find(m => m.role === 'companion');
 
   // =============================================================================
   // DYNAMIC SCENE SYSTEM

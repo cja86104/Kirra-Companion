@@ -392,7 +392,7 @@ export default function DashboardPage() {
 
       // Memories
       const { data: memoriesData, count: memoriesCount } = await supabase
-        .from('companion_memories')
+        .from('memories')
         .select('id, title, memory_type, importance, created_at', { count: 'exact' })
         .eq('companion_id', companionId)
         .order('created_at', { ascending: false })

@@ -33,7 +33,7 @@ import type { Companion } from '@/types/database';
 
 interface CompanionWithLastMessage extends Companion {
   lastMessage?: string;
-  lastMessageAt?: string;
+  lastMessageAt?: string | null;
   unreadCount?: number;
   messageCount?: number;
 }
@@ -170,7 +170,7 @@ export default function ChatPage() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const formatTimeAgo = (timestamp: string | undefined) => {
+  const formatTimeAgo = (timestamp: string | null | undefined) => {
     if (!timestamp) return '';
     
     const now = new Date();
