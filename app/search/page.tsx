@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, MessageCircle, Brain, User, ArrowRight } from 'lucide-react';
@@ -43,7 +43,7 @@ interface SearchResults {
   messages: MessageResult[];
 }
 
-export default function SearchPage() {
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
   
@@ -360,5 +360,29 @@ export default function SearchPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+function SearchFallback() {
+  return (
+    <div className="container max-w-4xl space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-bold">Search</h1>
+        <p className="text-muted-foreground">
+          Search across companions, memories, and conversations
+        </p>
+      </div>
+      <div className="flex items-center justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<SearchFallback />}>
+      <SearchPageContent />
+    </Suspense>
   );
 }
