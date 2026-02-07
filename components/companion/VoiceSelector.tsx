@@ -26,62 +26,63 @@ interface VoiceOption {
 }
 
 /**
- * OpenAI TTS voices (matching the API)
+ * Cartesia TTS voices - selected for AI companion personalities
+ * Provider: Cartesia Sonic 3 - 40ms time-to-first-audio
  */
-const OPENAI_VOICES: VoiceOption[] = [
+const CARTESIA_VOICES: VoiceOption[] = [
   {
-    voice_id: 'alloy',
-    name: 'Alloy',
-    description: 'Neutral and balanced',
-    gender: 'neutral',
-    personality: 'Professional, clear, versatile',
-    available: true,
-    preview_text: "Hi there! I'm Alloy. I have a balanced, neutral voice that works well for any situation.",
-  },
-  {
-    voice_id: 'echo',
-    name: 'Echo',
+    voice_id: 'tessa',
+    name: 'Tessa',
     description: 'Warm and engaging',
-    gender: 'male',
-    personality: 'Warm, friendly, conversational',
-    available: true,
-    preview_text: "Hey! I'm Echo. I've got a warm, friendly tone that's great for casual conversations.",
-  },
-  {
-    voice_id: 'fable',
-    name: 'Fable',
-    description: 'Expressive and dynamic',
-    gender: 'neutral',
-    personality: 'Expressive, storytelling, dynamic',
-    available: true,
-    preview_text: "Hello! I'm Fable. I love bringing stories to life with my expressive voice!",
-  },
-  {
-    voice_id: 'onyx',
-    name: 'Onyx',
-    description: 'Deep and authoritative',
-    gender: 'male',
-    personality: 'Deep, confident, authoritative',
-    available: true,
-    preview_text: "Greetings. I'm Onyx. I have a deep, resonant voice that conveys confidence and calm.",
-  },
-  {
-    voice_id: 'nova',
-    name: 'Nova',
-    description: 'Friendly and upbeat',
     gender: 'female',
-    personality: 'Bright, cheerful, energetic',
+    personality: 'Friendly, supportive, conversational',
     available: true,
-    preview_text: "Hi! I'm Nova! I'm super excited to chat with you - I've got lots of energy!",
+    preview_text: "Hi there! I'm Tessa. I love having warm, meaningful conversations and being here for you.",
   },
   {
-    voice_id: 'shimmer',
-    name: 'Shimmer',
+    voice_id: 'maya',
+    name: 'Maya',
     description: 'Soft and soothing',
     gender: 'female',
-    personality: 'Gentle, calming, soothing',
+    personality: 'Gentle, calming, empathetic',
     available: true,
-    preview_text: "Hello there. I'm Shimmer. I have a soft, gentle voice that's perfect for relaxing conversations.",
+    preview_text: "Hello. I'm Maya. I have a gentle presence and I'm here to listen whenever you need me.",
+  },
+  {
+    voice_id: 'katie',
+    name: 'Katie',
+    description: 'Clear and balanced',
+    gender: 'female',
+    personality: 'Professional, articulate, versatile',
+    available: true,
+    preview_text: "Hello! I'm Katie. I have a clear, balanced voice that works well for any conversation.",
+  },
+  {
+    voice_id: 'leo',
+    name: 'Leo',
+    description: 'Deep and reassuring',
+    gender: 'male',
+    personality: 'Calm, confident, grounding',
+    available: true,
+    preview_text: "Greetings. I'm Leo. I bring a calm, steady presence to our conversations.",
+  },
+  {
+    voice_id: 'kyle',
+    name: 'Kyle',
+    description: 'Friendly and energetic',
+    gender: 'male',
+    personality: 'Upbeat, enthusiastic, engaging',
+    available: true,
+    preview_text: "Hey! I'm Kyle! I'm always excited to chat and bring some positive energy to your day!",
+  },
+  {
+    voice_id: 'kiefer',
+    name: 'Kiefer',
+    description: 'Expressive and thoughtful',
+    gender: 'male',
+    personality: 'Articulate, dynamic, storytelling',
+    available: true,
+    preview_text: "Hello! I'm Kiefer. I love expressing ideas with nuance and bringing depth to our talks.",
   },
 ];
 
@@ -187,14 +188,14 @@ export function VoiceSelector({
     }
 
     const config: VoiceConfig = {
-      provider: 'openai',
+      provider: 'cartesia',
       voiceId,
-      model: 'tts-1',
+      model: 'sonic-3',
       speed,
     };
 
     onVoiceSelect(config);
-    toast.success(`Selected ${OPENAI_VOICES.find(v => v.voice_id === voiceId)?.name} voice`);
+    toast.success(`Selected ${CARTESIA_VOICES.find(v => v.voice_id === voiceId)?.name} voice`);
   }, [hasVoiceAccess, speed, onVoiceSelect]);
 
   // Clear voice selection
@@ -255,7 +256,7 @@ export function VoiceSelector({
     );
   }
 
-  const selectedVoiceData = OPENAI_VOICES.find(v => v.voice_id === selectedVoice?.voiceId);
+  const selectedVoiceData = CARTESIA_VOICES.find(v => v.voice_id === selectedVoice?.voiceId);
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -280,7 +281,7 @@ export function VoiceSelector({
 
       {/* Voice Grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {OPENAI_VOICES.map((voice) => {
+        {CARTESIA_VOICES.map((voice) => {
           const isSelected = selectedVoice?.voiceId === voice.voice_id;
           const isPlaying = playingVoiceId === voice.voice_id;
           const isLoading = loadingVoiceId === voice.voice_id;
@@ -428,7 +429,7 @@ export function VoiceSelector({
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Volume2 className="w-3 h-3" />
         <span>
-          Voice uses OpenAI TTS. Usage is tracked against your monthly limit.
+          Voice uses Cartesia Sonic 3. Ultra-low latency for natural conversations.
         </span>
       </div>
     </div>
@@ -439,7 +440,7 @@ export function VoiceSelector({
  * Get voice name by ID
  */
 export function getVoiceName(voiceId: string): string {
-  const voice = OPENAI_VOICES.find(v => v.voice_id === voiceId);
+  const voice = CARTESIA_VOICES.find(v => v.voice_id === voiceId);
   return voice?.name || 'Unknown';
 }
 
@@ -447,7 +448,7 @@ export function getVoiceName(voiceId: string): string {
  * Get voice description by ID
  */
 export function getVoiceDescription(voiceId: string): string {
-  const voice = OPENAI_VOICES.find(v => v.voice_id === voiceId);
+  const voice = CARTESIA_VOICES.find(v => v.voice_id === voiceId);
   return voice?.description || '';
 }
 
@@ -459,21 +460,23 @@ export function isValidVoiceConfig(config: unknown): config is VoiceConfig {
   
   const c = config as Record<string, unknown>;
   
-  // Must have a valid provider
-  if (c.provider !== 'openai' && c.provider !== 'elevenlabs') return false;
+  // Must have a valid provider (cartesia, openai legacy, or elevenlabs legacy)
+  if (c.provider !== 'cartesia' && c.provider !== 'openai' && c.provider !== 'elevenlabs') return false;
   
   // Must have a voice ID
   if (typeof c.voiceId !== 'string' || c.voiceId.length === 0) return false;
   
-  // For OpenAI, validate voice ID exists
-  if (c.provider === 'openai') {
-    if (!OPENAI_VOICES.find(v => v.voice_id === c.voiceId)) return false;
+  // For Cartesia, validate voice ID exists
+  if (c.provider === 'cartesia') {
+    if (!CARTESIA_VOICES.find(v => v.voice_id === c.voiceId)) return false;
   }
   
-  // Validate speakingRate if present (OpenAI)
-  if (c.speakingRate !== undefined) {
-    if (typeof c.speakingRate !== 'number' || c.speakingRate < 0.25 || c.speakingRate > 4.0) {
-      return false;
+  // Validate speed if present (Cartesia uses 0.5-2.0 or string values)
+  if (c.speed !== undefined) {
+    if (typeof c.speed === 'number') {
+      if (c.speed < 0.5 || c.speed > 2.0) return false;
+    } else if (typeof c.speed === 'string') {
+      if (!['slowest', 'slow', 'normal', 'fast', 'fastest'].includes(c.speed)) return false;
     }
   }
   

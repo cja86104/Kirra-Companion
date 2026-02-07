@@ -5,10 +5,11 @@ import {
   hasVoiceAccess,
   getVoiceLimitForTier,
   isValidVoiceConfig,
-  OPENAI_VOICES,
-  type OpenAIVoiceId,
+  CARTESIA_VOICES,
+  migrateVoiceConfig,
+  type CartesiaVoiceId,
   type VoiceConfig,
-} from '@/lib/tts/openai-tts';
+} from '@/lib/tts/cartesia-tts';
 import type { Json } from '@/types/database';
 
 interface TTSRequest {
@@ -30,10 +31,11 @@ interface CompanionVoiceRow {
 /**
  * POST /api/companion/[id]/speak
  * 
- * Generate TTS audio for a companion's message using OpenAI TTS.
+ * Generate TTS audio for a companion's message using Cartesia Sonic 3.
  * Uses the companion's voice_config if available.
  * 
- * Cost: $15 per 1M characters (92% cheaper than ElevenLabs)
+ * Provider: Cartesia - 40ms time-to-first-audio, streaming support
+ * Cost: ~$0.038 per 1K characters
  */
 export async function POST(
   request: NextRequest,
@@ -51,8 +53,8 @@ export async function POST(
       );
     }
 
-    // Limit text length to prevent abuse (OpenAI limit is 4096)
-    const MAX_CHARS = 4000;
+    // Cartesia supports up to 10,000 characters per request
+    const MAX_CHARS = 10000;
     const truncatedText = text.slice(0, MAX_CHARS);
 
     const supabase = await createClient();
@@ -105,7 +107,7 @@ export async function POST(
     }
 
     // Validate voice configuration
-    const voiceConfig = companion.voice_config as VoiceConfig | null;
+    let voiceConfig = companion.voice_config as VoiceConfig | null;
 
     if (!voiceConfig || !isValidVoiceConfig(voiceConfig)) {
       return NextResponse.json(
@@ -115,32 +117,36 @@ export async function POST(
     }
 
     // Check API key
-    if (!process.env.OPENAI_API_KEY) {
-      console.error('OPENAI_API_KEY not configured');
+    if (!process.env.CARTESIA_API_KEY) {
+      console.error('CARTESIA_API_KEY not configured');
       return NextResponse.json(
         { error: 'Voice service not configured' },
         { status: 503 }
       );
     }
 
-    // Handle different providers
-    if (voiceConfig.provider === 'elevenlabs') {
-      // Legacy ElevenLabs support - could redirect to ElevenLabs handler
-      // For now, fall back to default OpenAI voice
-      console.warn('ElevenLabs voice detected, falling back to OpenAI');
+    // Migrate legacy OpenAI/ElevenLabs configs to Cartesia
+    if (voiceConfig.provider !== 'cartesia') {
+      console.log(`Migrating ${voiceConfig.provider} voice to Cartesia for companion ${companionId}`);
+      voiceConfig = migrateVoiceConfig(voiceConfig);
+      
+      // Update the companion's voice config in the database
+      await supabase
+        .from('companions')
+        .update({ voice_config: voiceConfig as unknown as Json })
+        .eq('id', companionId);
     }
 
-    // Validate voice ID exists in OpenAI
-    const voiceId = (voiceConfig.provider === 'openai' && OPENAI_VOICES[voiceConfig.voiceId as OpenAIVoiceId])
-      ? voiceConfig.voiceId as OpenAIVoiceId
-      : 'nova'; // Default to Nova if voice not found
+    // Validate voice ID exists in Cartesia
+    const voiceId = CARTESIA_VOICES[voiceConfig.voiceId as CartesiaVoiceId]
+      ? voiceConfig.voiceId as CartesiaVoiceId
+      : 'tessa'; // Default to Tessa if voice not found
 
     // Generate speech
     const speechResult = await generateSpeech({
       text: truncatedText,
       voiceId,
-      model: voiceConfig.model || 'tts-1',
-      speed: voiceConfig.speed || 1.0,
+      speed: voiceConfig.speed,
       format: 'mp3',
     });
 
@@ -167,6 +173,7 @@ export async function POST(
         'X-Audio-Duration': String(Math.round(speechResult.estimatedDuration)),
         'X-Characters-Used': String(speechResult.characterCount),
         'X-Characters-Limit': String(characterLimit),
+        'X-TTS-Provider': 'cartesia',
         'Cache-Control': 'private, max-age=3600', // Cache for 1 hour
       },
     });
@@ -254,6 +261,7 @@ export async function GET(
       voiceConfig: companion.voice_config,
       hasAccess: hasVoiceAccess(tier),
       tier,
+      provider: 'cartesia',
       usage: {
         characterLimit,
       },

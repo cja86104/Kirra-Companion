@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
-  OPENAI_VOICES,
+  CARTESIA_VOICES,
   hasVoiceAccess,
   getVoiceLimitForTier,
-  type OpenAIVoiceId,
-} from '@/lib/tts/openai-tts';
+  type CartesiaVoiceId,
+} from '@/lib/tts/cartesia-tts';
 
 /**
  * Voice option returned to client
@@ -27,8 +27,10 @@ interface ProfileTier {
 /**
  * GET /api/voices
  * 
- * Returns list of available OpenAI TTS voices for the user's tier.
- * All voices are available to all paid tiers (OpenAI pricing makes this affordable).
+ * Returns list of available Cartesia TTS voices for the user's tier.
+ * All voices are available to all paid tiers.
+ * 
+ * Provider: Cartesia Sonic 3 - 40ms time-to-first-audio
  */
 export async function GET(request: NextRequest) {
   try {
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest) {
     const hasAccess = hasVoiceAccess(tier);
 
     // Build voice options list
-    const voiceOptions: VoiceOption[] = Object.entries(OPENAI_VOICES).map(([id, voice]) => ({
+    const voiceOptions: VoiceOption[] = Object.entries(CARTESIA_VOICES).map(([id, voice]) => ({
       voice_id: id,
       name: voice.name,
       description: voice.description,
@@ -89,7 +91,7 @@ export async function GET(request: NextRequest) {
       has_voice_access: hasAccess,
       available_count: hasAccess ? voiceOptions.length : 0,
       total_count: voiceOptions.length,
-      provider: 'openai',
+      provider: 'cartesia',
       usage: {
         characters_used: charactersUsed,
         characters_limit: characterLimit,
@@ -132,22 +134,31 @@ export async function POST(request: NextRequest) {
     const { voiceId, speed } = body;
 
     // Validate voice ID
-    if (!voiceId || !OPENAI_VOICES[voiceId as OpenAIVoiceId]) {
+    if (!voiceId || !CARTESIA_VOICES[voiceId as CartesiaVoiceId]) {
       return NextResponse.json(
         { 
           error: 'Invalid voice ID',
-          valid_ids: Object.keys(OPENAI_VOICES),
+          valid_ids: Object.keys(CARTESIA_VOICES),
         },
         { status: 400 }
       );
     }
 
-    // Validate speed if provided
+    // Validate speed if provided (Cartesia uses 0.5 to 2.0 range or string values)
     if (speed !== undefined) {
-      if (typeof speed !== 'number' || speed < 0.25 || speed > 4.0) {
+      if (typeof speed === 'number' && (speed < 0.5 || speed > 2.0)) {
         return NextResponse.json(
           { 
-            error: 'Speed must be a number between 0.25 and 4.0',
+            error: 'Speed must be a number between 0.5 and 2.0, or a string: slowest, slow, normal, fast, fastest',
+            received: speed,
+          },
+          { status: 400 }
+        );
+      }
+      if (typeof speed === 'string' && !['slowest', 'slow', 'normal', 'fast', 'fastest'].includes(speed)) {
+        return NextResponse.json(
+          { 
+            error: 'Speed must be one of: slowest, slow, normal, fast, fastest',
             received: speed,
           },
           { status: 400 }
@@ -177,13 +188,13 @@ export async function POST(request: NextRequest) {
 
     // Return validated configuration
     const voiceConfig = {
-      provider: 'openai' as const,
+      provider: 'cartesia' as const,
       voiceId,
-      model: 'tts-1' as const,
-      speed: speed ?? 1.0,
+      model: 'sonic-3' as const,
+      speed: speed ?? 'normal',
     };
 
-    const voice = OPENAI_VOICES[voiceId as OpenAIVoiceId];
+    const voice = CARTESIA_VOICES[voiceId as CartesiaVoiceId];
 
     return NextResponse.json({
       valid: true,
