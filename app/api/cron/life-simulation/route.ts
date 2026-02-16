@@ -1,18 +1,21 @@
 /**
- * Proactive Check Cron Endpoint
+ * Life Simulation Cron Endpoint
  * 
- * Called periodically to check all active companions for proactive messaging opportunities.
- * Should be triggered by a cron service (Vercel Cron, Supabase pg_cron, etc.)
+ * Runs the autonomous life simulation for all active companions.
+ * Generates activities, life events, mood changes, and "thought of user" moments.
  * 
+ * This is what makes companions feel ALIVE 24/7 even when not chatting.
+ * 
+ * Schedule: Every 2 hours (configured in vercel.json)
  * Security: Protected by cron secret header
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import {
-  processProactiveCheck,
-  expireOldMessages,
-} from '@/lib/companion/proactive-messaging';
+import { 
+  runSimulationTick, 
+  DEFAULT_SIMULATION_CONFIG 
+} from '@/lib/companion/life-simulation';
 
 // Use service role for cron operations
 const supabaseAdmin = createClient(
@@ -22,7 +25,7 @@ const supabaseAdmin = createClient(
 );
 
 // ============================================================================
-// POST - Run proactive check for all companions
+// POST - Run life simulation for specific companion(s)
 // ============================================================================
 
 export async function POST(request: NextRequest) {
@@ -40,7 +43,7 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json().catch(() => ({}));
     const { 
-      companion_id,  // Optional: specific companion
+      companion_id,
       batch_size = 50,
       dry_run = false,
     } = body as {
@@ -51,114 +54,119 @@ export async function POST(request: NextRequest) {
     
     const results: {
       companion_id: string;
-      checked: boolean;
-      sent: boolean;
-      reason?: string;
+      simulated: boolean;
+      activity_generated: boolean;
+      event_generated: boolean;
+      thought_of_user: boolean;
+      error?: string;
     }[] = [];
     
-    // First, expire old pending messages
-    const expiredCount = await expireOldMessages(24);
-    
     if (companion_id) {
-      // Check specific companion
+      // Simulate specific companion
       if (dry_run) {
         results.push({
           companion_id,
-          checked: true,
-          sent: false,
-          reason: 'Dry run - no message sent',
+          simulated: false,
+          activity_generated: false,
+          event_generated: false,
+          thought_of_user: false,
+          error: 'Dry run - no simulation performed',
         });
       } else {
-        const result = await processProactiveCheck(companion_id);
-        results.push({
-          companion_id,
-          ...result,
-        });
+        try {
+          const result = await runSimulationTick(companion_id, DEFAULT_SIMULATION_CONFIG);
+          results.push({
+            companion_id,
+            simulated: true,
+            activity_generated: !!result.activity,
+            event_generated: !!result.event,
+            thought_of_user: result.thoughtOfUser,
+          });
+        } catch (err) {
+          results.push({
+            companion_id,
+            simulated: false,
+            activity_generated: false,
+            event_generated: false,
+            thought_of_user: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
       }
     } else {
-      // Get all active companions that haven't had a proactive check recently
-      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-      
-      // Get companions with their simulation states
+      // Get all active companions
       const { data: companions, error } = await supabaseAdmin
         .from('companions')
-        .select(`
-          id,
-          user_id,
-          is_archived,
-          simulation_states!simulation_states_companion_id_fkey (
-            last_proactive_message_at,
-            next_scheduled_at
-          )
-        `)
+        .select('id, name, is_archived, is_active')
         .eq('is_archived', false)
+        .eq('is_active', true)
         .limit(batch_size);
       
       if (error) {
-        console.error('Error fetching companions for proactive check:', error);
+        console.error('Error fetching companions for life simulation:', error);
         return NextResponse.json(
           { error: 'Failed to fetch companions' },
           { status: 500 }
         );
       }
       
-      // Filter to companions that are due for a check
-      const now = new Date();
-      const eligibleCompanions = (companions || []).filter(c => {
-        const simState = Array.isArray(c.simulation_states) 
-          ? c.simulation_states[0] 
-          : c.simulation_states;
-        
-        if (!simState) return true; // No simulation state yet
-        
-        // Check if scheduled time has passed
-        if (simState.next_scheduled_at) {
-          const scheduledAt = new Date(simState.next_scheduled_at);
-          if (scheduledAt > now) return false;
-        }
-        
-        return true;
-      });
+      console.log(`[Life Simulation] Processing ${companions?.length || 0} companions`);
       
-      // Process each eligible companion
-      for (const companion of eligibleCompanions) {
+      // Process each companion
+      for (const companion of companions || []) {
         try {
           if (dry_run) {
             results.push({
               companion_id: companion.id,
-              checked: true,
-              sent: false,
-              reason: 'Dry run - no message sent',
+              simulated: false,
+              activity_generated: false,
+              event_generated: false,
+              thought_of_user: false,
+              error: 'Dry run',
             });
           } else {
-            const result = await processProactiveCheck(companion.id);
+            const result = await runSimulationTick(companion.id, DEFAULT_SIMULATION_CONFIG);
+            
             results.push({
               companion_id: companion.id,
-              ...result,
+              simulated: true,
+              activity_generated: !!result.activity,
+              event_generated: !!result.event,
+              thought_of_user: result.thoughtOfUser,
             });
+            
+            if (result.activity) {
+              console.log(`[Life Simulation] ${companion.name}: ${result.activity.activity_name}`);
+            }
           }
         } catch (err) {
-          console.error(`Error processing companion ${companion.id}:`, err);
+          console.error(`[Life Simulation] Error for ${companion.id}:`, err);
           results.push({
             companion_id: companion.id,
-            checked: false,
-            sent: false,
-            reason: `Error: ${err instanceof Error ? err.message : 'Unknown'}`,
+            simulated: false,
+            activity_generated: false,
+            event_generated: false,
+            thought_of_user: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
           });
         }
         
         // Small delay between companions to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
     
-    // Summarize results
+    // Summarize
     const summary = {
-      total_checked: results.length,
-      messages_sent: results.filter(r => r.sent).length,
-      failed: results.filter(r => !r.checked).length,
-      expired_messages: expiredCount,
+      total_processed: results.length,
+      simulated: results.filter(r => r.simulated).length,
+      activities_generated: results.filter(r => r.activity_generated).length,
+      events_generated: results.filter(r => r.event_generated).length,
+      thought_of_user: results.filter(r => r.thought_of_user).length,
+      errors: results.filter(r => r.error).length,
     };
+    
+    console.log(`[Life Simulation] Complete: ${summary.activities_generated} activities, ${summary.events_generated} events`);
     
     return NextResponse.json({
       success: true,
@@ -168,7 +176,7 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('Proactive cron error:', error);
+    console.error('Life simulation cron error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -177,13 +185,12 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================================
-// GET - Called by Vercel Cron - runs the proactive check
+// GET - Called by Vercel Cron
 // ============================================================================
 
 export async function GET(request: NextRequest) {
   try {
     // Vercel cron sends the secret in x-vercel-cron-auth header
-    // Also check authorization header for manual calls
     const vercelCronAuth = request.headers.get('x-vercel-cron-auth');
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
@@ -200,120 +207,117 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Check if this is just a status check (query param)
+    // Check for status query
     const { searchParams } = new URL(request.url);
     if (searchParams.get('status') === 'true') {
-      // Return status only
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
-      const { count: sentToday } = await supabaseAdmin
-        .from('proactive_messages')
+      // Get life events from last 24h
+      const { count: eventsToday } = await supabaseAdmin
+        .from('life_events')
         .select('id', { count: 'exact', head: true })
-        .gte('sent_at', twentyFourHoursAgo);
+        .gte('created_at', twentyFourHoursAgo);
       
-      const { count: pendingCount } = await supabaseAdmin
-        .from('proactive_messages')
+      // Get activities from last 24h
+      const { count: activitiesToday } = await supabaseAdmin
+        .from('companion_activities')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending');
+        .gte('started_at', twentyFourHoursAgo);
       
+      // Get active companions
       const { count: activeCompanions } = await supabaseAdmin
         .from('companions')
         .select('id', { count: 'exact', head: true })
-        .eq('is_archived', false);
+        .eq('is_archived', false)
+        .eq('is_active', true);
       
       return NextResponse.json({
         status: 'healthy',
         stats: {
-          messages_sent_24h: sentToday || 0,
-          pending_messages: pendingCount || 0,
+          life_events_24h: eventsToday || 0,
+          activities_24h: activitiesToday || 0,
           active_companions: activeCompanions || 0,
         },
         timestamp: new Date().toISOString(),
       });
     }
     
-    // Run the proactive check (same as POST but with defaults)
+    // Run full simulation
+    console.log('[Life Simulation Cron] Starting...');
+    
     const results: {
       companion_id: string;
-      checked: boolean;
-      sent: boolean;
-      reason?: string;
+      simulated: boolean;
+      activity_generated: boolean;
+      event_generated: boolean;
+      thought_of_user: boolean;
+      error?: string;
     }[] = [];
     
-    // First, expire old pending messages
-    const expiredCount = await expireOldMessages(24);
-    
-    // Get all active companions that need checking
+    // Get all active companions
     const { data: companions, error } = await supabaseAdmin
       .from('companions')
-      .select(`
-        id,
-        user_id,
-        is_archived,
-        simulation_states!simulation_states_companion_id_fkey (
-          last_proactive_message_at,
-          next_scheduled_at
-        )
-      `)
+      .select('id, name, is_archived, is_active')
       .eq('is_archived', false)
-      .limit(50);
+      .eq('is_active', true)
+      .limit(100); // Process up to 100 companions per cron run
     
     if (error) {
-      console.error('Error fetching companions for proactive check:', error);
+      console.error('Error fetching companions:', error);
       return NextResponse.json(
         { error: 'Failed to fetch companions' },
         { status: 500 }
       );
     }
     
-    // Filter to companions that are due for a check
-    const now = new Date();
-    const eligibleCompanions = (companions || []).filter(c => {
-      const simState = Array.isArray(c.simulation_states) 
-        ? c.simulation_states[0] 
-        : c.simulation_states;
-      
-      if (!simState) return true;
-      
-      if (simState.next_scheduled_at) {
-        const scheduledAt = new Date(simState.next_scheduled_at);
-        if (scheduledAt > now) return false;
-      }
-      
-      return true;
-    });
+    console.log(`[Life Simulation] Found ${companions?.length || 0} active companions`);
     
-    // Process each eligible companion
-    for (const companion of eligibleCompanions) {
+    // Process each companion
+    for (const companion of companions || []) {
       try {
-        const result = await processProactiveCheck(companion.id);
+        const result = await runSimulationTick(companion.id, DEFAULT_SIMULATION_CONFIG);
+        
         results.push({
           companion_id: companion.id,
-          ...result,
+          simulated: true,
+          activity_generated: !!result.activity,
+          event_generated: !!result.event,
+          thought_of_user: result.thoughtOfUser,
         });
+        
+        if (result.activity) {
+          console.log(`[Life Sim] ${companion.name}: ${result.activity.activity_name}`);
+        }
+        if (result.event) {
+          console.log(`[Life Sim] ${companion.name} event: ${result.event.title}`);
+        }
+        
       } catch (err) {
-        console.error(`Error processing companion ${companion.id}:`, err);
+        console.error(`[Life Simulation] Error for ${companion.name}:`, err);
         results.push({
           companion_id: companion.id,
-          checked: false,
-          sent: false,
-          reason: `Error: ${err instanceof Error ? err.message : 'Unknown'}`,
+          simulated: false,
+          activity_generated: false,
+          event_generated: false,
+          thought_of_user: false,
+          error: err instanceof Error ? err.message : 'Unknown error',
         });
       }
       
-      // Small delay between companions
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Small delay to avoid overwhelming the DB
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
     
-    // Summarize results
     const summary = {
-      total_checked: results.length,
-      messages_sent: results.filter(r => r.sent).length,
-      failed: results.filter(r => !r.checked).length,
-      expired_messages: expiredCount,
+      total_processed: results.length,
+      simulated: results.filter(r => r.simulated).length,
+      activities_generated: results.filter(r => r.activity_generated).length,
+      events_generated: results.filter(r => r.event_generated).length,
+      thought_of_user: results.filter(r => r.thought_of_user).length,
+      errors: results.filter(r => r.error).length,
     };
     
-    console.log(`Proactive cron completed: ${summary.messages_sent} messages sent`);
+    console.log(`[Life Simulation Cron] Complete:`, summary);
     
     return NextResponse.json({
       success: true,
@@ -323,7 +327,7 @@ export async function GET(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('Proactive cron error:', error);
+    console.error('Life simulation cron error:', error);
     return NextResponse.json(
       { 
         status: 'error',

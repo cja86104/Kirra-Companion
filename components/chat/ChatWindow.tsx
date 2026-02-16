@@ -1,15 +1,19 @@
 'use client';
 
 /**
- * KIRRA IMMERSIVE CHAT v9.0
+ * KIRRA IMMERSIVE CHAT v9.1
  * =========================
- * DYNAMIC CONVERSATION-AWARE SCENES
+ * OPTIMIZED VOICE PLAYBACK
  * 
- * - AI analyzes conversation every 5 minutes
- * - Generates contextual scene images via Fal.ai
+ * v9.1 Changes:
+ * - Sentence-level TTS for faster perceived latency
+ * - First sentence plays ~500ms after response (vs 3+ sec)
+ * - Queued playback for remaining sentences
+ * 
+ * Previous features:
+ * - Dynamic conversation-aware scenes
+ * - AI-generated scene backgrounds
  * - Ambient audio matched to scene theme
- * - Dynamic AI-generated scene backgrounds
- * - Falls back to time-based scenes when needed
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -44,7 +48,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { VoiceConversationMode, useVoiceConversationSupported } from './VoiceConversationMode';
-import { useSceneUpdater, getFallbackSceneUrl } from './useSceneUpdater';
+import { useSceneUpdater } from './useSceneUpdater';
+import { useQueuedVoicePlayback } from './useQueuedVoicePlayback';
 import { getClient } from '@/lib/supabase/client';
 import { uploadMultipleAttachments } from '@/lib/supabase/storage';
 import { cn } from '@/lib/utils/cn';
@@ -110,6 +115,9 @@ export function ChatWindow({
   // Voice config
   const voiceConfig = companion.voice_config as VoiceConfig | null;
   const hasVoiceEnabled = !!voiceConfig?.voiceId;
+
+  // Queued voice playback hook - optimized for sentence-level TTS
+  const { playQueued, stop: stopVoice, isPlaying: isVoicePlaying } = useQueuedVoicePlayback(companion.id);
   
   // Mood
   const moodData = companion.current_mood as { primary?: string } | null;
@@ -129,13 +137,12 @@ export function ChatWindow({
       conversationId: conversation?.id || '',
       relationshipType: companion.relationship_type,
       enabled: !!conversation,
-      cooldownMinutes: 20, // Generate new scene every 20 minutes max
-      checkIntervalSeconds: 60, // Check every minute
+      cooldownMinutes: 20,
+      checkIntervalSeconds: 60,
     },
     messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
   );
 
-  // Determine which scene URL to use
   const sceneUrl = sceneState.currentScene?.image_url || sceneState.fallbackSceneUrl;
 
   // =============================================================================
@@ -251,8 +258,9 @@ export function ChatWindow({
           return [...prev, data.companionMessage];
         });
 
+        // Use queued playback for faster perceived response
         if (autoPlayVoice && hasVoiceEnabled && data.companionMessage.content) {
-          playCompanionResponse(data.companionMessage.content);
+          playQueued(data.companionMessage.content);
         }
       }
     } catch (error) {
@@ -266,38 +274,15 @@ export function ChatWindow({
   };
 
   // =============================================================================
-  // VOICE PLAYBACK
+  // VOICE TOGGLE HANDLERS
   // =============================================================================
 
-  const audioUnlockedRef = useRef(false);
-  const pendingAudioRef = useRef<string | null>(null);
-
-  const playCompanionResponse = useCallback(async (text: string) => {
-    try {
-      const response = await fetch(`/api/companion/${companion.id}/speak`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, companionId: companion.id }),
-      });
-
-      if (!response.ok) return;
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
-
-      try {
-        await audio.play();
-        audioUnlockedRef.current = true;
-      } catch {
-        pendingAudioRef.current = text;
-        URL.revokeObjectURL(url);
-      }
-    } catch (error) {
-      console.error('Auto-play error:', error);
+  const handleVoiceToggle = useCallback(() => {
+    if (autoPlayVoice && isVoicePlaying) {
+      stopVoice();
     }
-  }, [companion.id]);
+    setAutoPlayVoice(!autoPlayVoice);
+  }, [autoPlayVoice, isVoicePlaying, stopVoice]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -321,7 +306,6 @@ export function ChatWindow({
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000"
         style={{ backgroundImage: `url(${sceneUrl})` }}
       >
-        {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
       </div>
 
@@ -349,6 +333,18 @@ export function ChatWindow({
               </motion.div>
             )}
 
+            {/* Voice playing indicator */}
+            {isVoicePlaying && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/80 text-white text-xs backdrop-blur-sm"
+              >
+                <Volume2 className="h-3 w-3" />
+                <span>Speaking...</span>
+              </motion.div>
+            )}
+
             {/* Ambient audio toggle */}
             <Button
               variant="ghost"
@@ -368,7 +364,7 @@ export function ChatWindow({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setAutoPlayVoice(!autoPlayVoice)}
+                onClick={handleVoiceToggle}
                 className={cn(
                   "rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm",
                   autoPlayVoice && "bg-white/30"
@@ -475,7 +471,10 @@ export function ChatWindow({
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
             className="relative"
           >
-            <Avatar className="h-32 w-32 ring-2 ring-white/30 shadow-2xl backdrop-blur-sm">
+            <Avatar className={cn(
+              "h-32 w-32 ring-2 shadow-2xl backdrop-blur-sm transition-all duration-300",
+              isVoicePlaying ? "ring-emerald-400 ring-4" : "ring-white/30"
+            )}>
               {companion.avatar_url ? (
                 <AvatarImage src={companion.avatar_url} alt={companion.name} className="object-cover" />
               ) : (

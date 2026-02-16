@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import type { VoiceConfig } from '@/types/database';
 
 /**
- * Voice option from API
+ * Voice option interface
  */
 interface VoiceOption {
   voice_id: string;
@@ -26,63 +26,63 @@ interface VoiceOption {
 }
 
 /**
- * Cartesia TTS voices - selected for AI companion personalities
- * Provider: Cartesia Sonic 3 - 40ms time-to-first-audio
+ * OpenAI TTS voices
+ * Provider: OpenAI TTS with sentence-level optimization
  */
-const CARTESIA_VOICES: VoiceOption[] = [
+const OPENAI_VOICES: VoiceOption[] = [
   {
-    voice_id: 'tessa',
-    name: 'Tessa',
-    description: 'Warm and engaging',
+    voice_id: 'nova',
+    name: 'Nova',
+    description: 'Friendly and upbeat',
     gender: 'female',
-    personality: 'Friendly, supportive, conversational',
+    personality: 'Bright, cheerful, energetic',
     available: true,
-    preview_text: "Hi there! I'm Tessa. I love having warm, meaningful conversations and being here for you.",
+    preview_text: "Hi! I'm Nova! I'm super excited to chat with you - I've got lots of energy!",
   },
   {
-    voice_id: 'maya',
-    name: 'Maya',
+    voice_id: 'shimmer',
+    name: 'Shimmer',
     description: 'Soft and soothing',
     gender: 'female',
-    personality: 'Gentle, calming, empathetic',
+    personality: 'Gentle, calming, soothing',
     available: true,
-    preview_text: "Hello. I'm Maya. I have a gentle presence and I'm here to listen whenever you need me.",
+    preview_text: "Hello there. I'm Shimmer. I have a soft, gentle voice that's perfect for relaxing conversations.",
   },
   {
-    voice_id: 'katie',
-    name: 'Katie',
-    description: 'Clear and balanced',
-    gender: 'female',
-    personality: 'Professional, articulate, versatile',
+    voice_id: 'alloy',
+    name: 'Alloy',
+    description: 'Neutral and balanced',
+    gender: 'neutral',
+    personality: 'Professional, clear, versatile',
     available: true,
-    preview_text: "Hello! I'm Katie. I have a clear, balanced voice that works well for any conversation.",
+    preview_text: "Hi there! I'm Alloy. I have a balanced, neutral voice that works well for any situation.",
   },
   {
-    voice_id: 'leo',
-    name: 'Leo',
-    description: 'Deep and reassuring',
+    voice_id: 'onyx',
+    name: 'Onyx',
+    description: 'Deep and authoritative',
     gender: 'male',
-    personality: 'Calm, confident, grounding',
+    personality: 'Deep, confident, authoritative',
     available: true,
-    preview_text: "Greetings. I'm Leo. I bring a calm, steady presence to our conversations.",
+    preview_text: "Greetings. I'm Onyx. I have a deep, resonant voice that conveys confidence and calm.",
   },
   {
-    voice_id: 'kyle',
-    name: 'Kyle',
-    description: 'Friendly and energetic',
+    voice_id: 'echo',
+    name: 'Echo',
+    description: 'Warm and engaging',
     gender: 'male',
-    personality: 'Upbeat, enthusiastic, engaging',
+    personality: 'Warm, friendly, conversational',
     available: true,
-    preview_text: "Hey! I'm Kyle! I'm always excited to chat and bring some positive energy to your day!",
+    preview_text: "Hey! I'm Echo. I've got a warm, friendly tone that's great for casual conversations.",
   },
   {
-    voice_id: 'kiefer',
-    name: 'Kiefer',
-    description: 'Expressive and thoughtful',
-    gender: 'male',
-    personality: 'Articulate, dynamic, storytelling',
+    voice_id: 'fable',
+    name: 'Fable',
+    description: 'Expressive and dynamic',
+    gender: 'neutral',
+    personality: 'Expressive, storytelling, dynamic',
     available: true,
-    preview_text: "Hello! I'm Kiefer. I love expressing ideas with nuance and bringing depth to our talks.",
+    preview_text: "Hello! I'm Fable. I love bringing stories to life with my expressive voice!",
   },
 ];
 
@@ -102,7 +102,7 @@ export function VoiceSelector({
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [loadingVoiceId, setLoadingVoiceId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [speed, setSpeed] = useState(selectedVoice?.speakingRate ?? 1.0);
+  const [speed, setSpeed] = useState(selectedVoice?.speed ?? 1.0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Check if user has voice access
@@ -129,9 +129,7 @@ export function VoiceSelector({
 
   // Play voice preview
   const playPreview = useCallback(async (voiceId: string) => {
-    // Stop any currently playing audio
     stopAudio();
-
     setLoadingVoiceId(voiceId);
 
     try {
@@ -188,14 +186,14 @@ export function VoiceSelector({
     }
 
     const config: VoiceConfig = {
-      provider: 'cartesia',
+      provider: 'openai',
       voiceId,
-      model: 'sonic-3',
+      model: 'tts-1',
       speed,
     };
 
     onVoiceSelect(config);
-    toast.success(`Selected ${CARTESIA_VOICES.find(v => v.voice_id === voiceId)?.name} voice`);
+    toast.success(`Selected ${OPENAI_VOICES.find(v => v.voice_id === voiceId)?.name} voice`);
   }, [hasVoiceAccess, speed, onVoiceSelect]);
 
   // Clear voice selection
@@ -217,7 +215,7 @@ export function VoiceSelector({
     }
   }, [selectedVoice, onVoiceSelect]);
 
-  // Get gender icon/color
+  // Get gender styles
   const getGenderStyles = (gender: string) => {
     switch (gender) {
       case 'female':
@@ -256,7 +254,7 @@ export function VoiceSelector({
     );
   }
 
-  const selectedVoiceData = CARTESIA_VOICES.find(v => v.voice_id === selectedVoice?.voiceId);
+  const selectedVoiceData = OPENAI_VOICES.find(v => v.voice_id === selectedVoice?.voiceId);
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -281,7 +279,7 @@ export function VoiceSelector({
 
       {/* Voice Grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {CARTESIA_VOICES.map((voice) => {
+        {OPENAI_VOICES.map((voice) => {
           const isSelected = selectedVoice?.voiceId === voice.voice_id;
           const isPlaying = playingVoiceId === voice.voice_id;
           const isLoading = loadingVoiceId === voice.voice_id;
@@ -429,7 +427,7 @@ export function VoiceSelector({
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Volume2 className="w-3 h-3" />
         <span>
-          Voice uses Cartesia Sonic 3. Ultra-low latency for natural conversations.
+          Voice uses OpenAI TTS with sentence-level playback for faster responses.
         </span>
       </div>
     </div>
@@ -440,7 +438,7 @@ export function VoiceSelector({
  * Get voice name by ID
  */
 export function getVoiceName(voiceId: string): string {
-  const voice = CARTESIA_VOICES.find(v => v.voice_id === voiceId);
+  const voice = OPENAI_VOICES.find(v => v.voice_id === voiceId);
   return voice?.name || 'Unknown';
 }
 
@@ -448,7 +446,7 @@ export function getVoiceName(voiceId: string): string {
  * Get voice description by ID
  */
 export function getVoiceDescription(voiceId: string): string {
-  const voice = CARTESIA_VOICES.find(v => v.voice_id === voiceId);
+  const voice = OPENAI_VOICES.find(v => v.voice_id === voiceId);
   return voice?.description || '';
 }
 
@@ -460,24 +458,20 @@ export function isValidVoiceConfig(config: unknown): config is VoiceConfig {
   
   const c = config as Record<string, unknown>;
   
-  // Must have a valid provider (cartesia, openai legacy, or elevenlabs legacy)
-  if (c.provider !== 'cartesia' && c.provider !== 'openai' && c.provider !== 'elevenlabs') return false;
+  // Must have a valid provider
+  if (c.provider !== 'openai' && c.provider !== 'cartesia' && c.provider !== 'elevenlabs') return false;
   
   // Must have a voice ID
   if (typeof c.voiceId !== 'string' || c.voiceId.length === 0) return false;
   
-  // For Cartesia, validate voice ID exists
-  if (c.provider === 'cartesia') {
-    if (!CARTESIA_VOICES.find(v => v.voice_id === c.voiceId)) return false;
+  // For OpenAI, validate voice ID exists
+  if (c.provider === 'openai') {
+    if (!OPENAI_VOICES.find(v => v.voice_id === c.voiceId)) return false;
   }
   
-  // Validate speed if present (Cartesia uses 0.5-2.0 or string values)
+  // Validate speed if present (OpenAI uses 0.25-4.0)
   if (c.speed !== undefined) {
-    if (typeof c.speed === 'number') {
-      if (c.speed < 0.5 || c.speed > 2.0) return false;
-    } else if (typeof c.speed === 'string') {
-      if (!['slowest', 'slow', 'normal', 'fast', 'fastest'].includes(c.speed)) return false;
-    }
+    if (typeof c.speed !== 'number' || c.speed < 0.25 || c.speed > 4.0) return false;
   }
   
   return true;

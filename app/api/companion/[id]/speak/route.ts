@@ -2,20 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
   generateSpeech,
+  prepareSentenceQueue,
   hasVoiceAccess,
   getVoiceLimitForTier,
   isValidVoiceConfig,
-  CARTESIA_VOICES,
   migrateVoiceConfig,
-  type CartesiaVoiceId,
+  OPENAI_VOICES,
+  type OpenAIVoiceId,
   type VoiceConfig,
-} from '@/lib/tts/cartesia-tts';
+} from '@/lib/tts/openai-tts';
 import type { Json } from '@/types/database';
 
 interface TTSRequest {
   text: string;
   companionId: string;
   messageId?: string;
+  // Sentence-level options for queued playback
+  sentenceIndex?: number;
+  mode?: 'full' | 'first' | 'sentence';
 }
 
 interface ProfileRow {
@@ -31,11 +35,15 @@ interface CompanionVoiceRow {
 /**
  * POST /api/companion/[id]/speak
  * 
- * Generate TTS audio for a companion's message using Cartesia Sonic 3.
- * Uses the companion's voice_config if available.
+ * Generate TTS audio for a companion's message.
  * 
- * Provider: Cartesia - 40ms time-to-first-audio, streaming support
- * Cost: ~$0.038 per 1K characters
+ * Modes:
+ * - 'full' (default): Generate audio for entire text
+ * - 'first': Generate audio for first sentence only (fast response)
+ * - 'sentence': Generate audio for specific sentence by index
+ * 
+ * Provider: OpenAI TTS
+ * Optimization: Sentence-level generation for perceived lower latency
  */
 export async function POST(
   request: NextRequest,
@@ -44,7 +52,7 @@ export async function POST(
   try {
     const { id: companionId } = await params;
     const body: TTSRequest = await request.json();
-    const { text, messageId } = body;
+    const { text, sentenceIndex, mode = 'full' } = body;
 
     if (!text?.trim()) {
       return NextResponse.json(
@@ -52,10 +60,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    // Cartesia supports up to 10,000 characters per request
-    const MAX_CHARS = 10000;
-    const truncatedText = text.slice(0, MAX_CHARS);
 
     const supabase = await createClient();
 
@@ -78,7 +82,6 @@ export async function POST(
     const profile = profileData as ProfileRow | null;
     const tier = profile?.subscription_tier || 'free';
 
-    // Check if user has voice access
     if (!hasVoiceAccess(tier)) {
       return NextResponse.json(
         { error: 'Voice feature requires a paid subscription' },
@@ -86,7 +89,6 @@ export async function POST(
       );
     }
 
-    // Get character limit for tier (for informational purposes)
     const characterLimit = getVoiceLimitForTier(tier);
 
     // Get companion's voice config
@@ -106,7 +108,6 @@ export async function POST(
       );
     }
 
-    // Validate voice configuration
     let voiceConfig = companion.voice_config as VoiceConfig | null;
 
     if (!voiceConfig || !isValidVoiceConfig(voiceConfig)) {
@@ -117,98 +118,124 @@ export async function POST(
     }
 
     // Check API key
-    if (!process.env.CARTESIA_API_KEY) {
-      console.error('CARTESIA_API_KEY not configured');
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY not configured');
       return NextResponse.json(
         { error: 'Voice service not configured' },
         { status: 503 }
       );
     }
 
-    // Migrate legacy OpenAI/ElevenLabs configs to Cartesia
-    if (voiceConfig.provider !== 'cartesia') {
-      console.log(`Migrating ${voiceConfig.provider} voice to Cartesia for companion ${companionId}`);
+    // Migrate non-OpenAI configs (from Cartesia or ElevenLabs)
+    if (voiceConfig.provider !== 'openai') {
+      console.log(`Migrating ${voiceConfig.provider} voice to OpenAI for companion ${companionId}`);
       voiceConfig = migrateVoiceConfig(voiceConfig);
       
-      // Update the companion's voice config in the database
+      // Update companion's voice config
       await supabase
         .from('companions')
         .update({ voice_config: voiceConfig as unknown as Json })
         .eq('id', companionId);
     }
 
-    // Validate voice ID exists in Cartesia
-    const voiceId = CARTESIA_VOICES[voiceConfig.voiceId as CartesiaVoiceId]
-      ? voiceConfig.voiceId as CartesiaVoiceId
-      : 'tessa'; // Default to Tessa if voice not found
+    // Validate voice ID
+    const voiceId = OPENAI_VOICES[voiceConfig.voiceId as OpenAIVoiceId]
+      ? voiceConfig.voiceId as OpenAIVoiceId
+      : 'nova';
+
+    const speed = voiceConfig.speed || 1.0;
+
+    // Determine text to speak based on mode
+    let textToSpeak: string;
+    let totalSentences = 0;
+    let currentIndex = 0;
+    let isLastSentence = true;
+
+    if (mode === 'first' || mode === 'sentence') {
+      // Sentence-level mode for queued playback
+      const queue = prepareSentenceQueue(text);
+      totalSentences = queue.length;
+
+      if (mode === 'first') {
+        textToSpeak = queue[0]?.text || text;
+        currentIndex = 0;
+        isLastSentence = queue.length <= 1;
+      } else {
+        const idx = sentenceIndex ?? 0;
+        if (idx < 0 || idx >= queue.length) {
+          return NextResponse.json(
+            { error: 'Invalid sentence index' },
+            { status: 400 }
+          );
+        }
+        textToSpeak = queue[idx].text;
+        currentIndex = idx;
+        isLastSentence = queue[idx].isLast;
+      }
+    } else {
+      // Full mode - generate for entire text
+      textToSpeak = text.slice(0, 4096);
+    }
 
     // Generate speech
     const speechResult = await generateSpeech({
-      text: truncatedText,
+      text: textToSpeak,
       voiceId,
-      speed: voiceConfig.speed,
+      model: 'tts-1',
+      speed,
       format: 'mp3',
     });
 
-    // Update companion voice minutes
+    // Update companion voice minutes (non-blocking)
     const newVoiceMinutes = (companion.total_voice_minutes || 0) + (speechResult.estimatedDuration / 60);
-
-    await supabase
+    
+    supabase
       .from('companions')
-      .update({
-        total_voice_minutes: newVoiceMinutes,
-      } as never)
-      .eq('id', companionId);
+      .update({ total_voice_minutes: newVoiceMinutes } as never)
+      .eq('id', companionId)
+      .then(() => {})
+      .catch(err => console.error('Voice minutes update error:', err));
 
-    // If messageId provided, we could update the message with voice info
-    // For now, we're streaming audio directly
-    if (messageId) {
-      // Future: Store audio URL in message record
+    // Build response headers
+    const headers: Record<string, string> = {
+      'Content-Type': speechResult.contentType,
+      'X-Audio-Duration': String(Math.round(speechResult.estimatedDuration * 1000)),
+      'X-Characters-Used': String(speechResult.characterCount),
+      'X-Characters-Limit': String(characterLimit),
+      'X-TTS-Provider': 'openai',
+      'Cache-Control': 'private, max-age=3600',
+    };
+
+    // Add sentence metadata for queued playback
+    if (mode === 'first' || mode === 'sentence') {
+      headers['X-Sentence-Index'] = String(currentIndex);
+      headers['X-Sentence-Total'] = String(totalSentences);
+      headers['X-Sentence-Last'] = isLastSentence ? '1' : '0';
     }
 
-    // Return audio with metadata headers
-    return new NextResponse(speechResult.audioBuffer, {
-      headers: {
-        'Content-Type': speechResult.contentType,
-        'X-Audio-Duration': String(Math.round(speechResult.estimatedDuration)),
-        'X-Characters-Used': String(speechResult.characterCount),
-        'X-Characters-Limit': String(characterLimit),
-        'X-TTS-Provider': 'cartesia',
-        'Cache-Control': 'private, max-age=3600', // Cache for 1 hour
-      },
-    });
+    return new NextResponse(speechResult.audioBuffer, { headers });
 
   } catch (error) {
     console.error('TTS API error:', error);
     
     const message = error instanceof Error ? error.message : 'Failed to generate speech';
     
-    // Handle specific error types
     if (message.includes('Rate limit')) {
-      return NextResponse.json(
-        { error: message },
-        { status: 429 }
-      );
+      return NextResponse.json({ error: message }, { status: 429 });
     }
     
     if (message.includes('Invalid') || message.includes('API key')) {
-      return NextResponse.json(
-        { error: 'Voice service configuration error' },
-        { status: 503 }
-      );
+      return NextResponse.json({ error: 'Voice service configuration error' }, { status: 503 });
     }
 
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 /**
  * GET /api/companion/[id]/speak
  * 
- * Get voice configuration and usage stats for a companion
+ * Get voice configuration and usage stats
  */
 export async function GET(
   request: NextRequest,
@@ -218,16 +245,11 @@ export async function GET(
     const { id: companionId } = await params;
     const supabase = await createClient();
 
-    // Verify user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user profile
     const { data: profileData } = await supabase
       .from('profiles')
       .select('subscription_tier')
@@ -237,7 +259,6 @@ export async function GET(
     const profile = profileData as ProfileRow | null;
     const tier = profile?.subscription_tier || 'free';
 
-    // Get companion
     const { data: companionData } = await supabase
       .from('companions')
       .select('voice_config, name, total_voice_minutes')
@@ -248,22 +269,17 @@ export async function GET(
     const companion = companionData as CompanionVoiceRow | null;
 
     if (!companion) {
-      return NextResponse.json(
-        { error: 'Companion not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
     }
-
-    const characterLimit = getVoiceLimitForTier(tier);
 
     return NextResponse.json({
       hasVoice: !!companion.voice_config,
       voiceConfig: companion.voice_config,
       hasAccess: hasVoiceAccess(tier),
       tier,
-      provider: 'cartesia',
+      provider: 'openai',
       usage: {
-        characterLimit,
+        characterLimit: getVoiceLimitForTier(tier),
       },
       companionStats: {
         totalVoiceMinutes: companion.total_voice_minutes || 0,
@@ -272,9 +288,6 @@ export async function GET(
 
   } catch (error) {
     console.error('Voice config error:', error);
-    return NextResponse.json(
-      { error: 'Failed to get voice configuration' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to get voice configuration' }, { status: 500 });
   }
 }

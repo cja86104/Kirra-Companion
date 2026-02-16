@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
+  generateSpeech,
   generateVoicePreview,
   hasVoiceAccess,
-  CARTESIA_VOICES,
-  type CartesiaVoiceId,
-} from '@/lib/tts/cartesia-tts';
+  OPENAI_VOICES,
+  type OpenAIVoiceId,
+} from '@/lib/tts/openai-tts';
 import type { Profile } from '@/types/database';
 
 /**
@@ -58,11 +59,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!CARTESIA_VOICES[voiceId as CartesiaVoiceId]) {
+    if (!OPENAI_VOICES[voiceId as OpenAIVoiceId]) {
       return NextResponse.json(
         { 
           error: 'Invalid voice ID',
-          valid_ids: Object.keys(CARTESIA_VOICES),
+          valid_ids: Object.keys(OPENAI_VOICES),
         },
         { status: 400 }
       );
@@ -122,15 +123,15 @@ export async function GET(request: NextRequest) {
       return new NextResponse(cached.audioBuffer, {
         headers: {
           'Content-Type': cached.contentType,
-          'Cache-Control': 'public, max-age=86400', // 24 hours
+          'Cache-Control': 'public, max-age=86400',
           'X-Cache': 'HIT',
         },
       });
     }
 
     // Check API key
-    if (!process.env.CARTESIA_API_KEY) {
-      console.error('CARTESIA_API_KEY not configured');
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY not configured');
       return NextResponse.json(
         { error: 'Voice service not configured' },
         { status: 503 }
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Generate preview
-    const result = await generateVoicePreview(voiceId as CartesiaVoiceId);
+    const result = await generateVoicePreview(voiceId as OpenAIVoiceId);
 
     // Add to cache (evict oldest if full)
     if (previewCache.size >= MAX_CACHE_SIZE) {
@@ -157,7 +158,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(result.audioBuffer, {
       headers: {
         'Content-Type': result.contentType,
-        'Cache-Control': 'public, max-age=86400', // 24 hours
+        'Cache-Control': 'public, max-age=86400',
         'X-Cache': 'MISS',
         'X-Audio-Duration': String(Math.round(result.estimatedDuration)),
       },
@@ -222,7 +223,7 @@ export async function POST(request: NextRequest) {
     const { voiceId, text, speed } = body;
 
     // Validate inputs
-    if (!voiceId || !CARTESIA_VOICES[voiceId as CartesiaVoiceId]) {
+    if (!voiceId || !OPENAI_VOICES[voiceId as OpenAIVoiceId]) {
       return NextResponse.json(
         { error: 'Invalid voice ID' },
         { status: 400 }
@@ -240,28 +241,23 @@ export async function POST(request: NextRequest) {
     const MAX_PREVIEW_CHARS = 200;
     const truncatedText = text.slice(0, MAX_PREVIEW_CHARS);
 
-    // Validate speed (Cartesia uses 0.5 to 2.0 or string values)
-    let speedValue: number | string = 'normal';
-    if (typeof speed === 'number' && speed >= 0.5 && speed <= 2.0) {
-      speedValue = speed;
-    } else if (typeof speed === 'string' && ['slowest', 'slow', 'normal', 'fast', 'fastest'].includes(speed)) {
+    // Validate speed (OpenAI uses 0.25 to 4.0)
+    let speedValue = 1.0;
+    if (typeof speed === 'number' && speed >= 0.25 && speed <= 4.0) {
       speedValue = speed;
     }
 
     // Check API key
-    if (!process.env.CARTESIA_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { error: 'Voice service not configured' },
         { status: 503 }
       );
     }
 
-    // Import generateSpeech here to avoid circular dependencies
-    const { generateSpeech } = await import('@/lib/tts/cartesia-tts');
-
     const result = await generateSpeech({
       text: truncatedText,
-      voiceId: voiceId as CartesiaVoiceId,
+      voiceId: voiceId as OpenAIVoiceId,
       speed: speedValue,
       format: 'mp3',
     });
@@ -269,7 +265,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse(result.audioBuffer, {
       headers: {
         'Content-Type': result.contentType,
-        'Cache-Control': 'private, max-age=300', // 5 minutes for custom previews
+        'Cache-Control': 'private, max-age=300',
         'X-Audio-Duration': String(Math.round(result.estimatedDuration)),
         'X-Characters-Used': String(result.characterCount),
       },
