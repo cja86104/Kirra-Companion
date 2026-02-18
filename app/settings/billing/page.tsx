@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { 
   Loader2, 
@@ -128,7 +127,6 @@ const pricingTiers: PricingTier[] = [
 ];
 
 export default function BillingSettingsPage() {
-  const router = useRouter();
   const [currentTier, setCurrentTier] = useState<string>('free');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [isLoading, setIsLoading] = useState(true);
@@ -189,7 +187,8 @@ export default function BillingSettingsPage() {
 
       const { url } = await response.json();
       window.location.href = url;
-    } catch (error) {
+    } catch (checkoutError) {
+      console.error('Checkout error:', checkoutError);
       toast.error('Failed to start checkout. Please try again.');
     } finally {
       setIsCheckingOut(null);
@@ -208,7 +207,8 @@ export default function BillingSettingsPage() {
 
       const { url } = await response.json();
       window.location.href = url;
-    } catch (error) {
+    } catch (portalError) {
+      console.error('Portal error:', portalError);
       toast.error('Failed to open billing portal. Please try again.');
     }
   };

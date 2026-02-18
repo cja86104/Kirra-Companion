@@ -2,22 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { 
-  Download, 
-  FileJson, 
-  Trash2, 
-  Clock, 
-  CheckCircle2, 
+import {
+  Download,
+  FileJson,
+  Clock,
+  CheckCircle2,
   AlertCircle,
   Loader2,
-  RefreshCw 
+  RefreshCw,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/supabase/client';
-import { cn } from '@/lib/utils/cn';
 import type { DataExport } from '@/types/database';
 
 export default function DataPage() {
@@ -104,14 +102,6 @@ export default function DataPage() {
     } finally {
       setIsExporting(false);
     }
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const formatDate = (dateString: string) => {

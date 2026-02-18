@@ -86,7 +86,6 @@ export default function CreateCompanionPage() {
   const [subscriptionTier, setSubscriptionTier] = useState('free');
   // CRITICAL: Age verification state
   const [isMinor, setIsMinor] = useState<boolean | null>(null);
-  const [ageTier, setAgeTier] = useState<'blocked' | 'minor' | 'adult'>('adult');
   
   const [companionData, setCompanionData] = useState<CompanionData>({
     name: '',
@@ -130,7 +129,6 @@ export default function CreateCompanionPage() {
         // CRITICAL: Set age verification status
         const userAgeTier = profile?.age_tier || 'adult';
         const isMinorFlagged = profile?.is_minor_flagged || false;
-        setAgeTier(userAgeTier as 'blocked' | 'minor' | 'adult');
         setIsMinor(userAgeTier === 'minor' || userAgeTier === 'blocked' || isMinorFlagged);
         
         // If blocked, redirect away
@@ -402,7 +400,7 @@ export default function CreateCompanionPage() {
           </div>
         );
 
-      case 1:
+      case 1: {
         // CRITICAL: Filter relationship types based on age
         const availableRelationships = RELATIONSHIP_TYPES.filter(rel => {
           if (isMinor && (rel.type === 'romantic' || rel.type === 'custom')) {
@@ -410,7 +408,7 @@ export default function CreateCompanionPage() {
           }
           return true;
         });
-        
+
         return (
           <div className="space-y-4">
             <p className="text-muted-foreground">
@@ -443,6 +441,7 @@ export default function CreateCompanionPage() {
             </div>
           </div>
         );
+      }
 
       case 2:
         return (

@@ -16,7 +16,6 @@ import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type {
   CompanionActivity,
-  CompanionInterest,
   LifeEvent,
   CompanionMoodState,
   SimulationState,
@@ -24,18 +23,13 @@ import type {
   ActivityCategory,
   PrimaryMood,
   TimeOfDay,
-  EventSignificance,
-  LifeEventInsert,
-  CompanionActivityInsert,
 } from '@/types/life-simulation';
+import type { Companion, CompanionDNA } from '@/types/database';
 import type {
   SimulationStateRow,
-  SimulationStateRowInsert,
-  SimulationStateRowUpdate,
   LifeEventRow,
   CompanionActivityRow,
 } from '@/types/life-simulation-db';
-import type { Companion, CompanionDNA } from '@/types/database';
 
 // ============================================================================
 // Constants
@@ -351,11 +345,11 @@ export async function getSimulationState(companionId: string): Promise<Simulatio
       simulation_version: 1,
     };
     
-    const { data: newState, error: insertError } = await (supabase
-      .from('simulation_states') as any)
+    const { data: newState, error: insertError } = await supabase
+      .from('simulation_states')
       .insert({ companion_id: companionId, ...defaultState })
       .select()
-      .single();
+      .single() as unknown as { data: SimulationStateRow | null; error: Error | null };
     
     if (insertError) {
       console.error('Error creating simulation state:', insertError);
@@ -377,10 +371,10 @@ export async function updateSimulationState(
 ): Promise<void> {
   const supabase = await createClient();
   
-  const { error } = await (supabase
-    .from('simulation_states') as any)
+  const { error } = await supabase
+    .from('simulation_states')
     .update(updates)
-    .eq('companion_id', companionId);
+    .eq('companion_id', companionId) as unknown as { error: Error | null };
   
   if (error) {
     console.error('Error updating simulation state:', error);
@@ -401,12 +395,13 @@ export async function createActivityLifeEvent(
 ): Promise<LifeEvent | null> {
   const supabase = await createClient();
   
-  const significance: EventSignificance = 
-    activity.outcome === 'great' ? 'notable' :
-    activity.thinking_of_user ? 'normal' :
+  // Map to Supabase significance enum values
+  const significance: 'major' | 'moderate' | 'minor' =
+    activity.outcome === 'great' ? 'major' :
+    activity.thinking_of_user ? 'moderate' :
     'minor';
   
-  const event: LifeEventInsert = {
+  const eventInsert = {
     companion_id: companionId,
     event_type: 'activity_completed',
     title: activity.activity_name,
@@ -415,30 +410,30 @@ export async function createActivityLifeEvent(
     significance,
     occurred_at: activity.ended_at || new Date().toISOString(),
     duration_minutes: activity.duration_minutes,
-    mood_after: mood,
+    mood_after: JSON.parse(JSON.stringify(mood)),
     related_activity_id: activity.id,
     related_interest_id: activity.related_interest_id,
     involves_user: activity.thinking_of_user,
     user_context: activity.user_mention_context,
     shareable: significance !== 'minor',
-    metadata: {
+    metadata: JSON.parse(JSON.stringify({
       category: activity.activity_category,
       outcome: activity.outcome,
-    },
+    })),
   };
-  
-  const { data, error } = await (supabase
-    .from('life_events') as any)
-    .insert(event)
+
+  const { data, error } = await supabase
+    .from('life_events')
+    .insert(eventInsert)
     .select()
-    .single();
-  
+    .single() as unknown as { data: LifeEventRow | null; error: Error | null };
+
   if (error) {
     console.error('Error creating life event:', error);
     return null;
   }
-  
-  return data as LifeEvent;
+
+  return data as unknown as LifeEvent;
 }
 
 /**
@@ -452,34 +447,34 @@ export async function createUserThoughtEvent(
 ): Promise<LifeEvent | null> {
   const supabase = await createClient();
   
-  const event: LifeEventInsert = {
+  const eventInsert = {
     companion_id: companionId,
     event_type: 'thought_of_user',
     title: 'Thought of you',
     description: context,
     narrative: context,
-    significance: 'normal',
+    significance: 'moderate' as const,
     occurred_at: new Date().toISOString(),
-    mood_after: mood,
+    mood_after: JSON.parse(JSON.stringify(mood)),
     related_activity_id: relatedActivityId,
     involves_user: true,
     user_context: context,
     shareable: true,
-    metadata: {},
+    metadata: JSON.parse(JSON.stringify({})),
   };
-  
-  const { data, error } = await (supabase
-    .from('life_events') as any)
-    .insert(event)
+
+  const { data, error } = await supabase
+    .from('life_events')
+    .insert(eventInsert)
     .select()
-    .single();
-  
+    .single() as unknown as { data: LifeEventRow | null; error: Error | null };
+
   if (error) {
     console.error('Error creating thought event:', error);
     return null;
   }
-  
-  return data as LifeEvent;
+
+  return data as unknown as LifeEvent;
 }
 
 // ============================================================================
@@ -491,12 +486,12 @@ export async function createUserThoughtEvent(
  */
 export async function getCompanionMood(companionId: string): Promise<CompanionMoodState> {
   const supabase = await createClient();
-  
-  const { data } = await (supabase
-    .from('companions') as any)
+
+  const { data } = await supabase
+    .from('companions')
     .select('current_mood')
     .eq('id', companionId)
-    .single();
+    .single() as { data: { current_mood: CompanionMoodState | null } | null };
   
   if (data?.current_mood) {
     return data.current_mood as CompanionMoodState;
@@ -523,11 +518,11 @@ export async function updateCompanionMood(
   mood: CompanionMoodState
 ): Promise<void> {
   const supabase = await createClient();
-  
-  const { error } = await (supabase
-    .from('companions') as any)
-    .update({ current_mood: mood })
-    .eq('id', companionId);
+
+  const { error } = await supabase
+    .from('companions')
+    .update({ current_mood: JSON.parse(JSON.stringify(mood)) })
+    .eq('id', companionId) as { error: Error | null };
   
   if (error) {
     console.error('Error updating companion mood:', error);
@@ -556,26 +551,27 @@ export async function runSimulationTick(
   }
   
   const supabase = await createClient();
-  
+
   // Get companion data
-  const { data: companion } = await (supabase
-    .from('companions') as any)
+  const { data: companion } = await supabase
+    .from('companions')
     .select(`
       *,
       companion_dna (*),
       profiles:user_id (timezone)
     `)
     .eq('id', companionId)
-    .single();
+    .single() as { data: Companion & { companion_dna: CompanionDNA | null; profiles: { timezone?: string } | null } | null };
   
   if (!companion) {
     return { moodChanged: false, thoughtOfUser: false };
   }
   
   const timezone = (companion.profiles as { timezone?: string } | undefined)?.timezone;
-  
-  // Check if sleeping
-  if (isCompanionSleeping(companion, timezone || undefined)) {
+
+  // Check if sleeping - use default schedule since companion doesn't have sleep_schedule field
+  const companionWithSchedule = { sleep_schedule: { wake: '07:00', sleep: '23:00' } };
+  if (isCompanionSleeping(companionWithSchedule, timezone || undefined)) {
     await updateSimulationState(companionId, { is_sleeping: true });
     return { moodChanged: false, thoughtOfUser: false };
   }
@@ -629,11 +625,11 @@ export async function runSimulationTick(
   }
   
   // Save activity
-  const { data: savedActivity, error: activityError } = await (supabase
-    .from('companion_activities') as any)
+  const { data: savedActivity, error: activityError } = await supabase
+    .from('companion_activities')
     .insert(activity)
     .select()
-    .single();
+    .single() as unknown as { data: CompanionActivityRow | null; error: Error | null };
   
   if (activityError) {
     console.error('Error saving activity:', activityError);
@@ -680,13 +676,15 @@ export async function runSimulationTick(
     );
     
     // Update activity with user thinking context
-    await (supabase
-      .from('companion_activities') as any)
-      .update({
-        thinking_of_user: true,
-        user_mention_context: context,
-      })
-      .eq('id', savedActivity?.id);
+    if (savedActivity?.id) {
+      await supabase
+        .from('companion_activities')
+        .update({
+          thinking_of_user: true,
+          user_mention_context: context,
+        })
+        .eq('id', savedActivity.id) as unknown as Promise<{ error: Error | null }>;
+    }
   }
   
   // Create life event

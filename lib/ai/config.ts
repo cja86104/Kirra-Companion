@@ -43,12 +43,19 @@ export const AI_CONFIG = {
 
 /**
  * Get the appropriate model based on subscription tier
- * Using DeepSeek for all tiers - differentiate by limits, not model quality
+ * Currently all tiers use the same model - differentiation is in limits, not model quality
  */
 export function getModelForTier(tier: string): string {
-  // All tiers get the same great model
-  // Differentiation is in message limits and features, not AI quality
-  return AI_CONFIG.deepseek.models.chat;
+  // All tiers currently get the same model
+  // Structure ready for future tier-based model selection
+  switch (tier) {
+    case 'ultimate':
+    case 'pro':
+    case 'basic':
+    case 'free':
+    default:
+      return AI_CONFIG.deepseek.models.chat;
+  }
 }
 
 /**

@@ -36,7 +36,6 @@ import { getClient } from '@/lib/supabase/client';
 import { NiceAvatarCustomizer } from '@/components/avatar/NiceAvatarCustomizer';
 import type { Companion, Json } from '@/types/database';
 import type { NiceAvatarConfig } from '@/types/nice-avatar';
-import { DEFAULT_NICE_AVATAR_CONFIG } from '@/types/nice-avatar';
 
 // ============================================================================
 // TYPES

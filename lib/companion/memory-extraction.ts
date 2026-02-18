@@ -18,12 +18,6 @@ interface ExtractedMemory {
   importance: number; // 0-1
 }
 
-interface ChatContext {
-  companionId: string;
-  userMessage: string;
-  companionResponse: string;
-}
-
 // ============================================================
 // EXTRACTION PATTERNS
 // ============================================================
@@ -80,8 +74,7 @@ const EXTRACTION_PATTERNS: {
  */
 export function extractMemoriesFromMessage(userMessage: string): ExtractedMemory[] {
   const memories: ExtractedMemory[] = [];
-  const lowerMessage = userMessage.toLowerCase();
-  
+
   for (const { pattern, category, importance, titleTemplate } of EXTRACTION_PATTERNS) {
     const match = userMessage.match(pattern);
     if (match) {

@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils/cn';
 
 interface MemorySearchProps {
   companionId: string;
@@ -53,7 +52,8 @@ export function MemorySearch({ companionId, onResultSelect }: MemorySearchProps)
 
       const data = await response.json();
       setResults(data.results || []);
-    } catch (error) {
+    } catch (searchError) {
+      console.error('Memory search error:', searchError);
       toast.error('Failed to search memories');
       setResults([]);
     } finally {

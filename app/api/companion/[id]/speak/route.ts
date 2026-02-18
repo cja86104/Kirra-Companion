@@ -188,13 +188,18 @@ export async function POST(
 
     // Update companion voice minutes (non-blocking)
     const newVoiceMinutes = (companion.total_voice_minutes || 0) + (speechResult.estimatedDuration / 60);
-    
-    supabase
-      .from('companions')
-      .update({ total_voice_minutes: newVoiceMinutes } as never)
-      .eq('id', companionId)
-      .then(() => {})
-      .catch(err => console.error('Voice minutes update error:', err));
+
+    // Fire and forget - don't await
+    (async () => {
+      try {
+        await supabase
+          .from('companions')
+          .update({ total_voice_minutes: newVoiceMinutes })
+          .eq('id', companionId);
+      } catch (err) {
+        console.error('Voice minutes update error:', err);
+      }
+    })();
 
     // Build response headers
     const headers: Record<string, string> = {

@@ -33,7 +33,7 @@ interface ProfileTier {
  * Provider: OpenAI TTS
  * Optimization: Sentence-level generation for lower perceived latency
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createClient();
 

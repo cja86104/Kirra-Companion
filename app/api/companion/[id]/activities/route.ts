@@ -68,14 +68,14 @@ export async function GET(
     }
     
     // Build query
-    let query = (supabase.from('companion_activities') as any)
+    let query = supabase.from('companion_activities')
       .select('*', { count: 'exact' })
       .eq('companion_id', companionId)
       .order('started_at', { ascending: false });
-    
+
     // Apply filters
     if (category) {
-      query = query.eq('category', category);
+      query = query.eq('activity_category', category);
     }
     
     if (fromDate) {
@@ -92,10 +92,10 @@ export async function GET(
     
     // Apply cursor pagination
     if (cursor) {
-      const { data: cursorActivity } = await ((supabase.from('companion_activities') as any)
+      const { data: cursorActivity } = await supabase.from('companion_activities')
         .select('started_at')
         .eq('id', cursor)
-        .single()) as { data: { started_at: string } | null };
+        .single();
       
       if (cursorActivity) {
         query = query.lt('started_at', cursorActivity.started_at);
@@ -301,28 +301,28 @@ export async function PUT(
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     
-    const { data: weeklyActivities } = await ((supabase.from('companion_activities') as any)
-      .select('category')
+    const { data: weeklyActivities } = await supabase.from('companion_activities')
+      .select('activity_category')
       .eq('companion_id', companionId)
-      .gte('started_at', weekAgo.toISOString())) as { data: { category: string }[] | null };
+      .gte('started_at', weekAgo.toISOString());
     
     // Count by category
     const categoryCounts: Record<string, number> = {};
     for (const activity of weeklyActivities || []) {
-      const cat = activity.category;
+      const cat = activity.activity_category;
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
     }
-    
+
     // Get total activity count
-    const { count: totalCount } = await ((supabase.from('companion_activities') as any)
+    const { count: totalCount } = await supabase.from('companion_activities')
       .select('id', { count: 'exact', head: true })
-      .eq('companion_id', companionId)) as { count: number | null };
-    
+      .eq('companion_id', companionId);
+
     // Get thoughts of user count
-    const { count: thoughtsCount } = await ((supabase.from('companion_activities') as any)
+    const { count: thoughtsCount } = await supabase.from('companion_activities')
       .select('id', { count: 'exact', head: true })
       .eq('companion_id', companionId)
-      .eq('thinking_of_user', true)) as { count: number | null };
+      .eq('thinking_of_user', true);
     
     return NextResponse.json({
       simulation_state: state,

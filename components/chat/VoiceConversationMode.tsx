@@ -15,7 +15,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Phone, PhoneOff, Mic, MicOff, Loader2, Volume2 } from 'lucide-react';
+import { Phone, PhoneOff, Mic, Loader2, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -75,7 +75,6 @@ export function VoiceConversationMode({
   onEnd,
   onSendMessage,
   companionName,
-  companionId,
   hasVoiceEnabled,
 }: VoiceConversationModeProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -212,7 +211,7 @@ export function VoiceConversationMode({
             if (isActiveRef.current && recognitionRef.current) {
               try {
                 recognitionRef.current.start();
-              } catch (e) {
+              } catch {
                 // Already started or other error
               }
             }

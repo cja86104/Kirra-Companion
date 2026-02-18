@@ -10,30 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { getClient } from '@/lib/supabase/client';
 
-// Pre-made avatar options with diverse representations
-const PREMADE_AVATARS = [
-  // Friendly/Approachable
-  { id: 'avatar-friendly-1', url: '/avatars/friendly-1.png', category: 'friendly', description: 'Warm smile' },
-  { id: 'avatar-friendly-2', url: '/avatars/friendly-2.png', category: 'friendly', description: 'Gentle eyes' },
-  { id: 'avatar-friendly-3', url: '/avatars/friendly-3.png', category: 'friendly', description: 'Soft expression' },
-  
-  // Professional/Mentor
-  { id: 'avatar-mentor-1', url: '/avatars/mentor-1.png', category: 'mentor', description: 'Wise presence' },
-  { id: 'avatar-mentor-2', url: '/avatars/mentor-2.png', category: 'mentor', description: 'Thoughtful' },
-  { id: 'avatar-mentor-3', url: '/avatars/mentor-3.png', category: 'mentor', description: 'Knowledgeable' },
-  
-  // Playful/Fun
-  { id: 'avatar-playful-1', url: '/avatars/playful-1.png', category: 'playful', description: 'Cheerful' },
-  { id: 'avatar-playful-2', url: '/avatars/playful-2.png', category: 'playful', description: 'Energetic' },
-  { id: 'avatar-playful-3', url: '/avatars/playful-3.png', category: 'playful', description: 'Mischievous' },
-  
-  // Calm/Serene
-  { id: 'avatar-serene-1', url: '/avatars/serene-1.png', category: 'serene', description: 'Peaceful' },
-  { id: 'avatar-serene-2', url: '/avatars/serene-2.png', category: 'serene', description: 'Tranquil' },
-  { id: 'avatar-serene-3', url: '/avatars/serene-3.png', category: 'serene', description: 'Calm presence' },
-];
-
-// Generate placeholder gradient avatars if images don't exist
+// Generate placeholder gradient avatars
 const GRADIENT_AVATARS = [
   { id: 'gradient-1', gradient: 'from-pink-400 to-purple-500', emoji: '💜' },
   { id: 'gradient-2', gradient: 'from-blue-400 to-cyan-500', emoji: '💙' },

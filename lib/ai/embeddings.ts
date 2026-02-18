@@ -49,12 +49,12 @@ export async function generateEmbedding(
   } catch (error) {
     if (error instanceof OpenAI.APIError) {
       console.error(`OpenAI Embeddings Error: ${error.status} - ${error.message}`);
-      
+
       if (error.status === 429) {
-        throw new Error('Rate limit exceeded for embeddings. Please try again.');
+        throw new Error('Rate limit exceeded for embeddings. Please try again.', { cause: error });
       }
     }
-    
+
     throw error;
   }
 }

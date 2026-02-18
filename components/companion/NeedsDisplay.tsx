@@ -13,7 +13,6 @@ import {
   Minus,
 } from 'lucide-react';
 
-import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils/cn';
 import { 

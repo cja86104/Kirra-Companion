@@ -35,7 +35,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { AffectionMeter } from '@/components/ui/progress';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import type { Profile, Companion, MoodState } from '@/types/database';
+import type { Profile, Companion } from '@/types/database';
 
 interface SidebarProps {
   user: Profile;

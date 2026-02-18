@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { LifeEvent, LifeEventsResponse, EventSignificance } from '@/types/life-simulation';
+import type { LifeEventRow } from '@/types/life-simulation-db';
 
 /**
  * GET /api/companion/[id]/life-events
@@ -62,14 +63,15 @@ export async function GET(
     }
     
     // Build query
-    let query = (supabase.from('life_events') as any)
+    let query = supabase
+      .from('life_events')
       .select('*', { count: 'exact' })
       .eq('companion_id', companionId)
       .order('occurred_at', { ascending: false });
     
     // Apply filters
     if (significance) {
-      query = query.eq('significance', significance);
+      query = query.filter('significance', 'eq', significance);
     }
     
     if (eventType) {
@@ -96,11 +98,12 @@ export async function GET(
     
     // Apply cursor pagination
     if (cursor) {
-      const { data: cursorEvent } = await ((supabase.from('life_events') as any)
+      const { data: cursorEvent } = await supabase
+        .from('life_events')
         .select('occurred_at')
         .eq('id', cursor)
-        .single()) as { data: { occurred_at: string } | null };
-      
+        .single() as unknown as { data: Pick<LifeEventRow, 'occurred_at'> | null };
+
       if (cursorEvent) {
         query = query.lt('occurred_at', cursorEvent.occurred_at);
       }
@@ -125,7 +128,7 @@ export async function GET(
     const nextCursor = hasMore ? resultEvents[resultEvents.length - 1]?.id : null;
     
     const response: LifeEventsResponse = {
-      events: resultEvents as LifeEvent[],
+      events: resultEvents as unknown as LifeEvent[],
       total: count || 0,
       hasMore,
       cursor: nextCursor,
@@ -207,13 +210,14 @@ export async function POST(
     
     if (action === 'mark_shared') {
       // Mark as shared with user
-      const { error: updateError } = await ((supabase.from('life_events') as any)
+      const { error: updateError } = await supabase
+        .from('life_events')
         .update({
           shared_with_user: true,
           shared_at: new Date().toISOString(),
         })
-        .eq('id', eventId));
-      
+        .eq('id', eventId) as unknown as { error: Error | null };
+
       if (updateError) {
         console.error('Error marking event as shared:', updateError);
         return NextResponse.json(

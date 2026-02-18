@@ -562,7 +562,7 @@ async function updateDialectDNA(
   };
   
   // Combine regex-extracted and AI-extracted phrases
-  let newPhrases = [...evolution.newPhrases];
+  const newPhrases = [...evolution.newPhrases];
   
   if (aiAnalysis) {
     // Add AI-detected unique phrases

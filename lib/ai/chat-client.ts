@@ -247,7 +247,7 @@ export async function createChatCompletion(
       console.error('Chat completion error:', error.message);
       throw error;
     }
-    throw new Error('Unknown error during chat completion');
+    throw new Error('Unknown error during chat completion', { cause: error });
   }
 }
 

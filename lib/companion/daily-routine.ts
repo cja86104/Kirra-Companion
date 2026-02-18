@@ -19,6 +19,11 @@ import type {
   ActivityCategory,
 } from '@/types/life-simulation';
 import type { Companion, CompanionDNA } from '@/types/database';
+import type { DailyRoutineRow, CompanionInterestRow } from '@/types/life-simulation-db';
+
+interface CompanionDNAPersonality {
+  personality_traits?: Record<string, number>;
+}
 
 // ============================================================================
 // Routine Templates
@@ -328,7 +333,7 @@ function selectRoutineTemplate(
 }
 
 /**
- * Personalize a routine based on specific traits
+ * Personalize a routine based on specific traits and interests
  */
 function personalizeRoutine(
   template: RoutineTemplate,
@@ -338,32 +343,56 @@ function personalizeRoutine(
   // Adjust times slightly based on personality
   const conscientiousness = personality.conscientiousness ?? 0.5;
   const extraversion = personality.extraversion ?? 0.5;
-  
+
   // More conscientious = earlier wake time
   const wakeHour = parseInt(template.wakeTime.split(':')[0]);
   const adjustedWakeHour = wakeHour - Math.floor((conscientiousness - 0.5) * 2);
   const adjustedWakeTime = `${String(Math.max(5, Math.min(10, adjustedWakeHour))).padStart(2, '0')}:00`;
-  
+
   // More extraverted = later sleep time
   const sleepHour = parseInt(template.sleepTime.split(':')[0]);
   const adjustedSleepHour = sleepHour + Math.floor((extraversion - 0.5) * 2);
   const adjustedSleepTime = `${String(Math.max(21, Math.min(26, adjustedSleepHour)) % 24).padStart(2, '0')}:00`;
-  
-  // Adjust slot probabilities based on energy pattern
-  const slots = template.slots.map(slot => ({
-    ...slot,
-    probability: Math.min(1, slot.probability + (Math.random() * 0.1 - 0.05)),
-  }));
-  
-  // Adjust social windows based on extraversion
+
+  // Categorize interests to adjust slot probabilities
+  const interestLower = interests.map(i => i.toLowerCase());
+  const hasCreativeInterests = interestLower.some(i =>
+    i.includes('art') || i.includes('music') || i.includes('writing') || i.includes('craft')
+  );
+  const hasIntellectualInterests = interestLower.some(i =>
+    i.includes('reading') || i.includes('learning') || i.includes('science') || i.includes('history')
+  );
+  const hasSocialInterests = interestLower.some(i =>
+    i.includes('social') || i.includes('friends') || i.includes('community')
+  );
+
+  // Adjust slot probabilities based on interests
+  const slots = template.slots.map(slot => {
+    let probabilityBoost = 0;
+    const slotActivities = slot.preferredCategories.join(' ').toLowerCase();
+
+    if (hasCreativeInterests && (slotActivities.includes('creative') || slotActivities.includes('art'))) {
+      probabilityBoost += 0.1;
+    }
+    if (hasIntellectualInterests && (slotActivities.includes('learn') || slotActivities.includes('read'))) {
+      probabilityBoost += 0.1;
+    }
+
+    return {
+      ...slot,
+      probability: Math.min(1, slot.probability + probabilityBoost + (Math.random() * 0.1 - 0.05)),
+    };
+  });
+
+  // Adjust social windows based on extraversion and social interests
   let socialWindows = [...template.socialWindows];
-  if (extraversion > 0.6 && !socialWindows.includes('night')) {
+  if ((extraversion > 0.6 || hasSocialInterests) && !socialWindows.includes('night')) {
     socialWindows.push('night');
   }
-  if (extraversion < 0.4 && socialWindows.length > 2) {
+  if (extraversion < 0.4 && !hasSocialInterests && socialWindows.length > 2) {
     socialWindows = socialWindows.slice(0, 2);
   }
-  
+
   return {
     name: template.name,
     is_default: true,
@@ -385,7 +414,8 @@ export async function generateDailyRoutine(
   
   // Get personality traits
   const personality = (companion.personality_base as unknown as Record<string, number>) || {};
-  const dnaTraits = ((companion.companion_dna as any)?.personality_traits as Record<string, number>) || {};
+  const dnaData = companion.companion_dna as CompanionDNAPersonality | undefined;
+  const dnaTraits = (dnaData?.personality_traits as Record<string, number>) || {};
   
   // Merge personality sources
   const mergedPersonality = {
@@ -397,37 +427,43 @@ export async function generateDailyRoutine(
   };
   
   // Get interests for personalization
-  const { data: interests } = await (supabase
-    .from('companion_interests') as any)
-    .select('name')
+  const { data: interests } = await supabase
+    .from('companion_interests')
+    .select('interest_name')
     .eq('companion_id', companion.id)
-    .limit(10);
-  
-  const interestNames = (interests || []).map((i: { name: string }) => i.name);
+    .limit(10) as unknown as { data: Pick<CompanionInterestRow, 'interest_name'>[] | null };
+
+  const interestNames = (interests || []).map((i) => i.interest_name);
   
   // Select and personalize template
   const template = selectRoutineTemplate(mergedPersonality);
   const routineData = personalizeRoutine(template, mergedPersonality, interestNames);
   
   // Check for existing routine
-  const { data: existingRoutine } = await (supabase
-    .from('daily_routines') as any)
+  const { data: existingRoutine } = await supabase
+    .from('daily_routines')
     .select('id')
     .eq('companion_id', companion.id)
     .eq('is_default', true)
-    .single();
+    .single() as unknown as { data: Pick<DailyRoutineRow, 'id'> | null };
   
   if (existingRoutine) {
     // Update existing
-    const { data, error } = await (supabase
-      .from('daily_routines') as any)
+    const { data, error } = await supabase
+      .from('daily_routines')
       .update({
-        ...routineData,
+        name: routineData.name,
+        is_default: routineData.is_default,
+        slots: JSON.parse(JSON.stringify(routineData.slots)),
+        wake_time: routineData.wake_time,
+        sleep_time: routineData.sleep_time,
+        energy_pattern: routineData.energy_pattern,
+        social_windows: JSON.parse(JSON.stringify(routineData.social_windows)),
         updated_at: new Date().toISOString(),
       })
       .eq('id', existingRoutine.id)
       .select()
-      .single();
+      .single() as unknown as { data: DailyRoutineRow | null; error: Error | null };
     
     if (error) {
       console.error('Error updating routine:', error);
@@ -438,14 +474,20 @@ export async function generateDailyRoutine(
   }
   
   // Create new
-  const { data, error } = await (supabase
-    .from('daily_routines') as any)
+  const { data, error } = await supabase
+    .from('daily_routines')
     .insert({
       companion_id: companion.id,
-      ...routineData,
+      name: routineData.name,
+      is_default: routineData.is_default,
+      slots: JSON.parse(JSON.stringify(routineData.slots)),
+      wake_time: routineData.wake_time,
+      sleep_time: routineData.sleep_time,
+      energy_pattern: routineData.energy_pattern,
+      social_windows: JSON.parse(JSON.stringify(routineData.social_windows)),
     })
     .select()
-    .single();
+    .single() as unknown as { data: DailyRoutineRow | null; error: Error | null };
   
   if (error) {
     console.error('Error creating routine:', error);
@@ -598,12 +640,12 @@ export async function adaptRoutineToUser(
   const newSocialWindows = Array.from(userTimeOfDays).slice(0, 4) as TimeOfDay[];
   
   if (JSON.stringify(newSocialWindows.sort()) !== JSON.stringify(routine.social_windows.sort())) {
-    await (supabase
-      .from('daily_routines') as any)
+    await supabase
+      .from('daily_routines')
       .update({
         social_windows: newSocialWindows,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', routine.id);
+      .eq('id', routine.id) as unknown as Promise<{ error: Error | null }>;
   }
 }

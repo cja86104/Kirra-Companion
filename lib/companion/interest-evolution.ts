@@ -13,7 +13,6 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type {
   CompanionInterest,
   CompanionInterestInsert,
@@ -23,10 +22,6 @@ import type {
   InterestConnection,
   ActivityCategory,
 } from '@/types/life-simulation';
-import type { 
-  Companion, 
-  CompanionDNA,
-} from '@/types/database';
 import type {
   CompanionInterestRow,
   InterestConnectionRow,
@@ -427,10 +422,11 @@ export async function discoverNewInterest(
     favorite_aspects: selectedAspects,
   };
   
-  const { data, error } = await ((supabase.from('companion_interests') as any)
+  const { data, error } = await supabase
+    .from('companion_interests')
     .insert(newInterest)
     .select()
-    .single()) as { data: CompanionInterestRow | null; error: Error | null };
+    .single() as unknown as { data: CompanionInterestRow | null; error: Error | null };
   
   if (error) {
     console.error('Error creating interest:', error);
@@ -487,6 +483,7 @@ export async function discoverInterestFromConversation(
 
 /**
  * Add experience to an interest and potentially level it up
+ * @param context - Optional description of why XP was gained (e.g., "practiced during activity")
  */
 export async function addInterestExperience(
   interestId: string,
@@ -494,15 +491,20 @@ export async function addInterestExperience(
   context?: string
 ): Promise<{ leveledUp: boolean; newStage?: InterestStage }> {
   const supabase = await createClient();
-  
+
   const { data: interest } = await supabase
     .from('companion_interests')
     .select('*')
     .eq('id', interestId)
     .single() as unknown as { data: CompanionInterestRow | null };
-  
+
   if (!interest) {
     return { leveledUp: false };
+  }
+
+  // Log experience gain with context for debugging/analytics
+  if (context) {
+    console.log(`[Interest XP] ${interest.interest_name}: +${experienceGained} XP (${context})`);
   }
   
   const newXP = (interest.experience_points || 0) + experienceGained;
@@ -535,7 +537,8 @@ export async function addInterestExperience(
   const strengthGain = experienceGained * 0.1;
   const newStrength = Math.min(100, (interest.strength || 0) + strengthGain);
   
-  await ((supabase.from('companion_interests') as any)
+  await supabase
+    .from('companion_interests')
     .update({
       experience_points: newXP,
       times_practiced: newTimesPracticed,
@@ -543,7 +546,7 @@ export async function addInterestExperience(
       strength: newStrength,
       last_engaged: new Date().toISOString(),
     })
-    .eq('id', interestId));
+    .eq('id', interestId) as unknown as Promise<{ error: Error | null }>;
   
   return { leveledUp, newStage: leveledUp ? newStage : undefined };
 }
@@ -573,9 +576,10 @@ export async function decayInterestStrength(companionId: string): Promise<void> 
       const newStrength = Math.max(5, interest.strength - decayAmount);
       
       if (newStrength !== interest.strength) {
-        await ((supabase.from('companion_interests') as any)
+        await supabase
+          .from('companion_interests')
           .update({ strength: newStrength })
-          .eq('id', interest.id));
+          .eq('id', interest.id) as unknown as Promise<{ error: Error | null }>;
       }
     }
   }
@@ -603,7 +607,8 @@ export async function connectInterests(
     return existing as InterestConnection;
   }
   
-  const { data, error } = await ((supabase.from('interest_connections') as any)
+  const { data, error } = await supabase
+    .from('interest_connections')
     .insert({
       interest_id: interestId,
       related_interest_id: relatedInterestId,
@@ -612,7 +617,7 @@ export async function connectInterests(
       discovered_at: new Date().toISOString(),
     })
     .select()
-    .single()) as { data: InterestConnectionRow | null; error: Error | null };
+    .single() as unknown as { data: InterestConnectionRow | null; error: Error | null };
   
   if (error) {
     console.error('Error creating interest connection:', error);
@@ -629,11 +634,12 @@ export async function connectInterests(
   if (interest) {
     const relatedIds = interest.related_interests || [];
     if (!relatedIds.includes(relatedInterestId)) {
-      await ((supabase.from('companion_interests') as any)
+      await supabase
+        .from('companion_interests')
         .update({
           related_interests: [...relatedIds, relatedInterestId],
         })
-        .eq('id', interestId));
+        .eq('id', interestId) as unknown as Promise<{ error: Error | null }>;
     }
   }
   

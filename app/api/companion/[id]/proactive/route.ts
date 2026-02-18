@@ -15,7 +15,6 @@ import {
   generateProactiveMessage,
   markMessageSeen,
   markMessageResponded,
-  getPendingMessages,
 } from '@/lib/companion/proactive-messaging';
 import type { ProactiveMessage, ProactiveTriggerType } from '@/types/proactive';
 
@@ -64,21 +63,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const includeExpired = searchParams.get('include_expired') === 'true';
     
     // Build query
-    let query = (supabase.from('proactive_messages') as any)
+    let query = supabase
+      .from('proactive_messages')
       .select('*')
       .eq('companion_id', companionId)
       .order('created_at', { ascending: false })
       .limit(Math.min(limit, 100));
-    
+
     if (status && status !== 'all') {
       query = query.eq('status', status);
     } else if (!includeExpired) {
       query = query.neq('status', 'expired');
     }
-    
-    const { data: messages, error } = await query as { 
-      data: ProactiveMessage[] | null; 
-      error: Error | null 
+
+    const { data: messages, error } = await query as unknown as {
+      data: ProactiveMessage[] | null;
+      error: Error | null;
     };
     
     if (error) {
@@ -90,10 +90,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     
     // Count pending messages
-    const { count: pendingCount } = await ((supabase.from('proactive_messages') as any)
+    const { count: pendingCount } = await supabase
+      .from('proactive_messages')
       .select('id', { count: 'exact', head: true })
       .eq('companion_id', companionId)
-      .in('status', ['pending', 'sent'])) as { count: number | null };
+      .in('status', ['pending', 'sent']) as unknown as { count: number | null };
     
     return NextResponse.json({
       messages: messages || [],
@@ -264,11 +265,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     
     // Verify message belongs to user
-    const { data: message } = await ((supabase.from('proactive_messages') as any)
+    const { data: message } = await supabase
+      .from('proactive_messages')
       .select('id, user_id, companion_id')
       .eq('id', message_id)
       .eq('user_id', user.id)
-      .single()) as { data: { id: string; user_id: string; companion_id: string } | null };
+      .single() as unknown as { data: { id: string; user_id: string; companion_id: string } | null };
     
     if (!message) {
       return NextResponse.json(

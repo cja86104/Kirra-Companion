@@ -76,9 +76,7 @@ export async function POST(request: NextRequest) {
         });
       }
     } else {
-      // Get all active companions that haven't had a proactive check recently
-      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-      
+      // Get all active companions that are due for a proactive check
       // Get companions with their simulation states
       const { data: companions, error } = await supabaseAdmin
         .from('companions')

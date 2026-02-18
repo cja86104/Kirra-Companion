@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Trophy, 
+import {
+  Trophy,
   ArrowLeft,
-  Calendar,
   MessageCircle,
   Sparkles,
 } from 'lucide-react';

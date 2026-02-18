@@ -536,7 +536,7 @@ export async function getBestScore(
     
     const result = data as { score: number; total_questions: number };
     return result.score;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

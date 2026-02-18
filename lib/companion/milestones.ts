@@ -235,13 +235,7 @@ export async function getCompanionMilestoneStats(
     return null;
   }
   
-  // Get total messages count
-  const { count: messageCount } = await supabase
-    .from('messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('conversation_id', companionId);
-  
-  // Actually need to get conversation first, then messages
+  // Get conversations for this companion, then count messages
   const { data: conversations } = await supabase
     .from('conversations')
     .select('id')

@@ -271,7 +271,7 @@ export function calculateOverallMood(needs: CompanionNeeds): { mood: OverallMood
  * Get mood description for companion responses
  */
 export function getMoodInfluence(needs: CompanionNeeds): string {
-  const { mood, score } = calculateOverallMood(needs);
+  const { mood } = calculateOverallMood(needs);
   const urgentNeed = getMostUrgentNeed(needs);
   
   let influence = '';

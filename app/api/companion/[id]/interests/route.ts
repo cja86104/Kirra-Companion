@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
-  getCompanionInterests,
-  getTopInterests,
   getUserSharedInterests,
   getRecentlyActiveInterests,
   discoverNewInterest,
   addInterestExperience,
-  getInterestSuggestions,
   INTEREST_TEMPLATES,
 } from '@/lib/companion/interest-evolution';
 import type {
@@ -16,6 +13,7 @@ import type {
   InterestCategory,
   InterestOrigin,
 } from '@/types/life-simulation';
+import type { CompanionInterestRow } from '@/types/life-simulation-db';
 
 /**
  * GET /api/companion/[id]/interests
@@ -67,8 +65,9 @@ export async function GET(
       );
     }
     
-    // Build query
-    let query = (supabase.from('companion_interests') as any)
+    // Build query - use type assertion for tables not in generated types
+    let query = supabase
+      .from('companion_interests')
       .select('*')
       .eq('companion_id', companionId)
       .order('strength', { ascending: false });
@@ -104,7 +103,7 @@ export async function GET(
     // Get category counts
     const categoryCounts: Record<InterestCategory, number> = {} as Record<InterestCategory, number>;
     for (const interest of interests || []) {
-      const cat = interest.category as InterestCategory;
+      const cat = interest.interest_category as InterestCategory;
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
     }
     
@@ -303,11 +302,12 @@ export async function PUT(
     }
     
     // Verify interest belongs to companion
-    const { data: interest } = await ((supabase.from('companion_interests') as any)
+    const { data: interest } = await supabase
+      .from('companion_interests')
       .select('*')
       .eq('id', interest_id)
       .eq('companion_id', companionId)
-      .single()) as { data: { strength: number; conversation_mentions: number } | null };
+      .single() as unknown as { data: Pick<CompanionInterestRow, 'strength' | 'conversation_mentions'> | null };
     
     if (!interest) {
       return NextResponse.json(
@@ -321,10 +321,11 @@ export async function PUT(
       const result = await addInterestExperience(interest_id, experienceAmount, context);
       
       // Fetch updated interest
-      const { data: updatedInterest } = await ((supabase.from('companion_interests') as any)
+      const { data: updatedInterest } = await supabase
+        .from('companion_interests')
         .select('*')
         .eq('id', interest_id)
-        .single());
+        .single() as unknown as { data: CompanionInterestRow | null };
       
       return NextResponse.json({
         success: true,
@@ -336,12 +337,13 @@ export async function PUT(
     
     if (action === 'update_strength') {
       const newStrength = Math.max(0, Math.min(100, typeof amount === 'number' ? amount : interest.strength));
-      
-      const { data: updatedInterest, error: updateError } = await ((supabase.from('companion_interests') as any)
+
+      const { data: updatedInterest, error: updateError } = await supabase
+        .from('companion_interests')
         .update({ strength: newStrength })
         .eq('id', interest_id)
         .select()
-        .single());
+        .single() as unknown as { data: CompanionInterestRow | null; error: Error | null };
       
       if (updateError) {
         return NextResponse.json(
@@ -358,14 +360,15 @@ export async function PUT(
     
     if (action === 'increment_mentions') {
       // Increment conversation mentions count
-      const { data: updatedInterest, error: updateError } = await ((supabase.from('companion_interests') as any)
-        .update({ 
+      const { data: updatedInterest, error: updateError } = await supabase
+        .from('companion_interests')
+        .update({
           conversation_mentions: (interest.conversation_mentions || 0) + 1,
           last_engaged_at: new Date().toISOString(),
         })
         .eq('id', interest_id)
         .select()
-        .single());
+        .single() as unknown as { data: CompanionInterestRow | null; error: Error | null };
       
       if (updateError) {
         return NextResponse.json(

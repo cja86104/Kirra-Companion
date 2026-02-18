@@ -120,7 +120,7 @@ export interface CompanionInterestRow {
   id: string;
   companion_id: string;
   interest_name: string;
-  interest_category: string;
+  interest_category: InterestCategory;
   interest_level: number | null;
   growth_rate: number | null;
   source: string | null;
@@ -136,17 +136,17 @@ export interface CompanionInterestRow {
   // New columns added by migration
   strength: number;
   experience_points: number;
-  stage: string;
+  stage: InterestStage;
   related_interests: string[];
   favorite_aspects: string[];
-  origin: string;
+  origin: InterestOrigin;
   conversation_mentions: number;
 }
 
 export interface CompanionInterestRowInsert {
   companion_id: string;
   interest_name: string;
-  interest_category: string;
+  interest_category: InterestCategory;
   interest_level?: number | null;
   growth_rate?: number | null;
   source?: string | null;
@@ -155,8 +155,8 @@ export interface CompanionInterestRowInsert {
   user_interest_level?: number | null;
   is_active?: boolean;
   // New columns
-  origin?: string;
-  stage?: string;
+  origin?: InterestOrigin;
+  stage?: InterestStage;
   strength?: number;
   experience_points?: number;
   related_interests?: string[];
@@ -165,9 +165,9 @@ export interface CompanionInterestRowInsert {
 
 export interface CompanionInterestRowUpdate {
   interest_name?: string;
-  interest_category?: string;
+  interest_category?: InterestCategory;
   interest_level?: number | null;
-  stage?: string;
+  stage?: InterestStage;
   strength?: number;
   experience_points?: number;
   last_engaged?: string;

@@ -10,18 +10,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  MessageCircle, 
-  Plus, 
-  Search, 
-  ArrowRight, 
+import { motion } from 'framer-motion';
+import {
+  MessageCircle,
+  Plus,
+  Search,
   Heart,
   Star,
-  Sparkles,
-  Clock,
-  TrendingUp,
-  Zap,
   ChevronRight,
 } from 'lucide-react';
 
@@ -29,7 +24,7 @@ import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClient } from '@/lib/supabase/client';
-import type { Companion } from '@/types/database';
+import type { Companion, MoodState } from '@/types/database';
 
 interface CompanionWithLastMessage extends Companion {
   lastMessage?: string;
@@ -188,7 +183,7 @@ export default function ChatPage() {
     return then.toLocaleDateString();
   };
 
-  const getMoodConfig = (mood: any) => {
+  const getMoodConfig = (mood: MoodState | null | undefined) => {
     const primary = mood?.primary || 'neutral';
     return MOOD_CONFIGS[primary] || MOOD_CONFIGS.neutral;
   };
@@ -288,7 +283,7 @@ export default function ChatPage() {
         ) : (
           <div className="space-y-4">
             {filteredCompanions.map((companion, index) => {
-              const moodConfig = getMoodConfig(companion.current_mood);
+              const moodConfig = getMoodConfig(companion.current_mood as MoodState | null);
               
               return (
                 <motion.div

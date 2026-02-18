@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Gamepad2, Brain, Trophy } from 'lucide-react';
 
 import { getCurrentUser, getUserCompanions } from '@/lib/supabase/server';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 

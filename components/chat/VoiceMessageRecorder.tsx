@@ -10,7 +10,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Loader2, Square, X, Send } from 'lucide-react';
+import { Mic, Loader2, Square, X, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils/cn';
@@ -174,7 +174,7 @@ export function VoiceMessageRecorder({
         if (isRecording && recognitionRef.current) {
           try {
             recognition.start();
-          } catch (e) {
+          } catch {
             // Already started, ignore
           }
         }

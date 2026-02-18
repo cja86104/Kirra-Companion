@@ -17,9 +17,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
-import { Input, SearchInput } from '@/components/ui/input';
+import { SearchInput } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -45,6 +44,16 @@ interface Notification {
   occurred_at: string;
   companion_name: string;
   notified_at: string | null;
+}
+
+interface LifeEventRow {
+  id: string;
+  title: string;
+  description: string | null;
+  emoji: string | null;
+  occurred_at: string;
+  notified_at: string | null;
+  companions: { name: string } | null;
 }
 
 export function Navbar({ user }: NavbarProps) {
@@ -83,7 +92,7 @@ export function Navbar({ user }: NavbarProps) {
         }
 
         if (data) {
-          const mapped = data.map((item: any) => ({
+          const mapped = (data as LifeEventRow[]).map((item) => ({
             id: item.id,
             title: item.title,
             description: item.description,
@@ -152,7 +161,8 @@ export function Navbar({ user }: NavbarProps) {
       router.push('/');
       router.refresh();
       toast.success('Signed out successfully');
-    } catch (error) {
+    } catch (signOutError) {
+      console.error('Sign out error:', signOutError);
       toast.error('Failed to sign out');
     }
   };

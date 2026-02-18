@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import Avatar, { genConfig } from 'react-nice-avatar';
+import Avatar from 'react-nice-avatar';
 import { Shuffle, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';

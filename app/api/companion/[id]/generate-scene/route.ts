@@ -155,8 +155,8 @@ Guidelines:
   try {
     const analysis = JSON.parse(jsonStr) as SceneAnalysis;
     return analysis;
-  } catch (parseError) {
-    console.error('Failed to parse DeepSeek response:', content);
+  } catch (jsonParseError) {
+    console.error('Failed to parse DeepSeek response:', content, 'Error:', jsonParseError);
     // Return default analysis based on relationship type
     const defaults: Record<string, SceneAnalysis> = {
       romantic: {
@@ -282,7 +282,7 @@ async function uploadToSupabase(
   const filename = `${userId}/${companionId}/${timestamp}.jpg`;
 
   // Upload to Supabase Storage
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from('generated-scenes')
     .upload(filename, imageBuffer, {
       contentType: 'image/jpeg',

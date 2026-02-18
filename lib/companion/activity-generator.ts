@@ -15,7 +15,6 @@ import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type {
   ActivityTemplate,
   ActivityCategory,
-  ActivityIntensity,
   ActivityOutcome,
   TimeOfDay,
   CompanionMoodState,

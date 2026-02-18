@@ -32,7 +32,6 @@ import { createClient } from '@supabase/supabase-js';
 import {
   evolveCompanionDNA,
   isEvolutionDue,
-  type EvolutionAnalysis,
 } from '@/lib/companion/dna-evolution';
 
 // Use service role for cron operations

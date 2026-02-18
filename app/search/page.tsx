@@ -43,6 +43,25 @@ interface SearchResults {
   messages: MessageResult[];
 }
 
+// Raw query result types for Supabase joins
+interface MemoryQueryResult {
+  id: string;
+  title: string;
+  content: string;
+  companion_id: string;
+  importance_score: number;
+  companions: { name: string; user_id: string } | null;
+}
+
+interface MessageQueryResult {
+  id: string;
+  content: string;
+  role: string;
+  created_at: string;
+  companion_id: string;
+  companions: { name: string; user_id: string } | null;
+}
+
 function SearchPageContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
@@ -101,9 +120,9 @@ function SearchPageContent() {
         .limit(10);
 
       // Filter memories to user's companions and map
-      const memories = (memoriesData || [])
-        .filter((m: any) => m.companions?.user_id === user.id)
-        .map((m: any) => ({
+      const memories = ((memoriesData || []) as MemoryQueryResult[])
+        .filter((m) => m.companions?.user_id === user.id)
+        .map((m) => ({
           id: m.id,
           title: m.title,
           content: m.content,
@@ -129,9 +148,9 @@ function SearchPageContent() {
         .limit(10);
 
       // Filter messages to user's companions and map
-      const messages = (messagesData || [])
-        .filter((m: any) => m.companions?.user_id === user.id)
-        .map((m: any) => ({
+      const messages = ((messagesData || []) as MessageQueryResult[])
+        .filter((m) => m.companions?.user_id === user.id)
+        .map((m) => ({
           id: m.id,
           content: m.content,
           role: m.role,

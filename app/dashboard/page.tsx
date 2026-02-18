@@ -20,8 +20,6 @@ import {
   Heart,
   Sparkles,
   Moon,
-  Sun,
-  CloudMoon,
   Music,
   Book,
   Coffee,
@@ -32,31 +30,24 @@ import {
   ChevronRight,
   Star,
   Bell,
-  TreePine,
-  Sunrise,
   Plus,
   Trash2,
-  X,
   Settings,
-  Trophy,
   Calendar,
   TrendingUp,
   Zap,
-  Gift,
   Users,
   BookOpen,
   Activity,
   Target,
   Flame,
-  Award,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Progress } from '@/components/ui/progress';
 import { getClient } from '@/lib/supabase/client';
-import type { Companion, Profile, MoodState } from '@/types/database';
+import type { Companion } from '@/types/database';
 import type { CompanionNeeds } from '@/lib/companion/needs-system';
 
 // ============================================================================
@@ -310,7 +301,6 @@ function NeedBar({ name, value, icon, color }: { name: string; value: number; ic
 
 export default function DashboardPage() {
   const [companions, setCompanions] = useState<Companion[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [selectedCompanion, setSelectedCompanion] = useState<Companion | null>(null);
   const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([]);
   const [currentActivity, setCurrentActivity] = useState<CompanionActivity | null>(null);
@@ -344,14 +334,6 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      if (profileData) setProfile(profileData as Profile);
-
       const { data: companionsData } = await supabase
         .from('companions')
         .select('*')
@@ -373,22 +355,24 @@ export default function DashboardPage() {
       const supabase = getClient();
 
       // Life events
-      const { data: events } = await (supabase.from('life_events') as any)
+      const { data: events } = await supabase
+        .from('life_events')
         .select('id, event_type, title, description, emoji, occurred_at')
         .eq('companion_id', companionId)
         .order('occurred_at', { ascending: false })
-        .limit(8);
+        .limit(8) as unknown as { data: LifeEvent[] | null };
 
       if (events) setLifeEvents(events);
 
       // Current activity
-      const { data: activity } = await (supabase.from('companion_activities') as any)
-        .select('*')
+      const { data: activity } = await supabase
+        .from('companion_activities')
+        .select('id, activity_name, activity_category, started_at, ended_at')
         .eq('companion_id', companionId)
         .is('ended_at', null)
-        .single();
+        .single() as unknown as { data: CompanionActivity | null };
 
-      setCurrentActivity(activity || null);
+      setCurrentActivity(activity);
 
       // Memories
       const { data: memoriesData, count: memoriesCount } = await supabase
@@ -431,8 +415,8 @@ export default function DashboardPage() {
       await supabase.from('companion_memories').delete().eq('companion_id', companion.id);
       await supabase.from('messages').delete().eq('companion_id', companion.id);
       await supabase.from('conversations').delete().eq('companion_id', companion.id);
-      await (supabase.from('life_events') as any).delete().eq('companion_id', companion.id);
-      await (supabase.from('companion_activities') as any).delete().eq('companion_id', companion.id);
+      await (supabase.from('life_events').delete().eq('companion_id', companion.id) as unknown as Promise<{ error: Error | null }>);
+      await (supabase.from('companion_activities').delete().eq('companion_id', companion.id) as unknown as Promise<{ error: Error | null }>);
       
       const { error } = await supabase.from('companions').delete().eq('id', companion.id);
       

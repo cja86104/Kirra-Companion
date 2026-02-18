@@ -10,14 +10,11 @@ import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import {
   TRIGGER_CONFIGS,
-  MESSAGE_TEMPLATES,
   evaluateTrigger,
   selectTemplate,
   fillTemplate,
   hoursSince,
   getTimeOfDay,
-  RANDOM_THOUGHTS,
-  CURIOUS_QUESTIONS,
 } from './message-triggers';
 import {
   DEFAULT_PROACTIVE_PREFERENCES,
@@ -33,7 +30,13 @@ import type {
   MessagePriority,
 } from '@/types/proactive';
 import type { CompanionMoodState } from '@/types/life-simulation';
-import type { Companion, CompanionDNA, Profile } from '@/types/database';
+import type { Companion, CompanionDNA } from '@/types/database';
+import type {
+  SimulationStateRow,
+  LifeEventRow,
+  CompanionInterestRow,
+  CompanionActivityRow,
+} from '@/types/life-simulation-db';
 
 // ============================================================================
 // Main Functions
@@ -85,10 +88,11 @@ export async function checkProactiveTriggers(
   }
   
   // Get simulation state
-  const { data: simState } = await ((supabase.from('simulation_states') as any)
+  const { data: simState } = await supabase
+    .from('simulation_states')
     .select('*')
     .eq('companion_id', companionId)
-    .single()) as { data: { last_proactive_message_at: string | null } | null };
+    .single() as unknown as { data: Pick<SimulationStateRow, 'last_proactive_message_at'> | null };
   
   // Get user preferences (stored in companion settings or use defaults)
   const userProfile = companion.profiles;
@@ -149,31 +153,34 @@ export async function checkProactiveTriggers(
   );
   
   // Get recent life events that are shareable
-  const { data: recentEvents } = await ((supabase.from('life_events') as any)
+  const { data: recentEvents } = await supabase
+    .from('life_events')
     .select('event_type, title, description')
     .eq('companion_id', companionId)
     .eq('shareable', true)
     .eq('shared_with_user', false)
     .order('occurred_at', { ascending: false })
-    .limit(3)) as { data: { event_type: string; title: string; description: string }[] | null };
+    .limit(3) as unknown as { data: Pick<LifeEventRow, 'event_type' | 'title' | 'description'>[] | null };
   
   // Get recent interest discoveries
-  const { data: recentInterests } = await ((supabase.from('companion_interests') as any)
+  const { data: recentInterests } = await supabase
+    .from('companion_interests')
     .select('interest_name, interest_category')
     .eq('companion_id', companionId)
     .eq('shared_with_user', false)
     .order('developed_at', { ascending: false })
-    .limit(1)) as { data: { interest_name: string; interest_category: string }[] | null };
+    .limit(1) as unknown as { data: Pick<CompanionInterestRow, 'interest_name' | 'interest_category'>[] | null };
   
   // Check today's message count
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   
-  const { count: todayCount } = await ((supabase.from('proactive_messages') as any)
+  const { count: todayCount } = await supabase
+    .from('proactive_messages')
     .select('id', { count: 'exact', head: true })
     .eq('companion_id', companionId)
     .gte('created_at', todayStart.toISOString())
-    .neq('status', 'expired')) as { count: number | null };
+    .neq('status', 'expired') as unknown as { count: number | null };
   
   if ((todayCount ?? 0) >= preferences.maxPerDay) {
     return {
@@ -300,32 +307,35 @@ export async function generateProactiveMessage(
   );
   
   // Get recent shareable event
-  const { data: recentEvent } = await ((supabase.from('life_events') as any)
+  const { data: recentEvent } = await supabase
+    .from('life_events')
     .select('id, event_type, title, description')
     .eq('companion_id', companionId)
     .eq('shareable', true)
     .eq('shared_with_user', false)
     .order('occurred_at', { ascending: false })
     .limit(1)
-    .single()) as { data: { id: string; event_type: string; title: string; description: string } | null };
+    .single() as unknown as { data: Pick<LifeEventRow, 'id' | 'event_type' | 'title' | 'description'> | null };
   
   // Get recent interest
-  const { data: recentInterest } = await ((supabase.from('companion_interests') as any)
+  const { data: recentInterest } = await supabase
+    .from('companion_interests')
     .select('id, interest_name, interest_category')
     .eq('companion_id', companionId)
     .eq('shared_with_user', false)
     .order('developed_at', { ascending: false })
     .limit(1)
-    .single()) as { data: { id: string; interest_name: string; interest_category: string } | null };
+    .single() as unknown as { data: Pick<CompanionInterestRow, 'id' | 'interest_name' | 'interest_category'> | null };
   
   // Get current activity
-  const { data: currentActivity } = await ((supabase.from('companion_activities') as any)
+  const { data: currentActivity } = await supabase
+    .from('companion_activities')
     .select('activity_name')
     .eq('companion_id', companionId)
     .is('ended_at', null)
     .order('started_at', { ascending: false })
     .limit(1)
-    .single()) as { data: { activity_name: string } | null };
+    .single() as unknown as { data: Pick<CompanionActivityRow, 'activity_name'> | null };
   
   // Get shared memories for context
   const { data: memoriesData } = await supabase
@@ -353,7 +363,7 @@ export async function generateProactiveMessage(
       ? {
           type: recentEvent.event_type,
           title: recentEvent.title,
-          description: recentEvent.description,
+          description: recentEvent.description || '',
         }
       : undefined,
     recentInterest: recentInterest
@@ -462,10 +472,11 @@ export async function generateProactiveMessage(
     context_snapshot: context,
   };
   
-  const { data: message, error } = await ((supabase.from('proactive_messages') as any)
+  const { data: message, error } = await supabase
+    .from('proactive_messages')
     .insert(messageInsert)
     .select()
-    .single()) as { data: ProactiveMessage | null; error: Error | null };
+    .single() as unknown as { data: ProactiveMessage | null; error: Error | null };
   
   if (error) {
     console.error('Error creating proactive message:', error);
@@ -473,9 +484,10 @@ export async function generateProactiveMessage(
   }
   
   // Update simulation state
-  await ((supabase.from('simulation_states') as any)
+  await supabase
+    .from('simulation_states')
     .update({ last_proactive_message_at: new Date().toISOString() })
-    .eq('companion_id', companionId));
+    .eq('companion_id', companionId) as unknown as Promise<{ error: Error | null }>;
   
   return message;
 }
@@ -485,14 +497,15 @@ export async function generateProactiveMessage(
  */
 export async function markMessageSent(messageId: string): Promise<boolean> {
   const supabase = await createClient();
-  
-  const { error } = await ((supabase.from('proactive_messages') as any)
+
+  const { error } = await supabase
+    .from('proactive_messages')
     .update({
       status: 'sent',
       sent_at: new Date().toISOString(),
-    })
-    .eq('id', messageId));
-  
+    } as Record<string, unknown>)
+    .eq('id', messageId) as unknown as { error: Error | null };
+
   return !error;
 }
 
@@ -501,15 +514,16 @@ export async function markMessageSent(messageId: string): Promise<boolean> {
  */
 export async function markMessageSeen(messageId: string): Promise<boolean> {
   const supabase = await createClient();
-  
-  const { error } = await ((supabase.from('proactive_messages') as any)
+
+  const { error } = await supabase
+    .from('proactive_messages')
     .update({
       status: 'seen',
       seen_at: new Date().toISOString(),
-    })
+    } as Record<string, unknown>)
     .eq('id', messageId)
-    .eq('status', 'sent'));
-  
+    .filter('status', 'eq', 'sent') as unknown as { error: Error | null };
+
   return !error;
 }
 
@@ -518,14 +532,15 @@ export async function markMessageSeen(messageId: string): Promise<boolean> {
  */
 export async function markMessageResponded(messageId: string): Promise<boolean> {
   const supabase = await createClient();
-  
-  const { error } = await ((supabase.from('proactive_messages') as any)
+
+  const { error } = await supabase
+    .from('proactive_messages')
     .update({
       status: 'responded',
       responded_at: new Date().toISOString(),
-    })
-    .eq('id', messageId));
-  
+    } as Record<string, unknown>)
+    .eq('id', messageId) as unknown as { error: Error | null };
+
   return !error;
 }
 
@@ -537,18 +552,19 @@ export async function getPendingMessages(
   companionId?: string
 ): Promise<ProactiveMessage[]> {
   const supabase = await createClient();
-  
-  let query = (supabase.from('proactive_messages') as any)
+
+  let query = supabase
+    .from('proactive_messages')
     .select('*')
     .eq('user_id', userId)
     .in('status', ['pending', 'sent'])
     .order('created_at', { ascending: false });
-  
+
   if (companionId) {
     query = query.eq('companion_id', companionId);
   }
-  
-  const { data, error } = await query as { data: ProactiveMessage[] | null; error: Error | null };
+
+  const { data, error } = await query as unknown as { data: ProactiveMessage[] | null; error: Error | null };
   
   if (error) {
     console.error('Error fetching pending messages:', error);
@@ -566,14 +582,15 @@ export async function expireOldMessages(hoursOld: number = 24): Promise<number> 
   
   const cutoff = new Date(Date.now() - hoursOld * 60 * 60 * 1000).toISOString();
   
-  const { data, error } = await ((supabase.from('proactive_messages') as any)
+  const { data, error } = await supabase
+    .from('proactive_messages')
     .update({
       status: 'expired',
       expired_at: new Date().toISOString(),
-    })
-    .eq('status', 'pending')
+    } as Record<string, unknown>)
+    .filter('status', 'eq', 'pending')
     .lt('created_at', cutoff)
-    .select('id')) as { data: { id: string }[] | null; error: Error | null };
+    .select('id') as unknown as { data: { id: string }[] | null; error: Error | null };
   
   if (error) {
     console.error('Error expiring messages:', error);
@@ -599,20 +616,31 @@ function isInQuietHours(currentHour: number, start: number, end: number): boolea
 }
 
 /**
- * Get when quiet hours end
+ * Get when quiet hours end in the user's timezone
  */
 function getQuietHoursEnd(endHour: number, timezone: string): string {
+  // Get current time in user's timezone
   const now = new Date();
+  const userTimeString = now.toLocaleString('en-US', { timeZone: timezone });
+  const userNow = new Date(userTimeString);
+  const userCurrentHour = userNow.getHours();
+
+  // Calculate when quiet hours end
   const result = new Date(now);
-  
-  // Set to end hour
+
+  // Adjust for timezone offset
+  const serverOffset = now.getTimezoneOffset();
+  const userOffset = new Date(now.toLocaleString('en-US', { timeZone: timezone })).getTimezoneOffset();
+  const offsetDiff = (serverOffset - userOffset) * 60 * 1000;
+
+  result.setTime(result.getTime() + offsetDiff);
   result.setHours(endHour, 0, 0, 0);
-  
-  // If we're past the end hour today, it's tomorrow
-  if (now.getHours() >= endHour) {
+
+  // If we're past the end hour in user's timezone, it's tomorrow
+  if (userCurrentHour >= endHour) {
     result.setDate(result.getDate() + 1);
   }
-  
+
   return result.toISOString();
 }
 

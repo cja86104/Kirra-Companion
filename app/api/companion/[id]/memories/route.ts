@@ -69,7 +69,7 @@ export async function POST(
   try {
     const { id: companionId } = await params;
     const body = await request.json();
-    const { title, content, category_id, importance_score, is_core_identity, is_pinned } = body;
+    const { title, content, importance_score, is_core_identity, is_pinned } = body;
 
     if (!content?.trim()) {
       return NextResponse.json({ error: 'Memory content is required' }, { status: 400 });
@@ -95,9 +95,8 @@ export async function POST(
       return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
     }
 
-    // Create memory - category_id must be a valid UUID or null
-    // The frontend sends category names like "personal", not UUIDs
-    // So we'll skip category_id for now (can be enhanced later to look up category by name)
+    // Create memory
+    // Note: category_id support can be added later by looking up category by name
     const memoryData = {
       companion_id: companionId,
       title: title?.trim() || null,

@@ -37,17 +37,17 @@ export async function POST(
     // Verify companion belongs to user
     const { data: companion, error: companionError } = await supabase
       .from('companions')
-      .select('id, name, is_active, is_archived')
+      .select('id, name, is_active')
       .eq('id', companionId)
       .eq('user_id', user.id)
       .single();
-    
+
     if (companionError || !companion) {
       return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
     }
-    
-    if (companion.is_archived) {
-      return NextResponse.json({ error: 'Companion is archived' }, { status: 400 });
+
+    if (!companion.is_active) {
+      return NextResponse.json({ error: 'Companion is not active' }, { status: 400 });
     }
     
     // Get current state before simulation

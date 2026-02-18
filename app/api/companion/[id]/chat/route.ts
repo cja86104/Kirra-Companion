@@ -506,12 +506,10 @@ export async function POST(
 
     // Skill teaching detection (non-blocking)
     // Detects when user is teaching the companion new skills
-    let skillLearned: { name: string; id: string } | null = null;
     processSkillTeaching(companionId, message.trim(), completion.content)
       .then(result => {
         if (result.saved && result.skill_name) {
-          console.log(`[Chat] Companion learned skill: ${result.skill_name}`);
-          skillLearned = { name: result.skill_name, id: result.skill_id! };
+          console.log(`[Chat] Companion learned skill: ${result.skill_name} (id: ${result.skill_id})`);
         }
       })
       .catch(err => {
