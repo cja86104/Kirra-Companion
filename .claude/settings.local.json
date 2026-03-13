@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(npx eslint:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm list:*)",
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(mkdir -p /c/Users/cja86/.claude/scripts)",
+      "Read(//c/Users/cja86/.claude/**)",
+      "Bash(npm:*)",
+      "Read(//c/Users/cja86/Desktop/colabmotion/**)",
+      "Bash(mkdir:*)",
+      "Read(//c/Users/cja86/Desktop//**)",
+      "Read(//c/Users/cja86/Documents//**)",
+      "Bash(do:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
