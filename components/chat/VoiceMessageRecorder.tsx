@@ -52,6 +52,7 @@ interface VoiceMessageRecorderProps {
   onCancel: () => void;
   maxDuration?: number; // in seconds
   disabled?: boolean;
+  autoStart?: boolean; // immediately request permission and begin recording on mount
 }
 
 export function VoiceMessageRecorder({
@@ -59,6 +60,7 @@ export function VoiceMessageRecorder({
   onCancel,
   maxDuration = 120,
   disabled = false,
+  autoStart = false,
 }: VoiceMessageRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -72,6 +74,10 @@ export function VoiceMessageRecorder({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref mirror of isRecording — avoids stale closure in recognition.onend
+  const isRecordingRef = useRef(false);
+  // Tracks current interim text so onend can commit it before restarting
+  const interimRef = useRef('');
 
   const cleanup = useCallback(() => {
     if (animationRef.current) {
@@ -89,6 +95,8 @@ export function VoiceMessageRecorder({
     streamRef.current = null;
     analyserRef.current = null;
     recognitionRef.current = null;
+    isRecordingRef.current = false;
+    interimRef.current = '';
     setDuration(0);
     setAudioLevel(0);
     setTranscript('');
@@ -98,6 +106,18 @@ export function VoiceMessageRecorder({
   useEffect(() => {
     return cleanup;
   }, [cleanup]);
+
+  // When autoStart is true (triggered by mic button click), immediately request
+  // microphone permission and begin recording. The browser's permission prompt
+  // fires inside startRecording via getUserMedia.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStart && !autoStarted.current) {
+      autoStarted.current = true;
+      startRecording();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startRecording = async () => {
     // Check for speech recognition support
@@ -155,6 +175,7 @@ export function VoiceMessageRecorder({
           }
         }
         
+        interimRef.current = interim;
         setTranscript(finalTranscript.trim());
         setInterimTranscript(interim);
       };
@@ -162,25 +183,39 @@ export function VoiceMessageRecorder({
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
-          toast.error('Microphone access denied');
-        } else if (event.error !== 'aborted') {
+          toast.error('Microphone access denied. Please allow microphone access in your browser.');
+        } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
+          // no-speech = silence pause (expected), aborted = we stopped it ourselves.
+          // Both are logged above but must not show a toast — that would disrupt recording
+          // and falsely tell the user something went wrong during a normal pause.
           toast.error('Voice recognition error. Please try again.');
         }
       };
 
       recognition.onend = () => {
-        // Recognition ended naturally (e.g., silence timeout)
-        // Only restart if we're still supposed to be recording
-        if (isRecording && recognitionRef.current) {
+        // Recognition ended naturally (silence timeout or no-speech pause).
+        // Use the ref — not state — to avoid the stale closure that always
+        // reads the initial false value and prevents restart.
+        if (isRecordingRef.current && recognitionRef.current) {
+          // Commit any pending interim text as final BEFORE restarting.
+          // Without this, words visible on screen are lost when recognition
+          // restarts after a pause — causing the "words going away" effect.
+          if (interimRef.current.trim()) {
+            finalTranscript += interimRef.current.trim() + ' ';
+            interimRef.current = '';
+            setTranscript(finalTranscript.trim());
+            setInterimTranscript('');
+          }
           try {
             recognition.start();
-          } catch {
-            // Already started, ignore
+          } catch (err) {
+            console.error('Failed to restart speech recognition:', err);
           }
         }
       };
 
       recognition.start();
+      isRecordingRef.current = true;
       setIsRecording(true);
       setDuration(0);
       setTranscript('');
@@ -209,6 +244,7 @@ export function VoiceMessageRecorder({
   };
 
   const stopRecording = useCallback(() => {
+    isRecordingRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }

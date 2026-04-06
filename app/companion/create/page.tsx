@@ -27,15 +27,12 @@ import { Slider } from '@/components/ui/slider';
 import { getClient } from '@/lib/supabase/client';
 import { BackstoryGenerator } from '@/components/companion/BackstoryGenerator';
 import { VoiceSelector } from '@/components/companion/VoiceSelector';
-import { NiceAvatarCustomizer } from '@/components/avatar/NiceAvatarCustomizer';
 import type { Profile, Companion, VoiceConfig } from '@/types/database';
-import type { NiceAvatarConfig } from '@/types/nice-avatar';
 
 type RelationshipType = 'friend' | 'mentor' | 'romantic' | 'family' | 'custom';
 
 interface CompanionData {
   name: string;
-  avatarConfig: NiceAvatarConfig | null;
   relationshipType: RelationshipType;
   backstory: string;
   traits: {
@@ -89,7 +86,6 @@ export default function CreateCompanionPage() {
   
   const [companionData, setCompanionData] = useState<CompanionData>({
     name: '',
-    avatarConfig: null,
     relationshipType: 'friend',
     backstory: '',
     traits: {
@@ -290,7 +286,7 @@ export default function CreateCompanionPage() {
         },
         needs: initialNeeds,
         avatar_url: null,
-        avatar_3d_config: companionData.avatarConfig,
+        avatar_3d_config: null,
         voice_config: companionData.voiceConfig,
       };
       
@@ -386,17 +382,6 @@ export default function CreateCompanionPage() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label>Design your companion&apos;s avatar</Label>
-              <p className="text-xs text-muted-foreground">
-                Customize how {companionData.name || 'your companion'} looks. You can always edit this later.
-              </p>
-              <NiceAvatarCustomizer
-                initialConfig={companionData.avatarConfig}
-                onChange={(config) => updateData('avatarConfig', config)}
-                compact={false}
-              />
-            </div>
           </div>
         );
 
@@ -554,12 +539,7 @@ export default function CreateCompanionPage() {
                         Voice enabled
                       </Badge>
                     )}
-                    {companionData.avatarConfig && (
-                      <Badge variant="outline" className="gap-1">
-                        <Sparkles className="h-3 w-3" />
-                        Custom Avatar
-                      </Badge>
-                    )}
+
                   </div>
                 </div>
               </div>

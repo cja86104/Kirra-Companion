@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { generateEmbedding } from '@/lib/ai/embeddings';
 
 // ============================================================
 // TYPES
@@ -168,7 +169,16 @@ export async function saveExtractedMemories(
       // Look up category UUID
       const categoryName = CATEGORY_NAME_MAP[memory.category] || memory.category;
       const categoryId = categoryMap.get(categoryName) || null;
-      
+
+      // Generate embedding for semantic search
+      let embedding: number[] | null = null;
+      try {
+        embedding = await generateEmbedding(memory.content);
+      } catch (embErr) {
+        // Non-fatal: memory still saves, text search is the fallback
+        console.error('Embedding generation failed for memory:', embErr);
+      }
+
       // Save new memory
       const { error } = await supabase
         .from('memories')
@@ -178,8 +188,8 @@ export async function saveExtractedMemories(
           content: memory.content,
           category_id: categoryId,
           importance_score: memory.importance,
-          source_type: 'conversation',
-          is_verified: false,
+          memory_type: memory.category,
+          embedding: embedding as never,
         } as never);
       
       if (error) {

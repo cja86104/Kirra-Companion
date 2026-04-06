@@ -48,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { VoiceConversationMode, useVoiceConversationSupported } from './VoiceConversationMode';
+import { VoiceMessageRecorder, useVoiceRecordingSupported } from './VoiceMessageRecorder';
 import { useSceneUpdater } from './useSceneUpdater';
 import { useQueuedVoicePlayback } from './useQueuedVoicePlayback';
 import { getClient } from '@/lib/supabase/client';
@@ -104,6 +105,7 @@ export function ChatWindow({
   const [isTyping, setIsTyping] = useState(false);
   const [autoPlayVoice, setAutoPlayVoice] = useState(true);
   const [voiceConversationActive, setVoiceConversationActive] = useState(false);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [inputValue, setInputValue] = useState('');
   
   // Refs
@@ -111,6 +113,7 @@ export function ChatWindow({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const supabase = getClient();
   const isVoiceConversationSupported = useVoiceConversationSupported();
+  const isVoiceMicSupported = useVoiceRecordingSupported();
 
   // Voice config
   const voiceConfig = companion.voice_config as VoiceConfig | null;
@@ -577,48 +580,75 @@ export function ChatWindow({
           ================================================================= */}
       <div className="absolute bottom-0 left-0 right-0 z-30 p-4">
         <div className="max-w-2xl mx-auto">
-          <div className="relative flex items-end gap-2">
-            <div className="flex-1 relative">
-              <textarea
-                ref={inputRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={`Say something to ${companion.name}...`}
-                rows={1}
-                className="w-full px-5 py-4 pr-24 rounded-3xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl resize-none focus:outline-none focus:ring-2 focus:ring-white/30 text-white placeholder-white/50"
-                style={{ minHeight: '56px', maxHeight: '120px' }}
-              />
 
-              <div className="absolute right-2 bottom-2 flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"
-                >
-                  <Mic className="h-5 w-5" />
-                </Button>
-                <Button
-                  onClick={() => sendMessage(inputValue)}
-                  disabled={!inputValue.trim() || isLoading}
-                  size="icon"
-                  className="h-10 w-10 rounded-full bg-white/20 hover:bg-white/30 text-white shadow-lg backdrop-blur-sm"
-                >
-                  <Send className="h-5 w-5" />
-                </Button>
+          {/* Voice recording UI — replaces textarea when mic is active */}
+          {isVoiceRecording ? (
+            <div className="rounded-3xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl p-3">
+              <VoiceMessageRecorder
+                onTranscriptionComplete={(text) => {
+                  setIsVoiceRecording(false);
+                  if (text.trim()) sendMessage(text.trim());
+                }}
+                onCancel={() => setIsVoiceRecording(false)}
+                maxDuration={120}
+                autoStart={true}
+              />
+            </div>
+          ) : (
+            <div className="relative flex items-end gap-2">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={`Say something to ${companion.name}...`}
+                  rows={1}
+                  className="w-full px-5 py-4 pr-24 rounded-3xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl resize-none focus:outline-none focus:ring-2 focus:ring-white/30 text-white placeholder-white/50"
+                  style={{ minHeight: '56px', maxHeight: '120px' }}
+                />
+
+                <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"
+                    title="Attach file"
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </Button>
+
+                  {/* Mic button — only shown when speech API is available */}
+                  {isVoiceMicSupported && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsVoiceRecording(true)}
+                      disabled={isLoading}
+                      className="h-10 w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"
+                      title="Record voice message"
+                    >
+                      <Mic className="h-5 w-5" />
+                    </Button>
+                  )}
+
+                  <Button
+                    onClick={() => sendMessage(inputValue)}
+                    disabled={!inputValue.trim() || isLoading}
+                    size="icon"
+                    className="h-10 w-10 rounded-full bg-white/20 hover:bg-white/30 text-white shadow-lg backdrop-blur-sm"
+                  >
+                    <Send className="h-5 w-5" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <p className="text-center text-white/60 text-xs mt-2 drop-shadow">
-            Press Enter to send • Shift+Enter for new line
+            {isVoiceRecording
+              ? 'Speak now — click stop when done'
+              : 'Press Enter to send • Shift+Enter for new line'}
           </p>
         </div>
       </div>

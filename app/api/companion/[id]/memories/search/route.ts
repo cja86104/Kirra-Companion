@@ -10,11 +10,12 @@ interface SearchRequestBody {
 // Type for memory with category joined
 interface MemorySearchResult {
   id: string;
+  title: string | null;
   summary: string | null;
   content: string;
-  importance: number;
+  importance_score: number;
   embedding: number[] | null;
-  memory_type: string;
+  memory_type: string | null;
 }
 
 export async function POST(
@@ -61,10 +62,9 @@ export async function POST(
     // Get all memories for this companion
     const { data: memoriesData, error: memoriesError } = await supabase
       .from('memories')
-      .select('id, summary, content, importance, embedding, memory_type')
+      .select('id, title, summary, content, importance_score, embedding, memory_type')
       .eq('companion_id', companionId)
-      .eq('is_active', true)
-      .order('importance', { ascending: false });
+      .order('importance_score', { ascending: false });
 
     if (memoriesError) {
       console.error('Error fetching memories:', memoriesError);
@@ -101,11 +101,11 @@ export async function POST(
       results = memoriesWithEmbeddings
         .map((memory) => ({
           id: memory.id,
-          title: memory.summary,
+          title: memory.title || memory.summary,
           content: memory.content,
-          importance: memory.importance,
+          importance: memory.importance_score,
           similarity: cosineSimilarity(queryEmbedding, memory.embedding as number[]),
-          category: memory.memory_type,
+          category: memory.memory_type || 'general',
         }))
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, limit);
@@ -115,16 +115,17 @@ export async function POST(
       
       results = memories
         .filter((m) => 
+          (m.title?.toLowerCase().includes(lowerQuery)) ||
           (m.summary?.toLowerCase().includes(lowerQuery)) ||
           m.content.toLowerCase().includes(lowerQuery)
         )
         .map((memory) => ({
           id: memory.id,
-          title: memory.summary,
+          title: memory.title || memory.summary,
           content: memory.content,
-          importance: memory.importance,
-          similarity: 1, // Perfect match for text search
-          category: memory.memory_type,
+          importance: memory.importance_score,
+          similarity: 1,
+          category: memory.memory_type || 'general',
         }))
         .slice(0, limit);
     }

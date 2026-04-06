@@ -188,6 +188,7 @@ export function ChatInput({
             onTranscriptionComplete={handleTranscriptionComplete}
             onCancel={handleCancelRecording}
             maxDuration={120}
+            autoStart={true}
           />
         </div>
       </div>
