@@ -34,12 +34,14 @@ import {
   isEvolutionDue,
 } from '@/lib/companion/dna-evolution';
 
-// Use service role for cron operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-);
+// Use service role for cron operations — lazy factory to avoid module-level env var access at build time
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 // ============================================================================
 // TYPES
@@ -103,7 +105,7 @@ export async function POST(request: NextRequest) {
       // Get all active companions with recent activity
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
-      const { data: companions, error } = await supabaseAdmin
+      const { data: companions, error } = await getSupabaseAdmin()
         .from('companions')
         .select(`
           id,
@@ -229,7 +231,7 @@ export async function GET(request: NextRequest) {
     // Get companions with recent activity
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     
-    const { data: companions, error } = await supabaseAdmin
+    const { data: companions, error } = await getSupabaseAdmin()
       .from('companions')
       .select(`
         id,
@@ -350,7 +352,7 @@ async function processCompanionEvolution(
   }
   
   // Get updated version number
-  const { data: dna } = await supabaseAdmin
+  const { data: dna } = await getSupabaseAdmin()
     .from('companion_dna')
     .select('personality_version')
     .eq('companion_id', companionId)
@@ -370,7 +372,7 @@ async function processCompanionEvolution(
  */
 async function getEvolutionStatus() {
   // Get stats about DNA evolution
-  const { data: dnaStats } = await supabaseAdmin
+  const { data: dnaStats } = await getSupabaseAdmin()
     .from('companion_dna')
     .select('personality_version, last_evolution')
     .order('last_evolution', { ascending: false })

@@ -17,12 +17,14 @@ import {
   DEFAULT_SIMULATION_CONFIG 
 } from '@/lib/companion/life-simulation';
 
-// Use service role for cron operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-);
+// Use service role for cron operations — lazy factory to avoid module-level env var access at build time
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 // ============================================================================
 // POST - Run life simulation for specific companion(s)
@@ -95,7 +97,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Get all active companions
-      const { data: companions, error } = await supabaseAdmin
+      const { data: companions, error } = await getSupabaseAdmin()
         .from('companions')
         .select('id, name, is_active')
         .eq('is_active', true)
@@ -212,19 +214,19 @@ export async function GET(request: NextRequest) {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
       // Get life events from last 24h
-      const { count: eventsToday } = await supabaseAdmin
+      const { count: eventsToday } = await getSupabaseAdmin()
         .from('life_events')
         .select('id', { count: 'exact', head: true })
         .gte('created_at', twentyFourHoursAgo);
       
       // Get activities from last 24h
-      const { count: activitiesToday } = await supabaseAdmin
+      const { count: activitiesToday } = await getSupabaseAdmin()
         .from('companion_activities')
         .select('id', { count: 'exact', head: true })
         .gte('started_at', twentyFourHoursAgo);
       
       // Get active companions
-      const { count: activeCompanions } = await supabaseAdmin
+      const { count: activeCompanions } = await getSupabaseAdmin()
         .from('companions')
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true);
@@ -253,7 +255,7 @@ export async function GET(request: NextRequest) {
     }[] = [];
     
     // Get all active companions
-    const { data: companions, error } = await supabaseAdmin
+    const { data: companions, error } = await getSupabaseAdmin()
       .from('companions')
       .select('id, name, is_active')
       .eq('is_active', true)
