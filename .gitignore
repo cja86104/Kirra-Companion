@@ -67,8 +67,6 @@ temp/
 # Stripe CLI
 .stripe
 
-# Generated types
-types/database.ts
 
 # Sentry
 .sentryclirc
