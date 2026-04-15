@@ -73,13 +73,13 @@ export async function GET(
       .order('strength', { ascending: false });
     
     if (category) {
-      query = query.eq('category', category);
+      query = query.eq('interest_category', category);
     }
     
     if (userShared === 'true') {
-      query = query.eq('user_shared', true);
+      query = query.eq('shared_with_user', true);
     } else if (userShared === 'false') {
-      query = query.eq('user_shared', false);
+      query = query.eq('shared_with_user', false);
     }
     
     if (stage) {
@@ -364,7 +364,7 @@ export async function PUT(
         .from('companion_interests')
         .update({
           conversation_mentions: (interest.conversation_mentions || 0) + 1,
-          last_engaged_at: new Date().toISOString(),
+          last_engaged: new Date().toISOString(),
         })
         .eq('id', interest_id)
         .select()

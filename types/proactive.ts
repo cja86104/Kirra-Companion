@@ -1,9 +1,11 @@
 /**
  * Proactive Messaging Types
- * 
+ *
  * Types for the system that allows companions to reach out
  * to users on their own initiative.
  */
+
+import type { Json } from '@/types/database';
 
 // ============================================================================
 // Trigger Types
@@ -136,7 +138,7 @@ export interface MessageContext {
   timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
   dayOfWeek: string;
   /** Custom context from trigger */
-  custom?: Record<string, unknown>;
+  custom?: Record<string, Json>;
 }
 
 // ============================================================================
@@ -184,7 +186,7 @@ export interface ProactiveMessageInsert {
   related_activity_id?: string;
   related_life_event_id?: string;
   related_interest_id?: string;
-  context_snapshot: MessageContext;
+  context_snapshot: Json;
   scheduled_for?: string;
 }
 

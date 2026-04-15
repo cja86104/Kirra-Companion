@@ -15,7 +15,15 @@
       "Read(//c/Users/cja86/Desktop//**)",
       "Read(//c/Users/cja86/Documents//**)",
       "Bash(do:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(grep -n \"proactive_messages\\\\|Database\\\\|createClient\" C:/Users/cja86/Documents/Kirra-Companion/lib/supabase/server.ts 2>/dev/null || find C:/Users/cja86/Documents/Kirra-Companion/lib/supabase -name \"*.ts\" | head -10)",
+      "Bash(grep -l \"proactive_messages\" C:/Users/cja86/Documents/Kirra-Companion/supabase/migrations/*.sql)",
+      "Bash(grep -n \"is_core_identity\" C:/Users/cja86/Documents/Kirra-Companion/supabase/migrations/*.sql | head -10)",
+      "Bash(find C:/Users/cja86/Documents/Kirra-Companion/node_modules/@supabase -name \"*.d.ts\" 2>/dev/null | xargs grep -l \"insert\\(\" 2>/dev/null | head -3)",
+      "Bash(find \"C:/Users/cja86/Documents/Kirra-Companion/node_modules/@supabase\" -name \"*.d.ts\" 2>/dev/null | head -10)",
+      "Bash(find \"C:/Users/cja86/Documents/Kirra-Companion/node_modules/@supabase/postgrest-js\" -name \"*.d.ts\" 2>/dev/null | head -5)",
+      "Bash(find \"C:/Users/cja86/Documents/Kirra-Companion/node_modules/@supabase\" -name \"*.ts\" 2>/dev/null | grep -v \"node_modules/@supabase/node_modules\" | grep \"query\\\\|Query\" | head -5)"
     ]
   }
 }

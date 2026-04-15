@@ -703,7 +703,7 @@ export async function getUserSharedInterests(
     .from('companion_interests')
     .select('*')
     .eq('companion_id', companionId)
-    .eq('user_shared', true)
+    .eq('shared_with_user', true)
     .order('strength', { ascending: false });
   
   return (data || []) as CompanionInterest[];

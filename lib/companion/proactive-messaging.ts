@@ -8,6 +8,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
+import type { Json } from '@/types/database';
 import {
   TRIGGER_CONFIGS,
   evaluateTrigger,
@@ -260,7 +261,7 @@ export async function generateProactiveMessage(
   triggerType: ProactiveTriggerType,
   options?: {
     forceGenerate?: boolean;
-    customContext?: Record<string, unknown>;
+    customContext?: Record<string, Json>;
   }
 ): Promise<ProactiveMessage | null> {
   const supabase = await createClient();
@@ -342,7 +343,7 @@ export async function generateProactiveMessage(
     .from('memories')
     .select('content')
     .eq('companion_id', companionId)
-    .eq('is_core_identity', true)
+    .eq('is_core_memory', true)
     .limit(5);
   
   const memories = memoriesData as { content: string }[] | null;
@@ -469,7 +470,7 @@ export async function generateProactiveMessage(
     status: 'pending',
     related_life_event_id: recentEvent?.id,
     related_interest_id: recentInterest?.id,
-    context_snapshot: context,
+    context_snapshot: JSON.parse(JSON.stringify(context)) as Json,
   };
   
   const { data: message, error } = await supabase
@@ -503,8 +504,8 @@ export async function markMessageSent(messageId: string): Promise<boolean> {
     .update({
       status: 'sent',
       sent_at: new Date().toISOString(),
-    } as Record<string, unknown>)
-    .eq('id', messageId) as unknown as { error: Error | null };
+    })
+    .eq('id', messageId);
 
   return !error;
 }
@@ -520,9 +521,9 @@ export async function markMessageSeen(messageId: string): Promise<boolean> {
     .update({
       status: 'seen',
       seen_at: new Date().toISOString(),
-    } as Record<string, unknown>)
+    })
     .eq('id', messageId)
-    .filter('status', 'eq', 'sent') as unknown as { error: Error | null };
+    .eq('status', 'sent');
 
   return !error;
 }
@@ -538,8 +539,8 @@ export async function markMessageResponded(messageId: string): Promise<boolean> 
     .update({
       status: 'responded',
       responded_at: new Date().toISOString(),
-    } as Record<string, unknown>)
-    .eq('id', messageId) as unknown as { error: Error | null };
+    })
+    .eq('id', messageId);
 
   return !error;
 }
@@ -587,8 +588,8 @@ export async function expireOldMessages(hoursOld: number = 24): Promise<number> 
     .update({
       status: 'expired',
       expired_at: new Date().toISOString(),
-    } as Record<string, unknown>)
-    .filter('status', 'eq', 'pending')
+    })
+    .eq('status', 'pending')
     .lt('created_at', cutoff)
     .select('id') as unknown as { data: { id: string }[] | null; error: Error | null };
   

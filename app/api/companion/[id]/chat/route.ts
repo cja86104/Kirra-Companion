@@ -32,7 +32,7 @@ import { processEvolutionTrigger, quickShouldCheck } from '@/lib/companion/evolu
 import { processSkillTeaching, findRelevantSkills } from '@/lib/companion/skill-detection';
 import { trackSkillUsage } from '@/lib/companion/skill-usage';
 import { analyzeConversationMood, shouldUpdateMood } from '@/lib/companion/mood-analysis';
-import type { Profile, Companion, CompanionDNA, Message, MoodState } from '@/types/database';
+import type { Json, Profile, Companion, CompanionDNA, Message, MoodState } from '@/types/database';
 
 interface ChatAttachment {
   url: string;
@@ -50,6 +50,8 @@ interface ChatRequestBody {
 // Type for companion with DNA joined
 interface CompanionWithDNA extends Companion {
   companion_dna: CompanionDNA[] | null;
+  needs: Json | null;
+  current_mood: Json | null;
 }
 
 // Type for profile fields we need

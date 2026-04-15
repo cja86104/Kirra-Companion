@@ -15,17 +15,11 @@ import {
 } from '@/lib/companion/proactive-messaging';
 
 // Use service role for cron operations
-let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
-function getSupabaseAdmin(): ReturnType<typeof createClient> {
-  if (!_supabaseAdmin) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
-    if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
-    _supabaseAdmin = createClient(url, key, { auth: { persistSession: false } });
-  }
-  return _supabaseAdmin;
-}
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
 
 // ============================================================================
 // POST - Run proactive check for all companions
@@ -84,18 +78,16 @@ export async function POST(request: NextRequest) {
     } else {
       // Get all active companions that are due for a proactive check
       // Get companions with their simulation states
-      const { data: companions, error } = await getSupabaseAdmin()
+      const { data: companions, error } = await supabaseAdmin
         .from('companions')
         .select(`
           id,
           user_id,
-          is_archived,
           simulation_states!simulation_states_companion_id_fkey (
             last_proactive_message_at,
             next_scheduled_at
           )
         `)
-        .eq('is_archived', false)
         .limit(batch_size);
       
       if (error) {
@@ -210,20 +202,19 @@ export async function GET(request: NextRequest) {
       // Return status only
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
-      const { count: sentToday } = await getSupabaseAdmin()
+      const { count: sentToday } = await supabaseAdmin
         .from('proactive_messages')
         .select('id', { count: 'exact', head: true })
         .gte('sent_at', twentyFourHoursAgo);
       
-      const { count: pendingCount } = await getSupabaseAdmin()
+      const { count: pendingCount } = await supabaseAdmin
         .from('proactive_messages')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'pending');
       
-      const { count: activeCompanions } = await getSupabaseAdmin()
+      const { count: activeCompanions } = await supabaseAdmin
         .from('companions')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_archived', false);
+        .select('id', { count: 'exact', head: true });
       
       return NextResponse.json({
         status: 'healthy',
@@ -248,18 +239,16 @@ export async function GET(request: NextRequest) {
     const expiredCount = await expireOldMessages(24);
     
     // Get all active companions that need checking
-    const { data: companions, error } = await getSupabaseAdmin()
+    const { data: companions, error } = await supabaseAdmin
       .from('companions')
       .select(`
         id,
         user_id,
-        is_archived,
         simulation_states!simulation_states_companion_id_fkey (
           last_proactive_message_at,
           next_scheduled_at
         )
       `)
-      .eq('is_archived', false)
       .limit(50);
     
     if (error) {

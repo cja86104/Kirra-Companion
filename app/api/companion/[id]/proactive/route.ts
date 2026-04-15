@@ -60,7 +60,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status'); // pending, sent, seen, responded, all
     const limit = parseInt(searchParams.get('limit') || '20');
-    const includeExpired = searchParams.get('include_expired') === 'true';
+    // includeExpired param reserved for future use
     
     // Build query
     let query = supabase
@@ -70,10 +70,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .order('created_at', { ascending: false })
       .limit(Math.min(limit, 100));
 
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
-    } else if (!includeExpired) {
-      query = query.neq('status', 'expired');
+    // proactive_messages uses read (boolean) not status
+    if (status === 'unread') {
+      query = query.eq('read', false);
+    } else if (status === 'read') {
+      query = query.eq('read', true);
     }
 
     const { data: messages, error } = await query as unknown as {
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .from('proactive_messages')
       .select('id', { count: 'exact', head: true })
       .eq('companion_id', companionId)
-      .in('status', ['pending', 'sent']) as unknown as { count: number | null };
+      .eq('read', false) as unknown as { count: number | null };
     
     return NextResponse.json({
       messages: messages || [],

@@ -35,17 +35,11 @@ import {
 } from '@/lib/companion/dna-evolution';
 
 // Use service role for cron operations
-let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
-function getSupabaseAdmin(): ReturnType<typeof createClient> {
-  if (!_supabaseAdmin) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
-    if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
-    _supabaseAdmin = createClient(url, key, { auth: { persistSession: false } });
-  }
-  return _supabaseAdmin;
-}
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
 
 // ============================================================================
 // TYPES
@@ -109,7 +103,7 @@ export async function POST(request: NextRequest) {
       // Get all active companions with recent activity
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
-      const { data: companions, error } = await getSupabaseAdmin()
+      const { data: companions, error } = await supabaseAdmin
         .from('companions')
         .select(`
           id,
@@ -120,8 +114,7 @@ export async function POST(request: NextRequest) {
             last_evolution
           )
         `)
-        .eq('is_archived', false)
-        .gte('last_interaction', twentyFourHoursAgo)
+                .gte('last_interaction', twentyFourHoursAgo)
         .limit(batch_size);
       
       if (error) {
@@ -236,7 +229,7 @@ export async function GET(request: NextRequest) {
     // Get companions with recent activity
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     
-    const { data: companions, error } = await getSupabaseAdmin()
+    const { data: companions, error } = await supabaseAdmin
       .from('companions')
       .select(`
         id,
@@ -247,8 +240,7 @@ export async function GET(request: NextRequest) {
           last_evolution
         )
       `)
-      .eq('is_archived', false)
-      .gte('last_interaction', twentyFourHoursAgo)
+            .gte('last_interaction', twentyFourHoursAgo)
       .limit(50);
     
     if (error) {
@@ -358,7 +350,7 @@ async function processCompanionEvolution(
   }
   
   // Get updated version number
-  const { data: dna } = await getSupabaseAdmin()
+  const { data: dna } = await supabaseAdmin
     .from('companion_dna')
     .select('personality_version')
     .eq('companion_id', companionId)
@@ -378,7 +370,7 @@ async function processCompanionEvolution(
  */
 async function getEvolutionStatus() {
   // Get stats about DNA evolution
-  const { data: dnaStats } = await getSupabaseAdmin()
+  const { data: dnaStats } = await supabaseAdmin
     .from('companion_dna')
     .select('personality_version, last_evolution')
     .order('last_evolution', { ascending: false })

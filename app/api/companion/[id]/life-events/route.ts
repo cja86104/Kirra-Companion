@@ -214,7 +214,6 @@ export async function POST(
         .from('life_events')
         .update({
           shared_with_user: true,
-          shared_at: new Date().toISOString(),
         })
         .eq('id', eventId) as unknown as { error: Error | null };
 

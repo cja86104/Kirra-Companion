@@ -12,6 +12,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { SkillUsageLogInsert } from '@/types/skills';
+import type { CompanionSkillUpdate } from '@/types/database';
 
 // Database row types for tables not yet in generated Supabase types
 interface CompanionSkillRow {
@@ -91,7 +92,7 @@ export async function trackSkillUsage(
         .eq('id', usage.skill_id)
         .single() as unknown as { data: Pick<CompanionSkillRow, 'times_used' | 'successful_uses' | 'failed_uses'> | null };
 
-      const incrementUpdates: Record<string, number | string> = {
+      const incrementUpdates: CompanionSkillUpdate = {
         times_used: (currentSkillForUpdate?.times_used || 0) + 1,
         last_used_at: new Date().toISOString(),
       };
