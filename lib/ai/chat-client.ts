@@ -1,13 +1,8 @@
 /**
- * AI Chat Client - Configurable Provider Support
- * 
- * Supports:
- * - DeepSeek V3 via OpenRouter (default - 98% cheaper)
- * - Anthropic Claude (fallback/premium option)
- * 
- * Provider selection via AI_PROVIDER env var:
- * - 'deepseek' (default) - Uses OpenRouter
- * - 'anthropic' - Direct Anthropic API
+ * AI Chat Client - OpenRouter / DeepSeek V3
+ *
+ * All AI calls go through OpenRouter. No other provider is supported.
+ * Model: DeepSeek V3 via OpenRouter
  */
 
 import { getMaxTokensForTier, AI_CONFIG } from './config';
@@ -40,140 +35,25 @@ export interface ChatCompletionResponse {
   inputTokens: number;
   outputTokens: number;
   model: string;
-  provider: 'deepseek' | 'anthropic';
+  provider: 'openrouter';
   cacheCreated?: number;
   cacheRead?: number;
 }
 
 /**
- * Provider configuration
+ * Build OpenRouter request headers
  */
-interface ProviderConfig {
-  name: 'deepseek' | 'anthropic';
-  apiUrl: string;
-  model: string;
-  getHeaders: () => Record<string, string>;
-  formatRequest: (
-    systemPrompt: string,
-    messages: ChatMessage[],
-    maxTokens: number,
-    temperature: number
-  ) => Record<string, unknown>;
-  parseResponse: (data: Record<string, unknown>) => {
-    content: string;
-    inputTokens: number;
-    outputTokens: number;
-  };
-}
-
-/**
- * DeepSeek provider configuration (via OpenRouter)
- */
-function getDeepSeekConfig(): ProviderConfig {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY environment variable is not set');
-  }
-
+function getOpenRouterHeaders(apiKey: string): Record<string, string> {
   return {
-    name: 'deepseek',
-    apiUrl: `${AI_CONFIG.openrouter.baseUrl}/chat/completions`,
-    model: AI_CONFIG.deepseek.models.chat,
-    getHeaders: () => ({
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-      'X-Title': 'Kirra Companion',
-    }),
-    formatRequest: (systemPrompt, messages, maxTokens, temperature) => ({
-      model: AI_CONFIG.deepseek.models.chat,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages.filter(m => m.role !== 'system'),
-        // User message is already in messages array from caller
-      ],
-      max_tokens: maxTokens,
-      temperature,
-    }),
-    parseResponse: (data) => {
-      const choices = data.choices as Array<{ message?: { content?: string } }> | undefined;
-      const usage = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
-      
-      return {
-        content: choices?.[0]?.message?.content || 
-          "I'm having trouble responding right now. Can you try again?",
-        inputTokens: usage?.prompt_tokens || 0,
-        outputTokens: usage?.completion_tokens || 0,
-      };
-    },
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    'X-Title': 'Kirra Companion',
   };
 }
 
 /**
- * Anthropic provider configuration
- */
-function getAnthropicConfig(): ProviderConfig {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is not set');
-  }
-
-  return {
-    name: 'anthropic',
-    apiUrl: 'https://api.anthropic.com/v1/messages',
-    model: 'claude-sonnet-4-20250514',
-    getHeaders: () => ({
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    }),
-    formatRequest: (systemPrompt, messages, maxTokens, temperature) => ({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: maxTokens,
-      temperature,
-      system: systemPrompt,
-      messages: messages
-        .filter(m => m.role !== 'system')
-        .map(m => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })),
-    }),
-    parseResponse: (data) => {
-      const content = data.content as Array<{ text?: string }> | undefined;
-      const usage = data.usage as { input_tokens?: number; output_tokens?: number } | undefined;
-      
-      return {
-        content: content?.[0]?.text || 
-          "I'm having trouble responding right now. Can you try again?",
-        inputTokens: usage?.input_tokens || 0,
-        outputTokens: usage?.output_tokens || 0,
-      };
-    },
-  };
-}
-
-/**
- * Get the appropriate provider based on configuration
- */
-function getProvider(): ProviderConfig {
-  const provider = process.env.AI_PROVIDER?.toLowerCase() || 'deepseek';
-  
-  switch (provider) {
-    case 'anthropic':
-    case 'claude':
-      return getAnthropicConfig();
-    case 'deepseek':
-    case 'openrouter':
-    default:
-      return getDeepSeekConfig();
-  }
-}
-
-/**
- * Create a chat completion with the configured provider
+ * Create a chat completion via OpenRouter (DeepSeek V3)
  */
 export async function createChatCompletion(
   options: ChatCompletionOptions
@@ -187,60 +67,64 @@ export async function createChatCompletion(
     maxTokens: customMaxTokens,
   } = options;
 
-  const provider = getProvider();
-  const maxTokens = customMaxTokens || getMaxTokensForTier(subscriptionTier);
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY environment variable is not set');
+  }
 
-  // Build messages array with user message appended
+  const maxTokens = customMaxTokens || getMaxTokensForTier(subscriptionTier);
+  const model = AI_CONFIG.deepseek.models.chat;
+
   const allMessages: ChatMessage[] = [
     ...messages,
     { role: 'user', content: userMessage },
   ];
 
-  const requestBody = provider.formatRequest(
-    systemPrompt,
-    allMessages,
-    maxTokens,
-    temperature
-  );
+  const requestBody = {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...allMessages.filter(m => m.role !== 'system'),
+    ],
+    max_tokens: maxTokens,
+    temperature,
+  };
 
   try {
-    const response = await fetch(provider.apiUrl, {
+    const response = await fetch(`${AI_CONFIG.openrouter.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: provider.getHeaders(),
+      headers: getOpenRouterHeaders(apiKey),
       body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error(`${provider.name} API Error:`, response.status, errorData);
-      
+      const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      console.error('OpenRouter API Error:', response.status, errorData);
+
       if (response.status === 429) {
         throw new Error('Rate limit exceeded. Please try again in a moment.');
       }
-      
       if (response.status === 401) {
-        throw new Error(`Invalid API key for ${provider.name}. Please check your configuration.`);
+        throw new Error('Invalid OPENROUTER_API_KEY. Please check your configuration.');
       }
-      
       if (response.status === 400) {
-        const errorMessage = typeof errorData === 'object' && errorData !== null
-          ? JSON.stringify(errorData)
-          : 'Bad request';
-        throw new Error(`Bad request: ${errorMessage}`);
+        throw new Error(`Bad request: ${JSON.stringify(errorData)}`);
       }
-      
-      throw new Error(`API Error: ${response.status}`);
+      throw new Error(`OpenRouter API Error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const parsed = provider.parseResponse(data);
+    const data = await response.json() as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
 
     return {
-      content: parsed.content,
-      inputTokens: parsed.inputTokens,
-      outputTokens: parsed.outputTokens,
-      model: provider.model,
-      provider: provider.name,
+      content: data.choices?.[0]?.message?.content ||
+        "I'm having trouble responding right now. Can you try again?",
+      inputTokens: data.usage?.prompt_tokens || 0,
+      outputTokens: data.usage?.completion_tokens || 0,
+      model,
+      provider: 'openrouter',
     };
   } catch (error) {
     if (error instanceof Error) {

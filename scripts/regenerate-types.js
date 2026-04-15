@@ -2,29 +2,21 @@
 
 /**
  * KIRRA COMPANION - Database Type Regeneration Script
- * 
- * This script regenerates types/database.ts from your Supabase schema
- * while preserving your custom type definitions.
- * 
+ *
  * Usage:
  *   node scripts/regenerate-types.js
- * 
- * Prerequisites:
- *   - Supabase CLI installed: npm install -g supabase
- *   - Logged in: supabase login
- *   - Project linked: supabase link --project-ref YOUR_PROJECT_REF
+ *   npm run db:generate:full
  */
 
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const TYPES_FILE = path.join(__dirname, '..', 'types', 'database.ts');
-const BACKUP_FILE = path.join(__dirname, '..', 'types', 'database.backup.ts');
+const TYPES_FILE   = path.join(__dirname, '..', 'types', 'database.ts');
+const BACKUP_FILE  = path.join(__dirname, '..', 'types', 'database.backup.ts');
 
 // =============================================================================
-// CUSTOM TYPES TO PRESERVE
-// These get appended after Supabase generates the base types
+// CUSTOM TYPES - appended after Supabase-generated base types
 // =============================================================================
 
 const CUSTOM_TYPES = `
@@ -45,46 +37,46 @@ export type UpdateTables<T extends keyof Database['public']['Tables']> =
 // CONVENIENCE EXPORTS - ROW TYPES
 // =============================================================================
 
-export type Profile = Tables<'profiles'>;
-export type Companion = Tables<'companions'>;
-export type CompanionDNA = Tables<'companion_dna'>;
-export type Conversation = Tables<'conversations'>;
-export type Message = Tables<'messages'>;
-export type Memory = Tables<'memories'>;
-export type LifeEvent = Tables<'life_events'>;
-export type CompanionSkill = Tables<'companion_skills'>;
-export type ProactiveMessage = Tables<'proactive_messages'>;
+export type Profile              = Tables<'profiles'>;
+export type Companion            = Tables<'companions'>;
+export type CompanionDNA         = Tables<'companion_dna'>;
+export type Conversation         = Tables<'conversations'>;
+export type Message              = Tables<'messages'>;
+export type Memory               = Tables<'memories'>;
+export type LifeEvent            = Tables<'life_events'>;
+export type CompanionSkill       = Tables<'companion_skills'>;
+export type ProactiveMessage     = Tables<'proactive_messages'>;
 
 // =============================================================================
 // INSERT TYPES
 // =============================================================================
 
-export type ProfileInsert = InsertTables<'profiles'>;
-export type CompanionInsert = InsertTables<'companions'>;
-export type CompanionDNAInsert = InsertTables<'companion_dna'>;
-export type ConversationInsert = InsertTables<'conversations'>;
-export type MessageInsert = InsertTables<'messages'>;
-export type MemoryInsert = InsertTables<'memories'>;
-export type LifeEventInsert = InsertTables<'life_events'>;
-export type CompanionSkillInsert = InsertTables<'companion_skills'>;
+export type ProfileInsert          = InsertTables<'profiles'>;
+export type CompanionInsert        = InsertTables<'companions'>;
+export type CompanionDNAInsert     = InsertTables<'companion_dna'>;
+export type ConversationInsert     = InsertTables<'conversations'>;
+export type MessageInsert          = InsertTables<'messages'>;
+export type MemoryInsert           = InsertTables<'memories'>;
+export type LifeEventInsert        = InsertTables<'life_events'>;
+export type CompanionSkillInsert   = InsertTables<'companion_skills'>;
 export type ProactiveMessageInsert = InsertTables<'proactive_messages'>;
 
 // =============================================================================
 // UPDATE TYPES
 // =============================================================================
 
-export type ProfileUpdate = UpdateTables<'profiles'>;
-export type CompanionUpdate = UpdateTables<'companions'>;
-export type CompanionDNAUpdate = UpdateTables<'companion_dna'>;
-export type ConversationUpdate = UpdateTables<'conversations'>;
-export type MessageUpdate = UpdateTables<'messages'>;
-export type MemoryUpdate = UpdateTables<'memories'>;
-export type CompanionSkillUpdate = UpdateTables<'companion_skills'>;
+export type ProfileUpdate          = UpdateTables<'profiles'>;
+export type CompanionUpdate        = UpdateTables<'companions'>;
+export type CompanionDNAUpdate     = UpdateTables<'companion_dna'>;
+export type ConversationUpdate     = UpdateTables<'conversations'>;
+export type MessageUpdate          = UpdateTables<'messages'>;
+export type MemoryUpdate           = UpdateTables<'memories'>;
+export type CompanionSkillUpdate   = UpdateTables<'companion_skills'>;
 export type ProactiveMessageUpdate = UpdateTables<'proactive_messages'>;
 
 // =============================================================================
-// PLACEHOLDER TYPES FOR OPTIONAL TABLES
-// Comment out any that now exist in your schema above
+// PLACEHOLDER TYPES FOR TABLES NOT YET IN GENERATED SCHEMA
+// Comment out any that now exist above after regeneration
 // =============================================================================
 
 export interface MemoryCategoryRow {
@@ -117,37 +109,22 @@ export interface ActivitySession {
   score: number | null;
   metadata: Json | null;
 }
-export type ActivitySessionInsert = Partial<ActivitySession> & { activity_id: string; companion_id: string; user_id: string };
-
-export interface CrisisLog {
-  id: string;
+export type ActivitySessionInsert = Partial<ActivitySession> & {
+  activity_id: string;
+  companion_id: string;
   user_id: string;
-  companion_id: string | null;
-  severity: string;
-  detected_content: string;
-  action_taken: string;
-  created_at: string;
-}
-export type CrisisLogInsert = Partial<CrisisLog> & { user_id: string; severity: string; detected_content: string; action_taken: string };
-
-export interface BehavioralDetectionLog {
-  id: string;
-  user_id: string;
-  detection_type: string;
-  confidence: number;
-  metadata: Json | null;
-  created_at: string;
-}
-export type BehavioralDetectionLogInsert = Partial<BehavioralDetectionLog> & { user_id: string; detection_type: string; confidence: number };
+};
 
 export interface DataExport {
   id: string;
   user_id: string;
   status: string;
   file_url: string | null;
-  requested_at: string;
+  export_type: string | null;
+  requested_at?: string;
   completed_at: string | null;
   expires_at: string | null;
+  created_at?: string;
 }
 export type DataExportInsert = Partial<DataExport> & { user_id: string };
 
@@ -155,13 +132,10 @@ export interface AuditLog {
   id: string;
   user_id: string;
   action: string;
-  resource_type: string;
-  resource_id: string | null;
-  metadata: Json | null;
-  ip_address: string | null;
+  details: Json | null;
   created_at: string;
 }
-export type AuditLogInsert = Partial<AuditLog> & { user_id: string; action: string; resource_type: string };
+export type AuditLogInsert = Partial<AuditLog> & { user_id: string; action: string };
 
 export interface MemoryAccessLog {
   id: string;
@@ -170,7 +144,11 @@ export interface MemoryAccessLog {
   access_type: string;
   created_at: string;
 }
-export type MemoryAccessLogInsert = Partial<MemoryAccessLog> & { memory_id: string; accessed_by: string; access_type: string };
+export type MemoryAccessLogInsert = Partial<MemoryAccessLog> & {
+  memory_id: string;
+  accessed_by: string;
+  access_type: string;
+};
 
 export interface RelationshipMilestone {
   id: string;
@@ -181,7 +159,11 @@ export interface RelationshipMilestone {
   achieved_at: string;
   metadata: Json | null;
 }
-export type RelationshipMilestoneInsert = Partial<RelationshipMilestone> & { companion_id: string; milestone_type: string; title: string };
+export type RelationshipMilestoneInsert = Partial<RelationshipMilestone> & {
+  companion_id: string;
+  milestone_type: string;
+  title: string;
+};
 
 export interface UserAchievement {
   id: string;
@@ -192,28 +174,21 @@ export interface UserAchievement {
   unlocked_at: string;
   metadata: Json | null;
 }
-export type UserAchievementInsert = Partial<UserAchievement> & { user_id: string; achievement_type: string; title: string };
+export type UserAchievementInsert = Partial<UserAchievement> & {
+  user_id: string;
+  achievement_type: string;
+  title: string;
+};
 
 // =============================================================================
 // CUSTOM APPLICATION TYPES
 // =============================================================================
 
-// Emotion types
 export type EmotionType =
-  | 'happy'
-  | 'sad'
-  | 'excited'
-  | 'calm'
-  | 'curious'
-  | 'loving'
-  | 'playful'
-  | 'thoughtful'
-  | 'neutral'
-  | 'anxious'
-  | 'proud'
-  | 'grateful';
+  | 'happy' | 'sad' | 'excited' | 'calm' | 'curious'
+  | 'loving' | 'playful' | 'thoughtful' | 'neutral'
+  | 'anxious' | 'proud' | 'grateful';
 
-// Mood state interface
 export interface MoodState {
   primary: EmotionType;
   secondary?: EmotionType | null;
@@ -221,7 +196,6 @@ export interface MoodState {
   lastUpdated?: string | null;
 }
 
-// Voice configuration
 export interface VoiceConfig {
   provider: 'elevenlabs' | 'openai';
   voiceId: string | null;
@@ -231,30 +205,19 @@ export interface VoiceConfig {
   speakingRate: number;
 }
 
-// Companion with DNA joined
 export interface CompanionWithDNA extends Companion {
   companion_dna: CompanionDNA | null;
 }
 
-// Event type for life events
-export type EventType = 
-  | 'discovery'
-  | 'achievement'
-  | 'relationship'
-  | 'mood_shift'
-  | 'growth'
-  | 'memory'
-  | 'skill_learned'
-  | 'interest_developed'
-  | 'milestone'
-  | 'daily_reflection';
+export type EventType =
+  | 'discovery' | 'achievement' | 'relationship' | 'mood_shift'
+  | 'growth' | 'memory' | 'skill_learned' | 'interest_developed'
+  | 'milestone' | 'daily_reflection';
 
-// Memory with category
 export interface MemoryWithCategory extends Memory {
   category?: string;
 }
 
-// Communication dialect structure
 export interface CommunicationDialect {
   uniquePhrases?: string[];
   favoriteExpressions?: string[];
@@ -265,78 +228,88 @@ export interface CommunicationDialect {
 `;
 
 // =============================================================================
-// MAIN SCRIPT
+// MAIN
 // =============================================================================
 
 async function main() {
-  console.log('🔄 Kirra Companion - Database Type Regeneration\\n');
+  console.log('Kirra Companion - Database Type Regeneration\n');
 
-  // Step 1: Check if supabase CLI is available
-  console.log('1️⃣  Checking Supabase CLI...');
-  try {
-    execSync('supabase --version', { stdio: 'pipe' });
-    console.log('   ✅ Supabase CLI found\\n');
-  } catch {
-    console.error('   ❌ Supabase CLI not found!');
-    console.error('   Run: npm install -g supabase');
-    console.error('   Then: supabase login');
-    console.error('   Then: supabase link --project-ref YOUR_PROJECT_REF\\n');
+  // 1. Check for access token
+  console.log('1. Checking for SUPABASE_ACCESS_TOKEN...');
+  if (!process.env.SUPABASE_ACCESS_TOKEN) {
+    console.error('   ERROR: SUPABASE_ACCESS_TOKEN env var is not set.');
+    console.error('   Get your token from: https://supabase.com/dashboard/account/tokens');
+    console.error('   Then run: $env:SUPABASE_ACCESS_TOKEN="your-token"\n');
     process.exit(1);
   }
+  console.log('   OK\n');
 
-  // Step 2: Backup existing types
-  console.log('2️⃣  Backing up current types...');
+  // 2. Backup existing types
+  console.log('2. Backing up current types...');
   if (fs.existsSync(TYPES_FILE)) {
     fs.copyFileSync(TYPES_FILE, BACKUP_FILE);
-    console.log(\`   ✅ Backup saved to types/database.backup.ts\\n\`);
+    console.log('   Backup saved to types/database.backup.ts\n');
   } else {
-    console.log('   ⚠️  No existing types file found\\n');
+    console.log('   No existing types file found\n');
   }
 
-  // Step 3: Generate new types from Supabase
-  console.log('3️⃣  Generating types from Supabase...');
+  // 3. Generate new types from Supabase
+  console.log('3. Generating types from Supabase...');
+  let generated;
   try {
-    const generated = execSync('supabase gen types typescript --linked', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+    const https = require('https');
+
+    generated = await new Promise((resolve, reject) => {
+      const url = 'https://api.supabase.com/v1/projects/znfoftmeggrkpxxvtqey/types/typescript';
+      const options = {
+        headers: {
+          'Authorization': 'Bearer ' + process.env.SUPABASE_ACCESS_TOKEN,
+        },
+      };
+
+      https.get(url, options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            reject(new Error('HTTP ' + res.statusCode + ': ' + data));
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve(parsed.types || data);
+            } catch {
+              resolve(data);
+            }
+          }
+        });
+      }).on('error', reject);
     });
-    
-    // Step 4: Combine generated types with custom types
-    console.log('   ✅ Types generated\\n');
-    
-    console.log('4️⃣  Adding custom type definitions...');
-    const finalContent = generated + CUSTOM_TYPES;
-    
-    fs.writeFileSync(TYPES_FILE, finalContent);
-    console.log('   ✅ Custom types appended\\n');
-    
-    // Step 5: Count the result
-    const lineCount = finalContent.split('\\n').length;
-    console.log(\`5️⃣  Done! types/database.ts now has \${lineCount} lines\\n\`);
-    
-    console.log('📋 Next steps:');
-    console.log('   1. Run: npx tsc --noEmit');
-    console.log('   2. Check for any new type errors');
-    console.log('   3. Remove unnecessary "as any" casts');
-    console.log('   4. Delete types/database.backup.ts when satisfied\\n');
-    
+
+    console.log('   Types generated\n');
   } catch (error) {
-    console.error('   ❌ Failed to generate types!');
-    console.error('   Make sure you have linked your project:');
-    console.error('   supabase link --project-ref YOUR_PROJECT_REF\\n');
-    
-    if (error.stderr) {
-      console.error('Error details:', error.stderr.toString());
-    }
-    
-    // Restore backup
+    console.error('   ERROR: Failed to generate types.\n');
+    if (error.stdout) console.error('stdout:', error.stdout.toString());
+    if (error.stderr) console.error('stderr:', error.stderr.toString());
+    if (error.message) console.error('message:', error.message);
     if (fs.existsSync(BACKUP_FILE)) {
       fs.copyFileSync(BACKUP_FILE, TYPES_FILE);
-      console.log('   🔄 Restored from backup\\n');
+      console.log('   Restored from backup\n');
     }
-    
     process.exit(1);
   }
+
+  // 4. Combine and write
+  console.log('4. Appending custom type definitions...');
+  const finalContent = generated + CUSTOM_TYPES;
+  fs.writeFileSync(TYPES_FILE, finalContent);
+
+  const lineCount = finalContent.split('\n').length;
+  console.log('   Done. types/database.ts now has ' + lineCount + ' lines\n');
+
+  console.log('Next steps:');
+  console.log('  npx tsc --noEmit');
+  console.log('  Review any remaining type errors');
+  console.log('  Delete types/database.backup.ts when satisfied\n');
 }
 
-main();
+main().catch(err => { console.error(err); process.exit(1); });
