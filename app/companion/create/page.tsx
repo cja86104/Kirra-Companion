@@ -237,8 +237,7 @@ export default function CreateCompanionPage() {
       const { count: companionCount } = await supabase
         .from('companions')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_archived', false);
+        .eq('user_id', user.id);
 
       const limits: Record<string, number> = {
         free: 1,

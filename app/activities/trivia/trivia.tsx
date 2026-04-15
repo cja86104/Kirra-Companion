@@ -100,8 +100,7 @@ export default function TriviaPage() {
         const { data } = await supabase
           .from('companions')
           .select('id, name, avatar_url')
-          .eq('user_id', user.id)
-          .eq('is_archived', false);
+          .eq('user_id', user.id);
 
         if (data) {
           const companionData = data as Companion[];

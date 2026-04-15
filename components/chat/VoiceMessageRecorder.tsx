@@ -116,7 +116,7 @@ export function VoiceMessageRecorder({
       autoStarted.current = true;
       startRecording();
     }
-  // eslint-disable-next-line -- intentional empty deps: runs once on mount only
+  // runs once on mount only — empty deps intentional
   }, []);
 
   const startRecording = async () => {
