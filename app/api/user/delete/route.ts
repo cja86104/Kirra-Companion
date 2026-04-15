@@ -4,17 +4,17 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import type { Profile, Companion, DataExport } from '@/types/database';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
-});
-
-// Admin client for deleting user
-const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function DELETE() {
+  // Instantiate clients inside handler so env vars are available at runtime
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2025-02-24.acacia',
+  });
+
+  const supabaseAdmin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   try {
     const supabase = await createClient();
 
