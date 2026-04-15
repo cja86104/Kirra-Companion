@@ -4,15 +4,19 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail, paymentFailedEmail } from '@/lib/email';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2025-02-24.acacia',
+  });
+}
 
 // Use service role for webhooks since there's no user session
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 // Map Stripe price IDs to tier names
 const PRICE_TO_TIER: Record<string, string> = {
@@ -39,7 +43,7 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!
@@ -110,7 +114,7 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   }
 
   // Update user's subscription tier
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('profiles')
     .update({
       subscription_tier: tier,
@@ -125,7 +129,7 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   }
 
   // Log the event
-  await supabase
+  await getSupabase()
     .from('audit_logs')
     .insert({
       user_id: userId,
@@ -144,7 +148,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
 
   // Get user by Stripe customer ID
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await getSupabase()
     .from('profiles')
     .select('id')
     .eq('stripe_customer_id', customerId)
@@ -160,7 +164,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const tier = PRICE_TO_TIER[priceId] || 'free';
 
   // Update subscription status
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('profiles')
     .update({
       subscription_tier: tier,
@@ -182,7 +186,7 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
 
   // Get user by Stripe customer ID
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await getSupabase()
     .from('profiles')
     .select('id')
     .eq('stripe_customer_id', customerId)
@@ -194,7 +198,7 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
   }
 
   // Downgrade to free tier
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('profiles')
     .update({
       subscription_tier: 'free',
@@ -209,7 +213,7 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
   }
 
   // Log the event
-  await supabase
+  await getSupabase()
     .from('audit_logs')
     .insert({
       user_id: profile.id,
@@ -226,7 +230,7 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string;
 
   // Get user by Stripe customer ID
-  const { data: profile } = await supabase
+  const { data: profile } = await getSupabase()
     .from('profiles')
     .select('id')
     .eq('stripe_customer_id', customerId)
@@ -235,7 +239,7 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
   if (!profile) return;
 
   // Log successful payment
-  await supabase
+  await getSupabase()
     .from('audit_logs')
     .insert({
       user_id: profile.id,
@@ -254,7 +258,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string;
 
   // Get user by Stripe customer ID
-  const { data: profile } = await supabase
+  const { data: profile } = await getSupabase()
     .from('profiles')
     .select('id, email, full_name')
     .eq('stripe_customer_id', customerId)
@@ -263,7 +267,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   if (!profile) return;
 
   // Update subscription status
-  await supabase
+  await getSupabase()
     .from('profiles')
     .update({
       subscription_status: 'past_due',
@@ -271,7 +275,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     .eq('id', profile.id);
 
   // Log failed payment
-  await supabase
+  await getSupabase()
     .from('audit_logs')
     .insert({
       user_id: profile.id,

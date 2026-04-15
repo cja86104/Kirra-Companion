@@ -3,9 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
 import type { Profile } from '@/types/database';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
-});
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2025-02-24.acacia',
+  });
+}
 
 // Price IDs mapping - set these in your environment variables
 const PRICE_IDS: Record<string, Record<string, string>> = {
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     if (!customerId) {
       // Create new Stripe customer
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: user.email,
         name: profile?.full_name || undefined,
         metadata: {
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create checkout session
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
