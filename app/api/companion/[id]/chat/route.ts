@@ -307,7 +307,47 @@ export async function POST(
         companion_dna: companion.companion_dna?.[0] ? {
           communication_dialect: companion.companion_dna[0].communication_dialect as {
             favoriteExpressions?: string[];
+            formality?: number;
+            emoji_frequency?: number;
+            verbosity?: number;
+            humor_style?: string;
+            uniquePhrases?: string[];
+            speechPatterns?: string[];
           },
+          communication_style: (() => {
+            // Communication style is stored inside communication_dialect at creation time.
+            // Extract it here so buildCompanionSystemPrompt can apply it directly.
+            const dialect = companion.companion_dna![0].communication_dialect as Record<string, number> | null;
+            if (!dialect) return undefined;
+            return {
+              formality:   dialect.formality   !== undefined ? dialect.formality / 100   : undefined,
+              emojiUsage:  dialect.emoji_frequency !== undefined ? dialect.emoji_frequency / 100 : undefined,
+              verbosity:   dialect.verbosity   !== undefined ? dialect.verbosity / 100   : undefined,
+              humorLevel:  dialect.humor_style  !== undefined ? (dialect.humor_style as unknown === 'playful' ? 0.7 : 0.4) : undefined,
+            };
+          })(),
+          personality_traits: (() => {
+            // Personality traits are on the companion record itself, not in DNA.
+            // Bridge them here so the prompt builder can use them.
+            const base = companion.personality_base as Record<string, number> | null;
+            if (!base) return undefined;
+            return {
+              openness:          (base.openness          ?? 50) / 100,
+              conscientiousness: (base.conscientiousness ?? 50) / 100,
+              extraversion:      (base.extraversion      ?? 50) / 100,
+              agreeableness:     (base.agreeableness     ?? 50) / 100,
+              neuroticism:       (base.neuroticism       ?? 50) / 100,
+            };
+          })(),
+          humor_genome: companion.companion_dna[0].humor_genome as Record<string, number> | null ?? undefined,
+          emotional_resonance_map: companion.companion_dna[0].emotional_resonance_map as Record<string, number> | null ?? undefined,
+          learning_style_matrix: companion.companion_dna[0].learning_style_matrix as Record<string, number> | null ?? undefined,
+          memory_weighting_algorithm: companion.companion_dna[0].memory_weighting_algorithm as Record<string, number> | null ?? undefined,
+          personality_version: companion.companion_dna[0].personality_version ?? 0,
+          interests: (() => {
+            const tree = companion.companion_dna![0].interest_evolution_tree as { interests?: string[] } | null;
+            return tree?.interests ?? (companion.interests as string[] | null) ?? undefined;
+          })(),
         } : undefined,
       },
       ((memories as Array<{ title: string | null; content: string; importance_score: number }>) || [])

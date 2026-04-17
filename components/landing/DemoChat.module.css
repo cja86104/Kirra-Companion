@@ -1,0 +1,503 @@
+/* ============================================================
+   DEMO CHAT — Kirra Companion System
+   Matches the dark intimate cinema aesthetic of the landing page
+   ============================================================ */
+
+.root {
+  width: 100%;
+}
+
+/* ============================================================
+   TYPE SELECTOR
+   ============================================================ */
+
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Live indicator bar above the cards ── */
+.selectorLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #F2EAD8;
+  margin-bottom: 4px;
+}
+
+.selectorLabelLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #639922;
+  background: rgba(99,153,34,0.1);
+  border: 1px solid rgba(99,153,34,0.25);
+  padding: 3px 10px 3px 8px;
+  border-radius: 100px;
+}
+
+.selectorLabelLiveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #639922;
+  animation: livePulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+
+.selectorGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+/* Cards glow amber on idle to signal they're clickable */
+@keyframes cardIdle {
+  0%, 100% { border-color: rgba(199,91,26,0.18); }
+  50%       { border-color: rgba(199,91,26,0.42); }
+}
+
+.typeCard {
+  background: rgba(13,9,6,0.9);
+  border: 1px solid rgba(199,91,26,0.18);
+  border-radius: 16px;
+  padding: 22px 18px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
+  animation: cardIdle 3s ease-in-out infinite;
+  /* Stagger each card's idle animation */
+}
+
+.typeCard:nth-child(2) { animation-delay: 1s; }
+.typeCard:nth-child(3) { animation-delay: 2s; }
+
+.typeCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 0%, rgba(199,91,26,0.1) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.typeCard:hover {
+  border-color: rgba(199,91,26,0.7) !important;
+  background: rgba(199,91,26,0.08);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(199,91,26,0.18), 0 0 0 1px rgba(199,91,26,0.15);
+  animation: none;
+}
+
+.typeCard:hover::before { opacity: 1; }
+
+.typeCard:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  animation: none;
+}
+
+.typeEmoji {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.typeName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #F2EAD8;
+}
+
+.typeDesc {
+  font-size: 12px;
+  color: #A89070;
+  line-height: 1.55;
+}
+
+/* Arrow is always visible now, not hidden until hover */
+.typeArrow {
+  font-size: 12px;
+  font-weight: 500;
+  color: #C75B1A;
+  margin-top: 10px;
+  opacity: 0.5;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.typeCard:hover .typeArrow {
+  opacity: 1;
+  transform: translateX(4px);
+}
+
+.limitNote {
+  font-size: 12px;
+  color: #7A5E45;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.limitLink {
+  color: #C75B1A;
+  text-decoration: none;
+}
+
+.limitLink:hover { text-decoration: underline; }
+
+/* ============================================================
+   CHAT WINDOW
+   ============================================================ */
+
+.chatWrap {
+  background: #0D0906;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.05);
+  overflow: hidden;
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(199,91,26,0.06);
+  display: flex;
+  flex-direction: column;
+  height: 480px;
+}
+
+/* ── Header ── */
+.chatHeader {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.chatAvatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, rgba(199,91,26,0.35), #100804);
+  border: 1px solid rgba(199,91,26,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 16px;
+  color: rgba(199,91,26,0.8);
+  flex-shrink: 0;
+}
+
+.chatInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.chatName {
+  font-size: 13px;
+  font-weight: 500;
+  color: #F2EAD8;
+}
+
+.chatStatus {
+  font-size: 11px;
+  color: #7A5E45;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chatOnline {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #639922;
+  flex-shrink: 0;
+}
+
+.chatMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.chatCounter {
+  font-size: 11px;
+  font-weight: 500;
+  color: #7A5E45;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 3px 9px;
+  border-radius: 100px;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.chatCounter[data-warning='true'] {
+  color: #C75B1A;
+  border-color: rgba(199,91,26,0.3);
+  background: rgba(199,91,26,0.06);
+}
+
+.chatChange {
+  font-size: 11px;
+  font-weight: 500;
+  color: #7A5E45;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  transition: color 0.2s;
+}
+
+.chatChange:hover { color: #A89070; }
+
+/* ── Messages ── */
+.chatBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
+
+/* Subtle scrollbar */
+.chatBody::-webkit-scrollbar { width: 4px; }
+.chatBody::-webkit-scrollbar-track { background: transparent; }
+.chatBody::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+
+.msgUser {
+  align-self: flex-end;
+  max-width: 78%;
+}
+
+.msgComp {
+  align-self: flex-start;
+  max-width: 86%;
+}
+
+.msgBubbleUser {
+  padding: 11px 15px;
+  background: rgba(199,91,26,0.12);
+  border: 1px solid rgba(199,91,26,0.18);
+  border-radius: 16px 16px 4px 16px;
+  font-size: 14px;
+  color: #C4A882;
+  line-height: 1.55;
+}
+
+.msgBubbleComp {
+  padding: 13px 17px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px 16px 16px 4px;
+  font-family: Georgia, 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 15px;
+  color: #F2EAD8;
+  line-height: 1.65;
+}
+
+.msgLabel {
+  font-size: 11px;
+  color: #7A5E45;
+  margin-bottom: 5px;
+}
+
+/* Typing indicator */
+.typing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 16px 16px 16px 4px;
+  width: fit-content;
+}
+
+.typingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7A5E45;
+  animation: typingBounce 1.3s ease-in-out infinite;
+}
+
+.typingDot:nth-child(2) { animation-delay: 0.22s; }
+.typingDot:nth-child(3) { animation-delay: 0.44s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: translateY(0);    opacity: 0.4; }
+  40%            { transform: translateY(-7px); opacity: 1; }
+}
+
+/* ── Limit reached CTA ── */
+.limitCard {
+  background: rgba(199,91,26,0.06);
+  border: 1px solid rgba(199,91,26,0.2);
+  border-radius: 16px;
+  padding: 22px 20px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.limitCardTitle {
+  font-family: Georgia, 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 17px;
+  color: #F2EAD8;
+  margin-bottom: 8px;
+}
+
+.limitCardSub {
+  font-size: 13px;
+  color: #A89070;
+  line-height: 1.65;
+  margin-bottom: 18px;
+}
+
+.limitCardBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #C75B1A;
+  color: #080604;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 22px;
+  border-radius: 100px;
+  text-decoration: none;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.limitCardBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* ── Input bar ── */
+.chatInput {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  color: #F2EAD8;
+  outline: none;
+  resize: none;
+  max-height: 100px;
+  line-height: 1.5;
+  transition: border-color 0.2s;
+}
+
+.input::placeholder { color: rgba(242,234,216,0.2); }
+.input:focus { border-color: rgba(199,91,26,0.4); }
+.input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.sendBtn {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  background: #C75B1A;
+  border: none;
+  border-radius: 10px;
+  color: #080604;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.sendBtn:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.sendBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sendSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(8,6,4,0.3);
+  border-top-color: #080604;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 600px) {
+  .selectorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .chatWrap {
+    height: 420px;
+    border-radius: 18px;
+  }
+}
+
+/* ── Additional states added for DemoChat v2 ── */
+
+.typeCardActive {
+  border-color: rgba(199,91,26,0.4);
+  background: rgba(199,91,26,0.06);
+  transform: none !important;
+  cursor: default;
+}
+
+.typeConnecting {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.selectorError {
+  font-size: 12px;
+  color: #f87171;
+  text-align: center;
+  margin-top: 4px;
+}

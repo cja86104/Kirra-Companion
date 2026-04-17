@@ -121,6 +121,10 @@ export function ChatWindow({
 
   // Queued voice playback hook - optimized for sentence-level TTS
   const { playQueued, stop: stopVoice, isPlaying: isVoicePlaying } = useQueuedVoicePlayback(companion.id);
+  // Track which message IDs have already triggered voice playback to prevent double-play.
+  // The same companion message can arrive via both the API response AND the Supabase
+  // realtime subscription — this ref ensures we only play it once.
+  const playedMessageIdsRef = useRef<Set<string>>(new Set());
   
   // Mood
   const moodData = companion.current_mood as { primary?: string } | null;
@@ -184,6 +188,20 @@ export function ChatWindow({
           return [...prev, newMessage];
         });
         setIsTyping(false);
+
+        // Play voice for companion messages that haven't been played yet.
+        // Messages already played via the API response path are in playedMessageIdsRef
+        // and must be skipped here to prevent the response from being read twice.
+        if (
+          newMessage.role === 'companion' &&
+          newMessage.content &&
+          autoPlayVoice &&
+          hasVoiceEnabled &&
+          !playedMessageIdsRef.current.has(newMessage.id)
+        ) {
+          playedMessageIdsRef.current.add(newMessage.id);
+          playQueued(newMessage.content);
+        }
       })
       .subscribe();
 
@@ -263,6 +281,7 @@ export function ChatWindow({
 
         // Use queued playback for faster perceived response
         if (autoPlayVoice && hasVoiceEnabled && data.companionMessage.content) {
+          playedMessageIdsRef.current.add(data.companionMessage.id);
           playQueued(data.companionMessage.content);
         }
       }

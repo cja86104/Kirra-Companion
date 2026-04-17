@@ -852,3 +852,10 @@
   .heroProof { flex-direction: column; align-items: flex-start; gap: 20px; }
   .heroProofDivider { display: none; }
 }
+
+/* ── Live demo container — wraps the DemoChat client component ── */
+.demoChatWrap {
+  /* DemoChat handles its own internal styles.
+     This just anchors it within the demoLayout grid column. */
+  min-width: 0; /* Prevent grid blowout */
+}

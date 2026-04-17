@@ -12,9 +12,22 @@
  * Result: Two identical companions become completely different after 30 days
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type { CompanionDNA } from '@/types/database';
+
+/**
+ * Get an admin Supabase client for background processes.
+ * DNA evolution runs as a fire-and-forget background task from the chat route,
+ * outside a proper user session context. The user-scoped client returns nothing
+ * due to RLS. Admin client bypasses RLS safely for this trusted internal process.
+ */
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase admin credentials');
+  return createAdminClient(url, key);
+}
 
 // ============================================================================
 // LOCAL TYPE DEFINITIONS
@@ -281,7 +294,7 @@ async function fetchRecentConversations(
   companionId: string,
   hoursBack: number = 24
 ): Promise<{ userMessages: string[]; companionMessages: string[] }> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const cutoff = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString();
   
@@ -825,7 +838,7 @@ export async function evolveCompanionDNA(
     useAI?: boolean;
   }
 ): Promise<EvolutionAnalysis | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   const hoursBack = options?.hoursBack ?? 24;
   const minMessages = options?.minMessages ?? 10;
   const useAI = options?.useAI ?? true; // Default to using AI
@@ -1000,7 +1013,7 @@ export async function evolveCompanionDNA(
 export async function getEvolutionHistory(
   companionId: string
 ): Promise<{ version: number; lastEvolution: string | null } | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const { data } = await supabase
     .from('companion_dna')
