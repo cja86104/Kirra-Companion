@@ -22,7 +22,27 @@ import type {
   CompanionActivityInsert,
 } from '@/types/life-simulation';
 import type { Companion, CompanionDNA } from '@/types/database';
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+
+/**
+ * Get an admin Supabase client for background processes.
+ *
+ * Activity generation runs primarily inside `runSimulationTick` (called from
+ * the `/api/cron/life-simulation` endpoint with no user session) and from
+ * user-facing routes that have already verified ownership at the route
+ * layer. In both cases the DB reads here (companion interests) are system
+ * operations driving the autonomous simulation, not direct user actions.
+ * The user-scoped SSR client would fail in the cron path (no cookies →
+ * anon → RLS blocks everything), so this library uses the service role.
+ * Matches the pattern in `lib/companion/life-simulation.ts` and
+ * `lib/companion/dna-evolution.ts`.
+ */
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase admin credentials');
+  return createAdminClient(url, key);
+}
 
 // ============================================================================
 // Activity Templates
@@ -629,7 +649,7 @@ export async function generateActivity(
   mood: CompanionMoodState,
   timeOfDay: TimeOfDay
 ): Promise<CompanionActivityInsert | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   // Get companion's interests
   const { data: interests } = await supabase

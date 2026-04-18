@@ -12,7 +12,7 @@
  * This is THE differentiator - companions feel alive 24/7.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type {
   CompanionActivity,
@@ -30,6 +30,25 @@ import type {
   LifeEventRow,
   CompanionActivityRow,
 } from '@/types/life-simulation-db';
+
+/**
+ * Get an admin Supabase client for background processes.
+ *
+ * The life-simulation library runs primarily from the `/api/cron/life-simulation`
+ * endpoint (with no user session at all) and secondarily from user-facing
+ * routes that have already verified ownership at the route layer. In both
+ * cases, writes here are system operations — the companion is autonomously
+ * living their life — not direct user actions. The user-scoped SSR client
+ * would fail in the cron path (no cookies → anon → RLS blocks everything),
+ * so this library uses the service role throughout. Matches the pattern
+ * already established in `lib/companion/dna-evolution.ts`.
+ */
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase admin credentials');
+  return createAdminClient(url, key);
+}
 
 // ============================================================================
 // Constants
@@ -318,7 +337,7 @@ Write a single sentence (20-40 words) explaining what specifically made you thin
  * Get or create simulation state for a companion
  */
 export async function getSimulationState(companionId: string): Promise<SimulationState | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const { data, error } = await supabase
     .from('simulation_states')
@@ -369,7 +388,7 @@ export async function updateSimulationState(
   companionId: string,
   updates: Partial<SimulationState>
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const { error } = await supabase
     .from('simulation_states')
@@ -393,7 +412,7 @@ export async function createActivityLifeEvent(
   activity: CompanionActivity,
   mood: CompanionMoodState
 ): Promise<LifeEvent | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   // Map to Supabase significance enum values
   const significance: 'major' | 'moderate' | 'minor' =
@@ -445,7 +464,7 @@ export async function createUserThoughtEvent(
   mood: CompanionMoodState,
   relatedActivityId?: string
 ): Promise<LifeEvent | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const eventInsert = {
     companion_id: companionId,
@@ -485,7 +504,7 @@ export async function createUserThoughtEvent(
  * Get companion's current mood state
  */
 export async function getCompanionMood(companionId: string): Promise<CompanionMoodState> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
 
   const { data } = await supabase
     .from('companions')
@@ -517,7 +536,7 @@ export async function updateCompanionMood(
   companionId: string,
   mood: CompanionMoodState
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
 
   const { error } = await supabase
     .from('companions')
@@ -550,7 +569,7 @@ export async function runSimulationTick(
     return { moodChanged: false, thoughtOfUser: false };
   }
   
-  const supabase = await createClient();
+  const supabase = getAdminClient();
 
   // Get companion data
   const { data: companion } = await supabase

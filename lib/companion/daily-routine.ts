@@ -11,7 +11,7 @@
  * Routines are personalized based on companion personality.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import type {
   DailyRoutine,
   RoutineSlot,
@@ -20,6 +20,24 @@ import type {
 } from '@/types/life-simulation';
 import type { Companion, CompanionDNA } from '@/types/database';
 import type { DailyRoutineRow, CompanionInterestRow } from '@/types/life-simulation-db';
+
+/**
+ * Get an admin Supabase client for background processes.
+ *
+ * Routine operations run from user-facing routes (which verify ownership at
+ * the route layer) and indirectly from the life-simulation orchestrator
+ * during cron runs. Either way, reads and writes here are system operations
+ * on the companion, not direct user actions. The user-scoped SSR client
+ * would fail in the cron path (no cookies → anon → RLS blocks everything),
+ * so this library uses the service role. Matches the pattern in
+ * `lib/companion/life-simulation.ts` and `lib/companion/dna-evolution.ts`.
+ */
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase admin credentials');
+  return createAdminClient(url, key);
+}
 
 interface CompanionDNAPersonality {
   personality_traits?: Record<string, number>;
@@ -410,7 +428,7 @@ function personalizeRoutine(
 export async function generateDailyRoutine(
   companion: Companion & { companion_dna?: CompanionDNA }
 ): Promise<DailyRoutine | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   // Get personality traits
   const personality = (companion.personality_base as unknown as Record<string, number>) || {};
@@ -503,7 +521,7 @@ export async function generateDailyRoutine(
 export async function getCompanionRoutine(
   companionId: string
 ): Promise<DailyRoutine | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const { data, error } = await supabase
     .from('daily_routines')
@@ -619,7 +637,7 @@ export async function adaptRoutineToUser(
   companionId: string,
   userActiveHours: number[]
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const routine = await getCompanionRoutine(companionId);
   if (!routine) return;

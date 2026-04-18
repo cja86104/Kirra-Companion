@@ -6,7 +6,7 @@
  * personalized proactive messages.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type { Json } from '@/types/database';
 import {
@@ -39,6 +39,26 @@ import type {
   CompanionActivityRow,
 } from '@/types/life-simulation-db';
 
+/**
+ * Get an admin Supabase client for background processes.
+ *
+ * Proactive-messaging runs primarily from the `/api/cron/proactive-check`
+ * endpoint (no user session) and secondarily from `/api/companion/[id]/proactive`
+ * routes that have already verified ownership at the route layer. In both
+ * cases, the operations here are system actions on the user's behalf — the
+ * companion initiating contact — not direct user writes. The user-scoped
+ * SSR client would fail in the cron path (no cookies → anon → RLS blocks
+ * everything), so this library uses the service role throughout. Matches
+ * the pattern already established in `lib/companion/dna-evolution.ts` and
+ * `lib/companion/life-simulation.ts`.
+ */
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase admin credentials');
+  return createAdminClient(url, key);
+}
+
 // ============================================================================
 // Main Functions
 // ============================================================================
@@ -49,7 +69,7 @@ import type {
 export async function checkProactiveTriggers(
   companionId: string
 ): Promise<TriggerCheckResult> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   // Get companion with DNA and user profile
   const { data: companionData } = await supabase
@@ -264,7 +284,7 @@ export async function generateProactiveMessage(
     customContext?: Record<string, Json>;
   }
 ): Promise<ProactiveMessage | null> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   // Get companion with full context
   const { data: companionData } = await supabase
@@ -497,7 +517,7 @@ export async function generateProactiveMessage(
  * Mark a proactive message as sent
  */
 export async function markMessageSent(messageId: string): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
 
   const { error } = await supabase
     .from('proactive_messages')
@@ -514,7 +534,7 @@ export async function markMessageSent(messageId: string): Promise<boolean> {
  * Mark a proactive message as seen
  */
 export async function markMessageSeen(messageId: string): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
 
   const { error } = await supabase
     .from('proactive_messages')
@@ -532,7 +552,7 @@ export async function markMessageSeen(messageId: string): Promise<boolean> {
  * Mark a proactive message as responded
  */
 export async function markMessageResponded(messageId: string): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
 
   const { error } = await supabase
     .from('proactive_messages')
@@ -552,7 +572,7 @@ export async function getPendingMessages(
   userId: string,
   companionId?: string
 ): Promise<ProactiveMessage[]> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
 
   let query = supabase
     .from('proactive_messages')
@@ -579,7 +599,7 @@ export async function getPendingMessages(
  * Expire old pending messages
  */
 export async function expireOldMessages(hoursOld: number = 24): Promise<number> {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   
   const cutoff = new Date(Date.now() - hoursOld * 60 * 60 * 1000).toISOString();
   
