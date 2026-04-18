@@ -34,7 +34,7 @@ import { Slider } from '@/components/ui/slider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClient } from '@/lib/supabase/client';
 import { NiceAvatarCustomizer } from '@/components/avatar/NiceAvatarCustomizer';
-import type { Companion, Json } from '@/types/database';
+import type { Companion, Json, CompanionUpdate } from '@/types/database';
 import type { NiceAvatarConfig } from '@/types/nice-avatar';
 
 // ============================================================================
@@ -135,10 +135,10 @@ export default function CompanionDetailsPage() {
       .from('companions')
       .update({
         name,
-        avatar_3d_config: avatarConfig,
-        personality_base: traits,
+        avatar_3d_config: avatarConfig as unknown as Json,
+        personality_base: traits as unknown as Json,
         updated_at: new Date().toISOString(),
-      } as never)
+      } satisfies CompanionUpdate)
       .eq('id', companion.id);
 
     if (error) {

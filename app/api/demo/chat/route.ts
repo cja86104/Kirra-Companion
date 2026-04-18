@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 
 // ============================================================================
@@ -188,18 +189,18 @@ function parseDemoCookie(raw: string | undefined): DemoCookieData {
 }
 
 // ============================================================================
-// REQUEST TYPES
+// REQUEST SCHEMA
 // ============================================================================
 
-interface DemoMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+const DemoMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string().min(1).max(10000),
+});
 
-interface DemoRequestBody {
-  companionType: string;
-  messages: DemoMessage[];
-}
+const DemoChatSchema = z.object({
+  companionType: z.string().min(1),
+  messages: z.array(DemoMessageSchema).min(1).max(DEMO_LIMIT + 2),
+});
 
 // ============================================================================
 // POST — send a message
@@ -238,23 +239,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // ── Parse body ──────────────────────────────────────────────────────────
-    const body = await request.json() as DemoRequestBody;
-    const { companionType, messages } = body;
-
-    if (!companionType || !messages?.length) {
+    const rawBody: unknown = await request.json();
+    const parseResult = DemoChatSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'bad_request', message: 'companionType and messages are required' },
+        { error: 'bad_request', errors: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-
-    // Server-side message count guard — never trust client state
-    if (messages.length > DEMO_LIMIT + 2) {
-      return NextResponse.json(
-        { error: 'limit_reached', message: 'Demo limit reached', remaining: 0 },
-        { status: 429 }
-      );
-    }
+    const { companionType, messages } = parseResult.data;
 
     // ── Resolve persona ─────────────────────────────────────────────────────
     const persona = COMPANIONS[companionType] ?? COMPANIONS.friend;

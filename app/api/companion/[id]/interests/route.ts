@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import {
   getUserSharedInterests,
@@ -11,9 +12,21 @@ import type {
   CompanionInterest,
   InterestsResponse,
   InterestCategory,
-  InterestOrigin,
 } from '@/types/life-simulation';
 import type { CompanionInterestRow } from '@/types/life-simulation-db';
+
+const InterestPostSchema = z.object({
+  origin: z.enum(['initial', 'user_shared', 'discovered', 'evolved', 'activity', 'conversation']),
+  interest_id: z.string().optional(),
+  context: z.string().max(1000).optional(),
+});
+
+const InterestPutSchema = z.object({
+  interest_id: z.string().uuid(),
+  action: z.enum(['add_experience', 'update_strength', 'increment_mentions']),
+  amount: z.number().optional(),
+  context: z.string().max(1000).optional(),
+});
 
 /**
  * GET /api/companion/[id]/interests
@@ -153,27 +166,16 @@ export async function POST(
 ) {
   try {
     const { id: companionId } = await params;
-    const body = await request.json();
-    const { origin, interest_id, context } = body;
-    
-    if (!origin) {
+    const rawBody: unknown = await request.json();
+    const parseResult = InterestPostSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'origin is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-    
-    const validOrigins: InterestOrigin[] = [
-      'initial', 'user_shared', 'discovered', 'evolved', 'activity', 'conversation'
-    ];
-    
-    if (!validOrigins.includes(origin)) {
-      return NextResponse.json(
-        { error: 'Invalid origin', valid_origins: validOrigins },
-        { status: 400 }
-      );
-    }
-    
+    const { origin, interest_id, context } = parseResult.data;
+
     const supabase = await createClient();
     
     // Verify user is authenticated
@@ -217,7 +219,7 @@ export async function POST(
     // Discover new interest
     const newInterest = await discoverNewInterest(
       companionId,
-      origin as InterestOrigin,
+      origin,
       {
         specificInterestId: interest_id,
         conversationContext: context,
@@ -265,16 +267,16 @@ export async function PUT(
 ) {
   try {
     const { id: companionId } = await params;
-    const body = await request.json();
-    const { interest_id, action, amount, context } = body;
-    
-    if (!interest_id || !action) {
+    const rawBody: unknown = await request.json();
+    const parseResult = InterestPutSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'interest_id and action are required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-    
+    const { interest_id, action, amount, context } = parseResult.data;
+
     const supabase = await createClient();
     
     // Verify user is authenticated

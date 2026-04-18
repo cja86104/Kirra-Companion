@@ -16,7 +16,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getClient } from '@/lib/supabase/client';
-import type { DataExport } from '@/types/database';
+import type { DataExport, DataExportInsert } from '@/types/database';
 
 export default function DataPage() {
   const [isExporting, setIsExporting] = useState(false);
@@ -85,7 +85,7 @@ export default function DataPage() {
         .insert({
           user_id: user.id,
           status: 'pending',
-        } as never)
+        } satisfies DataExportInsert)
         .select()
         .single();
 

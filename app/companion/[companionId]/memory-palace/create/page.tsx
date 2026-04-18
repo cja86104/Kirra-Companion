@@ -106,7 +106,7 @@ export default function MemoryCreatePage({ params }: MemoryCreatePageProps) {
           content: content.trim(),
           category_id: selectedCategory,
           importance_score: importance / 100,
-          is_core_identity: isCoreMemory,
+          is_core_memory: isCoreMemory,
           is_pinned: isPinned,
         }),
       });

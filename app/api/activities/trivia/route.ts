@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import {
   createGameState,
@@ -20,9 +21,15 @@ import {
   type TriviaGameState,
 } from '@/lib/activities/trivia';
 
-// Type shim for the untyped trivia_games table (types regenerate after supabase db pull)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnySupabase = any;
+const TriviaStartSchema = z.object({
+  companionId: z.string().uuid(),
+  category: z.enum(['general', 'science', 'history', 'entertainment', 'sports', 'geography']),
+});
+
+const TriviaAnswerSchema = z.object({
+  gameId: z.string().min(1).max(200),
+  selectedIndex: z.number().int().min(0).max(3),
+});
 
 // ============================================================
 // POST - Start New Game
@@ -37,18 +44,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { companionId, category } = body as {
-      companionId: string;
-      category: TriviaCategory;
-    };
-
-    if (!companionId || !category) {
+    const rawBody: unknown = await request.json();
+    const parseResult = TriviaStartSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'companionId and category are required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { companionId, category } = parseResult.data;
 
     // Verify companion belongs to user
     const { data: companionData, error: companionError } = await supabase
@@ -65,18 +69,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Create game state
-    const gameState = createGameState(companionId, category);
+    const gameState = createGameState(companionId, category as TriviaCategory);
 
-    // Persist to Supabase — trivia_games: id TEXT, user_id UUID, companion_id UUID, game_state JSONB
-    const db = supabase as AnySupabase;
-    const { error: insertError } = await db
-      .from('trivia_games')
+    // game_state and expires_at are not in generated trivia_games types (schema drift vs runtime table)
+    const { error: insertError } = await supabase
+      .from('trivia_games' as never)
       .insert({
         id: gameState.gameId,
         user_id: user.id,
         companion_id: companionId,
         game_state: gameState,
-      });
+      } as never);
 
     if (insertError) {
       console.error('Failed to persist trivia game:', insertError);
@@ -116,35 +119,30 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { gameId, selectedIndex } = body as {
-      gameId: string;
-      selectedIndex: number;
-    };
-
-    if (!gameId || selectedIndex === undefined) {
+    const rawBody: unknown = await request.json();
+    const parseResult = TriviaAnswerSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'gameId and selectedIndex are required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-
-    const db = supabase as AnySupabase;
+    const { gameId, selectedIndex } = parseResult.data;
 
     // Load game — enforce ownership and expiry
-    const { data: row, error: fetchError } = await db
-      .from('trivia_games')
+    const { data: row, error: fetchError } = await supabase
+      .from('trivia_games' as never)
       .select('game_state')
       .eq('id', gameId)
       .eq('user_id', user.id)
       .gt('expires_at', new Date().toISOString())
-      .single();
+      .single() as unknown as { data: { game_state: TriviaGameState } | null; error: Error | null };
 
     if (fetchError || !row) {
       return NextResponse.json({ error: 'Game not found or expired' }, { status: 404 });
     }
 
-    const gameState = (row as { game_state: TriviaGameState }).game_state;
+    const gameState = row.game_state;
 
     if (gameState.status === 'completed') {
       return NextResponse.json({ error: 'Game already completed' }, { status: 400 });
@@ -161,7 +159,7 @@ export async function PUT(request: NextRequest) {
       await saveGameResult(user.id, updatedState);
 
       // Delete the active game row
-      await db.from('trivia_games').delete().eq('id', gameId);
+      await supabase.from('trivia_games' as never).delete().eq('id', gameId);
 
       const endReaction = getGameEndReaction(updatedState.score, updatedState.totalQuestions);
 
@@ -178,9 +176,9 @@ export async function PUT(request: NextRequest) {
     }
 
     // Game still in progress — persist updated state
-    const { error: updateError } = await db
-      .from('trivia_games')
-      .update({ game_state: updatedState })
+    const { error: updateError } = await supabase
+      .from('trivia_games' as never)
+      .update({ game_state: updatedState } as never)
       .eq('id', gameId);
 
     if (updateError) {

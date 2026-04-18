@@ -14,12 +14,21 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import {
   evolveCompanionDNA,
   getEvolutionHistory,
   isEvolutionDue,
 } from '@/lib/companion/dna-evolution';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+const EvolveSchema = z.object({
+  force: z.boolean().optional().default(false),
+  useAI: z.boolean().optional().default(true),
+  hoursBack: z.number().int().min(1).max(168).optional().default(24),
+  minMessages: z.number().int().min(1).max(1000).optional().default(5),
+});
 
 // ============================================================================
 // GET - Evolution Status
@@ -134,18 +143,15 @@ export async function POST(
     const supabase = await createClient();
 
     // Parse request body
-    const body = await request.json().catch(() => ({}));
-    const {
-      force = false,        // Skip cooldown check
-      useAI = true,         // Use AI-powered analysis
-      hoursBack = 24,       // How far back to analyze
-      minMessages = 5,      // Minimum messages required
-    } = body as {
-      force?: boolean;
-      useAI?: boolean;
-      hoursBack?: number;
-      minMessages?: number;
-    };
+    const rawBody: unknown = await request.json().catch(() => ({}));
+    const parseResult = EvolveSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { force, useAI, hoursBack, minMessages } = parseResult.data;
 
     // Verify user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -153,6 +159,14 @@ export async function POST(
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    const rateLimitResult = await checkRateLimit(user.id, 'evolve', 10, 86400);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded', remaining: rateLimitResult.remaining, resetsAt: rateLimitResult.resetsAt },
+        { status: 429 }
       );
     }
 

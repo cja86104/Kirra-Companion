@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import {
   checkProactiveTriggers,
@@ -16,7 +17,22 @@ import {
   markMessageSeen,
   markMessageResponded,
 } from '@/lib/companion/proactive-messaging';
-import type { ProactiveMessage, ProactiveTriggerType } from '@/types/proactive';
+import type { ProactiveMessage } from '@/types/proactive';
+
+const ProactivePostSchema = z.object({
+  action: z.enum(['check', 'generate']).optional().default('check'),
+  trigger_type: z.enum([
+    'missing_user', 'thinking_of_you', 'share_experience', 'mood_share',
+    'milestone_reached', 'interest_discovery', 'need_social', 'special_occasion',
+    'random_thought', 'dream_share', 'question_for_user', 'gratitude', 'check_in',
+  ]).optional(),
+  force: z.boolean().optional().default(false),
+});
+
+const ProactivePutSchema = z.object({
+  message_id: z.string().uuid(),
+  action: z.enum(['seen', 'responded']),
+});
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -146,12 +162,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
     
-    const body = await request.json().catch(() => ({}));
-    const { action = 'check', trigger_type, force = false } = body as {
-      action?: 'check' | 'generate';
-      trigger_type?: ProactiveTriggerType;
-      force?: boolean;
-    };
+    const rawBody: unknown = await request.json().catch(() => ({}));
+    const parseResult = ProactivePostSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { action, trigger_type, force } = parseResult.data;
     
     if (action === 'check') {
       // Just check triggers without generating
@@ -252,18 +271,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
     
-    const body = await request.json();
-    const { message_id, action } = body as {
-      message_id: string;
-      action: 'seen' | 'responded';
-    };
-    
-    if (!message_id || !action) {
+    const rawBody: unknown = await request.json();
+    const putResult = ProactivePutSchema.safeParse(rawBody);
+    if (!putResult.success) {
       return NextResponse.json(
-        { error: 'Missing message_id or action' },
+        { error: putResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { message_id, action } = putResult.data;
     
     // Verify message belongs to user
     const { data: message } = await supabase

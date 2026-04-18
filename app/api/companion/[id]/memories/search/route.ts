@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { generateEmbedding, cosineSimilarity } from '@/lib/ai/embeddings';
 
-interface SearchRequestBody {
-  query: string;
-  limit?: number;
-}
+const MemorySearchSchema = z.object({
+  query: z.string().min(1).max(500),
+  limit: z.number().int().min(1).max(100).optional().default(10),
+});
 
 // Type for memory with category joined
 interface MemorySearchResult {
@@ -24,15 +25,15 @@ export async function POST(
 ) {
   try {
     const { id: companionId } = await params;
-    const body: SearchRequestBody = await request.json();
-    const { query, limit = 10 } = body;
-
-    if (!query?.trim()) {
+    const rawBody: unknown = await request.json();
+    const parseResult = MemorySearchSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'Search query is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { query, limit } = parseResult.data;
 
     const supabase = await createClient();
 

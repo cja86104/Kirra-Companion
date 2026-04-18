@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import {
   processProactiveCheck,
@@ -22,6 +23,12 @@ function getSupabaseAdmin() {
     { auth: { persistSession: false } }
   );
 }
+
+const ProactiveCheckBodySchema = z.object({
+  companion_id: z.string().uuid().optional(),
+  batch_size: z.number().int().positive().max(500).optional().default(50),
+  dry_run: z.boolean().optional().default(false),
+});
 
 // ============================================================================
 // POST - Run proactive check for all companions
@@ -40,16 +47,15 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const body = await request.json().catch(() => ({}));
-    const { 
-      companion_id,  // Optional: specific companion
-      batch_size = 50,
-      dry_run = false,
-    } = body as {
-      companion_id?: string;
-      batch_size?: number;
-      dry_run?: boolean;
-    };
+    const rawBody: unknown = await request.json().catch(() => ({}));
+    const parseResult = ProactiveCheckBodySchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { companion_id, batch_size, dry_run } = parseResult.data;
     
     const results: {
       companion_id: string;

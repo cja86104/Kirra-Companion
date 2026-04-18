@@ -1,6 +1,6 @@
 /**
  * TEACHABLE SKILLS TYPES
- * 
+ *
  * Type definitions for the companion skill learning system.
  * Companions can be taught specific knowledge that they retain and use.
  */

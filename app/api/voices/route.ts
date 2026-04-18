@@ -6,6 +6,7 @@ import {
   getVoiceLimitForTier,
   type OpenAIVoiceId,
 } from '@/lib/tts/openai-tts';
+import { z } from 'zod';
 
 /**
  * Voice option returned to client
@@ -113,9 +114,14 @@ export async function GET() {
   }
 }
 
+const VoiceConfigSchema = z.object({
+  voiceId: z.string().min(1).refine((v) => v in OPENAI_VOICES, { message: 'Invalid voice ID' }),
+  speed: z.number().min(0.25).max(4.0).optional(),
+});
+
 /**
  * POST /api/voices
- * 
+ *
  * Validate a voice configuration before saving.
  */
 export async function POST(request: NextRequest) {
@@ -131,32 +137,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { voiceId, speed } = body;
-
-    // Validate voice ID
-    if (!voiceId || !OPENAI_VOICES[voiceId as OpenAIVoiceId]) {
+    const rawBody: unknown = await request.json();
+    const parseResult = VoiceConfigSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { 
-          error: 'Invalid voice ID',
-          valid_ids: Object.keys(OPENAI_VOICES),
-        },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-
-    // Validate speed if provided (OpenAI uses 0.25 to 4.0 range)
-    if (speed !== undefined) {
-      if (typeof speed !== 'number' || speed < 0.25 || speed > 4.0) {
-        return NextResponse.json(
-          { 
-            error: 'Speed must be a number between 0.25 and 4.0',
-            received: speed,
-          },
-          { status: 400 }
-        );
-      }
-    }
+    const { voiceId, speed } = parseResult.data;
 
     // Get user tier
     const { data: profileData } = await supabase

@@ -8,8 +8,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import type { Json } from '@/types/database';
+
+const SkillSearchSchema = z.object({
+  query: z.string().min(1).max(500),
+  categories: z.array(z.enum(['coding', 'recipes', 'domain', 'traditions', 'games', 'creative', 'language', 'procedures', 'trivia', 'other'])).optional(),
+  limit: z.number().int().min(1).max(50).optional().default(5),
+  min_confidence: z.number().min(0).max(1).optional().default(0),
+});
 
 // Local types matching actual database schema
 interface CompanionRow {
@@ -71,30 +79,15 @@ export async function POST(
   try {
     const { id: companionId } = await params;
     const supabase = await createClient();
-    const body = await request.json();
-
-    const {
-      query,               // Search query text
-      categories,          // Optional: filter by categories
-      limit = 5,           // Max results
-      min_confidence = 0,  // Minimum confidence score (unused with current schema)
-    } = body as {
-      query: string;
-      categories?: SkillCategory[];
-      limit?: number;
-      min_confidence?: number;
-      include_inactive?: boolean;
-    };
-
-    // Suppress unused variable
-    void min_confidence;
-
-    if (!query?.trim()) {
+    const rawBody: unknown = await request.json();
+    const parseResult = SkillSearchSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'query is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { query, categories, limit } = parseResult.data;
 
     // Verify user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -129,8 +122,9 @@ export async function POST(
     }
 
     // Try to use the database function first
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: functionResults, error: functionError } = await (supabase as any)
+    // get_relevant_skills not yet in generated types — cast through unknown
+    type RpcClient = { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: RpcSkillResult[] | null; error: { message: string } | null }> };
+    const { data: functionResults, error: functionError } = await (supabase as unknown as RpcClient)
       .rpc('get_relevant_skills', {
         p_companion_id: companionId,
         p_search_text: query.trim(),

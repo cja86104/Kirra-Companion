@@ -11,10 +11,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
-import { 
-  runSimulationTick, 
-  DEFAULT_SIMULATION_CONFIG 
+import {
+  runSimulationTick,
+  DEFAULT_SIMULATION_CONFIG
 } from '@/lib/companion/life-simulation';
 
 // Use service role for cron operations — lazy factory to avoid module-level env var access at build time
@@ -25,6 +26,12 @@ function getSupabaseAdmin() {
     { auth: { persistSession: false } }
   );
 }
+
+const LifeSimBodySchema = z.object({
+  companion_id: z.string().uuid().optional(),
+  batch_size: z.number().int().positive().max(500).optional().default(50),
+  dry_run: z.boolean().optional().default(false),
+});
 
 // ============================================================================
 // POST - Run life simulation for specific companion(s)
@@ -43,16 +50,15 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const body = await request.json().catch(() => ({}));
-    const { 
-      companion_id,
-      batch_size = 50,
-      dry_run = false,
-    } = body as {
-      companion_id?: string;
-      batch_size?: number;
-      dry_run?: boolean;
-    };
+    const rawBody: unknown = await request.json().catch(() => ({}));
+    const parseResult = LifeSimBodySchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { companion_id, batch_size, dry_run } = parseResult.data;
     
     const results: {
       companion_id: string;

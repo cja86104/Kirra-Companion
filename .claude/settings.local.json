@@ -25,7 +25,11 @@
       "Bash(find \"C:/Users/cja86/Documents/Kirra-Companion/node_modules/@supabase/postgrest-js\" -name \"*.d.ts\" 2>/dev/null | head -5)",
       "Bash(find \"C:/Users/cja86/Documents/Kirra-Companion/node_modules/@supabase\" -name \"*.ts\" 2>/dev/null | grep -v \"node_modules/@supabase/node_modules\" | grep \"query\\\\|Query\" | head -5)",
       "Bash(cd C:/Users/cja86/Documents/Kirra-Companion && rm -rf .next 2>/dev/null; echo \"cache cleared\")",
-      "Bash(find C:/Users/cja86/Documents/Kirra-Companion/components -name \"*[Ss]idebar*\" 2>/dev/null | grep -v node_modules)"
+      "Bash(find C:/Users/cja86/Documents/Kirra-Companion/components -name \"*[Ss]idebar*\" 2>/dev/null | grep -v node_modules)",
+      "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db push 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db execute --file supabase/migrations/015_proactive_messages_schema.sql 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && cat supabase/migrations/015_proactive_messages_schema.sql | npx supabase db query --project-ref znfoftmeggrkpxxvtqey 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db query --linked -f supabase/migrations/015_proactive_messages_schema.sql 2>&1)"
     ]
   }
 }

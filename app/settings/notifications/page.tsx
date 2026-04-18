@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils/cn';
+import type { ProfileUpdate, Json } from '@/types/database';
 
 interface NotificationSettings {
   proactiveMessages: boolean;
@@ -121,11 +122,8 @@ export default function NotificationsPage() {
       const { error } = await supabase
         .from('profiles')
         .update({
-          preferences: {
-            ...currentPrefs,
-            notifications: newSettings,
-          },
-        } as never)
+          preferences: { ...currentPrefs, notifications: newSettings } as unknown as Json,
+        } satisfies ProfileUpdate)
         .eq('id', user.id);
 
       if (error) throw error;

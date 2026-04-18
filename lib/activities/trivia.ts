@@ -13,6 +13,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { TriviaQuestion, TriviaGameState, CompanionReaction, TriviaCategory } from './trivia-types';
+import type { TriviaGameInsert, Json } from '@/types/database';
 
 // Re-export types for convenience
 export type { TriviaQuestion, TriviaGameState, CompanionReaction, TriviaCategory };
@@ -458,10 +459,10 @@ export async function saveGameResult(
         category: state.category,
         score: state.score,
         total_questions: state.totalQuestions,
-        answers: state.answers,
+        answers: state.answers as unknown as Json,
         started_at: state.startedAt,
         completed_at: state.completedAt,
-      } as never);
+      } satisfies TriviaGameInsert);
     
     if (error) {
       console.error('Error saving trivia game:', error);

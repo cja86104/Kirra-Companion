@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
-import type { Profile, Companion, DataExport } from '@/types/database';
+import type { Profile, Companion, DataExport, DataExportInsert } from '@/types/database';
 
 export async function DELETE() {
   // Instantiate clients inside handler so env vars are available at runtime
@@ -46,23 +46,25 @@ export async function DELETE() {
       }
     }
 
-    // Export user data before deletion (optional - store in a secure location)
+    // Record the account deletion as a data export so it shows up in the
+    // user's audit trail for the 30-day grace window. export_type distinguishes
+    // these from regular user-requested exports created via settings/data.
     const { data: exportResult } = await supabase
       .from('data_exports')
       .insert({
         user_id: user.id,
         export_type: 'account_deletion',
         status: 'completed',
-        file_url: null, // We're just logging, not creating a file
-        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-      } as never)
+        file_url: null,
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      } satisfies DataExportInsert)
       .select()
       .single();
 
     const exportData = exportResult as DataExport | null;
 
-    // Log the deletion
-    await supabase
+    // Log the deletion — must use service-role client (RLS blocks user-context writes after migration 016)
+    await supabaseAdmin
       .from('audit_logs')
       .insert({
         user_id: user.id,
@@ -71,7 +73,7 @@ export async function DELETE() {
           export_id: exportData?.id,
           timestamp: new Date().toISOString(),
         },
-      } as never);
+      });
 
     // Delete user data in order (respecting foreign keys)
     // Note: With proper CASCADE setup, most of this happens automatically

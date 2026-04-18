@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 import type { SceneAnalysis, SceneGenerationResponse, GeneratedScene } from '@/types/scene';
 import { getAudioForTheme, getAnimationForTheme } from '@/types/scene';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // ============================================================================
 // CONFIG
@@ -26,7 +29,7 @@ function getSupabaseAdmin() {
     throw new Error('Missing Supabase credentials');
   }
 
-  return createClient(supabaseUrl, supabaseServiceKey);
+  return createSupabaseClient(supabaseUrl, supabaseServiceKey);
 }
 
 // ============================================================================
@@ -89,7 +92,7 @@ async function analyzeConversation(
   // Get relationship-specific guidelines
   const relationshipGuidelines = RELATIONSHIP_SCENE_GUIDELINES[relationshipType] || RELATIONSHIP_SCENE_GUIDELINES.custom;
 
-  const systemPrompt = `You are a scene analyzer for an AI companion chat application. 
+  const systemPrompt = `You are a scene analyzer for an AI companion chat application.
 Analyze the conversation and extract visual scene information.
 
 ${relationshipGuidelines}
@@ -244,19 +247,19 @@ LOOK: Cinematic, atmospheric, beautiful composition, depth of field`;
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Segmind API error:', errorText);
-    
+
     // 406 = Not enough credits
     if (response.status === 406) {
       throw new Error('Segmind: Not enough credits. Add credits at cloud.segmind.com');
     }
-    
+
     throw new Error(`Segmind API error: ${response.status}`);
   }
 
   // Segmind returns raw JPEG binary, not JSON
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  
+
   // Verify it's a valid JPEG (starts with FFD8)
   if (buffer.length < 2 || buffer[0] !== 0xFF || buffer[1] !== 0xD8) {
     console.error('Segmind returned invalid image data, length:', buffer.length);
@@ -361,8 +364,18 @@ async function updateTracker(
     });
 }
 
+const GenerateSceneSchema = z.object({
+  conversationId: z.string().uuid(),
+  messages: z.array(z.object({
+    role: z.string(),
+    content: z.string(),
+  })).min(1).max(100),
+  relationshipType: z.string().optional(),
+  forceRegenerate: z.boolean().optional().default(false),
+});
+
 // ============================================================================
-// MAIN HANDLER
+// POST — Generate a new scene
 // ============================================================================
 
 export async function POST(
@@ -373,61 +386,69 @@ export async function POST(
 
   try {
     const { id: companionId } = await params;
-    const body = await request.json();
-    const { conversationId, messages, relationshipType: providedRelType, forceRegenerate = false } = body;
-
-    // Validate inputs
-    if (!companionId || !conversationId || !messages?.length) {
+    const rawBody: unknown = await request.json();
+    const parseResult = GenerateSceneSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json({
         success: false,
-        reason: 'Missing required fields: companionId, conversationId, messages',
+        reason: 'Invalid request body',
+        errors: parseResult.error.flatten().fieldErrors,
       }, { status: 400 });
     }
+    const { conversationId, messages, relationshipType: providedRelType, forceRegenerate } = parseResult.data;
 
-    const supabase = getSupabaseAdmin();
-
-    // Get companion's relationship type if not provided
-    let relationshipType = providedRelType;
-    if (!relationshipType) {
-      const { data: companion } = await supabase
-        .from('companions')
-        .select('relationship_type')
-        .eq('id', companionId)
-        .single();
-      relationshipType = companion?.relationship_type || 'custom';
+    // ----------------------------------------------------------------
+    // AUTH & OWNERSHIP — user-context client only
+    // ----------------------------------------------------------------
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ success: false, reason: 'Unauthorized' }, { status: 401 });
     }
+
+    // Verify caller owns the companion
+    const { data: companion, error: companionError } = await supabase
+      .from('companions')
+      .select('id, relationship_type')
+      .eq('id', companionId)
+      .eq('user_id', user.id)
+      .single();
+    if (companionError || !companion) {
+      return NextResponse.json({ success: false, reason: 'Companion not found' }, { status: 404 });
+    }
+
+    // Verify caller owns the conversation and it belongs to this companion
+    const { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('user_id', user.id)
+      .eq('companion_id', companionId)
+      .single();
+    if (conversationError || !conversation) {
+      return NextResponse.json({ success: false, reason: 'Conversation not found' }, { status: 404 });
+    }
+    // ----------------------------------------------------------------
+    // END AUTH & OWNERSHIP
+    // ----------------------------------------------------------------
+
+    const rateLimitResult = await checkRateLimit(user.id, 'generate-scene', 30, 86400);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { success: false, reason: 'Rate limit exceeded', remaining: rateLimitResult.remaining, resetsAt: rateLimitResult.resetsAt },
+        { status: 429 }
+      );
+    }
+
+    // All checks passed — use service-role client for generation
+    const supabaseAdmin = getSupabaseAdmin();
+
+    const relationshipType = providedRelType ?? companion.relationship_type ?? 'custom';
     console.log('[Scene] Relationship type:', relationshipType);
-
-    // Get user from auth header or session
-    const authHeader = request.headers.get('authorization');
-    let userId: string | null = null;
-
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const { data: { user } } = await supabase.auth.getUser(token);
-      userId = user?.id || null;
-    }
-
-    // Fallback: get user from conversation
-    if (!userId) {
-      const { data: conversation } = await supabase
-        .from('conversations')
-        .select('user_id')
-        .eq('id', conversationId)
-        .single();
-      userId = conversation?.user_id;
-    }
-
-    if (!userId) {
-      return NextResponse.json({
-        success: false,
-        reason: 'Unauthorized',
-      }, { status: 401 });
-    }
 
     // Check cooldown (unless force regenerate)
     if (!forceRegenerate) {
-      const cooldown = await checkCooldown(supabase, userId, companionId);
+      const cooldown = await checkCooldown(supabaseAdmin, user.id, companionId);
       if (!cooldown.canGenerate) {
         return NextResponse.json({
           success: true,
@@ -450,7 +471,7 @@ export async function POST(
 
     // Step 3: Upload to Supabase Storage
     console.log('[Scene] Uploading to storage...');
-    const storedUrl = await uploadToSupabase(supabase, imageResult.buffer, userId, companionId);
+    const storedUrl = await uploadToSupabase(supabaseAdmin, imageResult.buffer, user.id, companionId);
     console.log('[Scene] Uploaded:', storedUrl);
 
     // Step 4: Get audio and animation mappings
@@ -460,12 +481,12 @@ export async function POST(
     // Step 5: Save to database
     const generationTime = Date.now() - startTime;
 
-    const { data: scene, error: dbError } = await supabase
+    const { data: scene, error: dbError } = await supabaseAdmin
       .from('generated_scenes')
       .insert({
         companion_id: companionId,
         conversation_id: conversationId,
-        user_id: userId,
+        user_id: user.id,
         prompt: analysis.scene_description,
         image_url: storedUrl,
         theme: analysis.theme,
@@ -485,7 +506,7 @@ export async function POST(
     }
 
     // Step 6: Update cooldown tracker
-    await updateTracker(supabase, userId, companionId, analysis.theme);
+    await updateTracker(supabaseAdmin, user.id, companionId, analysis.theme);
 
     console.log(`[Scene] Complete in ${generationTime}ms`);
 
@@ -504,7 +525,7 @@ export async function POST(
 }
 
 // ============================================================================
-// GET - Retrieve current/recent scene
+// GET — Retrieve current/recent scene
 // ============================================================================
 
 export async function GET(
@@ -516,13 +537,51 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const conversationId = searchParams.get('conversationId');
 
-    const supabase = getSupabaseAdmin();
+    // ----------------------------------------------------------------
+    // AUTH & OWNERSHIP — user-context client only
+    // ----------------------------------------------------------------
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    // Get most recent scene for this companion
-    const query = supabase
+    // Verify caller owns the companion
+    const { data: companion, error: companionError } = await supabase
+      .from('companions')
+      .select('id')
+      .eq('id', companionId)
+      .eq('user_id', user.id)
+      .single();
+    if (companionError || !companion) {
+      return NextResponse.json({ error: 'Companion not found' }, { status: 404 });
+    }
+
+    // If a conversationId is provided, verify caller owns it
+    if (conversationId) {
+      const { data: conv, error: convError } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('id', conversationId)
+        .eq('user_id', user.id)
+        .eq('companion_id', companionId)
+        .single();
+      if (convError || !conv) {
+        return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+      }
+    }
+    // ----------------------------------------------------------------
+    // END AUTH & OWNERSHIP
+    // ----------------------------------------------------------------
+
+    // All checks passed — use service-role client to fetch scene data
+    const supabaseAdmin = getSupabaseAdmin();
+
+    const query = supabaseAdmin
       .from('generated_scenes')
       .select('*')
       .eq('companion_id', companionId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -545,6 +604,9 @@ export async function GET(
 
   } catch (error) {
     console.error('[Scene] Fetch failed:', error);
-    return NextResponse.json({ scene: null }, { status: 200 });
+    return NextResponse.json(
+      { error: 'Failed to fetch scene' },
+      { status: 500 }
+    );
   }
 }

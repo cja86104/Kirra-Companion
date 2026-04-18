@@ -14,7 +14,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { MoodState, LifeEvent } from '@/types/database';
+import type { MoodState, LifeEvent, LifeEventInsert, Json } from '@/types/database';
 
 // ============================================================
 // TYPES
@@ -288,24 +288,27 @@ export async function saveLifeEvent(
       milestone: 'milestone',
     };
     
+    // shared_with_user=false: event hasn't been surfaced to the user yet (Life Feed
+    // marks it true when the user views it). Distinct from `shareable` which gates
+    // whether the event is eligible to be shown at all.
     const eventData = {
       companion_id: companionId,
       event_type: event.event_type,
       title: event.title,
       description: event.description,
       significance: significanceMap[event.event_type],
-      emotional_impact: currentMood ? { mood: currentMood } : null,
+      emotional_impact: (currentMood ? { mood: currentMood } : null) as unknown as Json,
       metadata: {
         should_notify_user: event.should_notify_user,
         notification_message: event.notification_message,
         notification_sent: false,
-      },
-      is_shared: false,
-    };
+      } as unknown as Json,
+      shared_with_user: false,
+    } satisfies LifeEventInsert;
     
     const { error } = await supabase
       .from('life_events')
-      .insert(eventData as never);
+      .insert(eventData);
     
     if (error) {
       console.error('Error saving life event:', error);

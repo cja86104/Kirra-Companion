@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import type { LifeEvent, LifeEventsResponse, EventSignificance } from '@/types/life-simulation';
 import type { LifeEventRow } from '@/types/life-simulation-db';
+
+const LifeEventPostSchema = z.object({
+  eventId: z.string().uuid(),
+  action: z.enum(['mark_shared']),
+});
 
 /**
  * GET /api/companion/[id]/life-events
@@ -157,15 +163,15 @@ export async function POST(
 ) {
   try {
     const { id: companionId } = await params;
-    const body = await request.json();
-    const { eventId, action } = body;
-    
-    if (!eventId) {
+    const rawBody: unknown = await request.json();
+    const parseResult = LifeEventPostSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'eventId is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { eventId, action } = parseResult.data;
     
     const supabase = await createClient();
     

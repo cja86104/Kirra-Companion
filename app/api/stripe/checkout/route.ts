@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
-import type { Profile } from '@/types/database';
+import type { Profile, ProfileUpdate } from '@/types/database';
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -25,23 +26,22 @@ const PRICE_IDS: Record<string, Record<string, string>> = {
   },
 };
 
-interface CheckoutRequestBody {
-  priceId: string;
-  billingPeriod: 'monthly' | 'yearly';
-}
+const CheckoutSchema = z.object({
+  priceId: z.enum(['basic', 'pro', 'ultimate']),
+  billingPeriod: z.enum(['monthly', 'yearly']),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body: CheckoutRequestBody = await request.json();
-    const { priceId, billingPeriod } = body;
-
-    // Validate tier
-    if (!PRICE_IDS[priceId]) {
+    const rawBody: unknown = await request.json();
+    const parseResult = CheckoutSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'Invalid pricing tier' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { priceId, billingPeriod } = parseResult.data;
 
     const stripePriceId = PRICE_IDS[priceId][billingPeriod];
     if (!stripePriceId) {
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       // Save customer ID to profile
       await supabase
         .from('profiles')
-        .update({ stripe_customer_id: customerId } as never)
+        .update({ stripe_customer_id: customerId } satisfies ProfileUpdate)
         .eq('id', user.id);
     }
 

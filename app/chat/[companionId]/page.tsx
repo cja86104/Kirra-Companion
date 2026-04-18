@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser, getCompanion, getConversationMessages, createClient } from '@/lib/supabase/server';
 import { ChatWindow } from '@/components/chat/ChatWindow';
-import type { Conversation, CompanionWithDNA } from '@/types/database';
+import type { Conversation, CompanionWithDNA, ConversationInsert } from '@/types/database';
 
 interface ChatPageProps {
   params: Promise<{ companionId: string }>;
@@ -45,7 +45,7 @@ export default async function ChatWithCompanionPage({ params }: ChatPageProps) {
         companion_id: companionId,
         user_id: user.id,
         title: `Chat with ${companion.name}`,
-      } as never)
+      } satisfies ConversationInsert)
       .select()
       .single();
 

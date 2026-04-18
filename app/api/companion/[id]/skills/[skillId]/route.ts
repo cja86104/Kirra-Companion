@@ -7,13 +7,26 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type {
   CompanionSkill,
-  CompanionSkillUpdate,
   SkillCategory,
 } from '@/types/skills';
+import type { CompanionSkillUpdate } from '@/types/database';
+
+const SkillUpdateSchema = z.object({
+  skill_name: z.string().min(1).max(100).optional(),
+  skill_category: z.enum(['coding', 'recipes', 'domain', 'traditions', 'games', 'creative', 'language', 'procedures', 'trivia', 'other']).optional(),
+  skill_description: z.string().max(500).nullable().optional(),
+  skill_content: z.string().min(1).max(10000).optional(),
+  structured_data: z.record(z.unknown()).optional(),
+  tags: z.array(z.string()).optional(),
+  is_favorite: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+  regenerate_summary: z.boolean().optional(),
+});
 
 interface CompanionRow {
   id: string;
@@ -121,7 +134,15 @@ export async function PUT(
   try {
     const { id: companionId, skillId } = await params;
     const supabase = await createClient();
-    const body: CompanionSkillUpdate & { regenerate_summary?: boolean } = await request.json();
+    const rawBody: unknown = await request.json();
+    const parseResult = SkillUpdateSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const body = parseResult.data;
 
     // Verify user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -224,6 +245,7 @@ export async function PUT(
     }
 
     // Perform update
+    // Dynamic update object — fields are added conditionally, so Record<string, unknown> is intentional
     const { data: updatedSkill, error: updateError } = await supabase
       .from('companion_skills')
       .update(updates as never)
@@ -325,7 +347,7 @@ export async function DELETE(
       // Soft delete - just deactivate
       const { error: updateError } = await supabase
         .from('companion_skills')
-        .update({ is_active: false } as never)
+        .update({ is_active: false } satisfies CompanionSkillUpdate)
         .eq('id', skillId);
 
       if (updateError) {

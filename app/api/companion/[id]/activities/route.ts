@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import {
   runSimulationTick,
@@ -156,9 +157,13 @@ export async function GET(
   }
 }
 
+const ActivitiesPostSchema = z.object({
+  force: z.boolean().optional().default(false),
+});
+
 /**
  * POST /api/companion/[id]/activities
- * 
+ *
  * Trigger a new activity simulation.
  * Can be called manually or by cron job.
  */
@@ -168,8 +173,15 @@ export async function POST(
 ) {
   try {
     const { id: companionId } = await params;
-    const body = await request.json().catch(() => ({}));
-    const { force = false } = body;
+    const rawBody: unknown = await request.json().catch(() => ({}));
+    const parseResult = ActivitiesPostSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { force } = parseResult.data;
     
     const supabase = await createClient();
     

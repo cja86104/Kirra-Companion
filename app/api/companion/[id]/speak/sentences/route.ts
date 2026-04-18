@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { prepareSentenceQueue, hasVoiceAccess } from '@/lib/tts/openai-tts';
 
-interface SentencesRequest {
-  text: string;
-}
+const SentencesSchema = z.object({
+  text: z.string().min(1).max(50000),
+});
 
 /**
  * POST /api/companion/[id]/speak/sentences
@@ -23,15 +24,15 @@ export async function POST(
 ) {
   try {
     const { id: companionId } = await params;
-    const body: SentencesRequest = await request.json();
-    const { text } = body;
-
-    if (!text?.trim()) {
+    const rawBody: unknown = await request.json();
+    const parseResult = SentencesSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'Text is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { text } = parseResult.data;
 
     const supabase = await createClient();
 

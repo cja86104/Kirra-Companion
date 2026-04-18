@@ -28,6 +28,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import {
   evolveCompanionDNA,
@@ -56,6 +57,15 @@ interface EvolutionResult {
   reason?: string;
 }
 
+const DnaEvolutionBodySchema = z.object({
+  companion_id: z.string().uuid().optional(),
+  batch_size: z.number().int().positive().max(500).optional().default(50),
+  hours_back: z.number().int().positive().max(168).optional().default(24),
+  min_messages: z.number().int().positive().optional().default(10),
+  force: z.boolean().optional().default(false),
+  dry_run: z.boolean().optional().default(false),
+});
+
 // ============================================================================
 // POST - Run DNA evolution for companions
 // ============================================================================
@@ -73,22 +83,15 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const body = await request.json().catch(() => ({}));
-    const { 
-      companion_id,     // Optional: specific companion to evolve
-      batch_size = 50,  // Max companions per run
-      hours_back = 24,  // Hours of conversation to analyze
-      min_messages = 10, // Minimum messages required
-      force = false,    // Force evolution even if not due
-      dry_run = false,  // Analyze but don't save
-    } = body as {
-      companion_id?: string;
-      batch_size?: number;
-      hours_back?: number;
-      min_messages?: number;
-      force?: boolean;
-      dry_run?: boolean;
-    };
+    const rawBody: unknown = await request.json().catch(() => ({}));
+    const parseResult = DnaEvolutionBodySchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { companion_id, batch_size, hours_back, min_messages, force, dry_run } = parseResult.data;
     
     const results: EvolutionResult[] = [];
     const startTime = Date.now();

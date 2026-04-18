@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit } from '@/lib/rate-limit';
 import {
   generateSpeech,
   prepareSentenceQueue,
@@ -13,14 +15,11 @@ import {
 } from '@/lib/tts/openai-tts';
 import type { Json } from '@/types/database';
 
-interface TTSRequest {
-  text: string;
-  companionId: string;
-  messageId?: string;
-  // Sentence-level options for queued playback
-  sentenceIndex?: number;
-  mode?: 'full' | 'first' | 'sentence';
-}
+const SpeakSchema = z.object({
+  text: z.string().min(1).max(4096),
+  sentenceIndex: z.number().int().min(0).optional(),
+  mode: z.enum(['full', 'first', 'sentence']).optional().default('full'),
+});
 
 interface ProfileRow {
   subscription_tier: 'free' | 'basic' | 'pro' | 'ultimate';
@@ -51,15 +50,15 @@ export async function POST(
 ) {
   try {
     const { id: companionId } = await params;
-    const body: TTSRequest = await request.json();
-    const { text, sentenceIndex, mode = 'full' } = body;
-
-    if (!text?.trim()) {
+    const rawBody: unknown = await request.json();
+    const parseResult = SpeakSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'Text is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { text, sentenceIndex, mode } = parseResult.data;
 
     const supabase = await createClient();
 
@@ -69,6 +68,14 @@ export async function POST(
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    const rateLimitResult = await checkRateLimit(user.id, 'speak', 500, 86400);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded', remaining: rateLimitResult.remaining, resetsAt: rateLimitResult.resetsAt },
+        { status: 429 }
       );
     }
 

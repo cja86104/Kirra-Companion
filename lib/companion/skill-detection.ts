@@ -15,6 +15,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
+import type { CompanionSkillInsert, CompanionSkillUpdate, Json } from '@/types/database';
 
 // ============================================================================
 // LOCAL TYPES
@@ -378,21 +379,22 @@ export async function processSkillTeaching(
     const existing = existingData as SkillRow | null;
 
     if (existing) {
-      // Update existing skill (reinforce)
+      // Update existing skill (reinforce). Promote skill_content / skill_description /
+      // structured_data / tags / teaching_context to their top-level columns to match
+      // the schema used by the manual-teaching route. Only `last_reinforced` lives in
+      // metadata since there is no dedicated column for it.
       const { error: updateError } = await supabase
         .from('companion_skills')
         .update({
-          times_used: 1, // Will increment
+          times_used: 1,
           learned_from: 'chat_reinforcement',
-          metadata: {
-            skill_content: extracted.skill_content,
-            skill_description: extracted.skill_description,
-            structured_data: extracted.structured_data,
-            tags: extracted.tags,
-            teaching_context: userMessage.slice(0, 500),
-            last_reinforced: new Date().toISOString(),
-          },
-        } as never)
+          skill_content: extracted.skill_content,
+          skill_description: extracted.skill_description,
+          structured_data: extracted.structured_data as unknown as Json,
+          tags: extracted.tags,
+          teaching_context: userMessage.slice(0, 500),
+          metadata: { last_reinforced: new Date().toISOString() } as unknown as Json,
+        } satisfies CompanionSkillUpdate)
         .eq('id', existing.id);
 
       if (updateError) {
@@ -408,26 +410,26 @@ export async function processSkillTeaching(
       };
     }
 
-    // Step 4: Save new skill
+    // Step 4: Save new skill. Fields are written to their top-level columns
+    // (matching the manual-teaching route in app/api/companion/[id]/skills/route.ts).
+    // proficiency_level is intentionally omitted: it is a generated column derived
+    // from the proficiency enum, which has its own DB default of 'novice'.
     const skillInsert = {
       companion_id: companionId,
       skill_name: extracted.skill_name,
       skill_category: extracted.skill_category,
-      proficiency_level: 1,
+      skill_content: extracted.skill_content,
+      skill_description: extracted.skill_description,
+      structured_data: extracted.structured_data as unknown as Json,
+      tags: extracted.tags,
+      teaching_context: userMessage.slice(0, 500),
       times_used: 0,
       learned_from: 'chat',
-      metadata: {
-        skill_content: extracted.skill_content,
-        skill_description: extracted.skill_description,
-        structured_data: extracted.structured_data,
-        tags: extracted.tags,
-        teaching_context: userMessage.slice(0, 500),
-      },
-    };
+    } satisfies CompanionSkillInsert;
 
     const { data: newSkillData, error: insertError } = await supabase
       .from('companion_skills')
-      .insert(skillInsert as never)
+      .insert(skillInsert)
       .select()
       .single();
 
@@ -479,9 +481,12 @@ export async function getSkillsForContext(
   // Build OR query for topics
   const searchTerms = relevantTopics.map(t => `skill_name.ilike.%${t}%`).join(',');
 
+  // Select skill_content as a top-level column. (Previously read from metadata
+  // which was the wrong location — manual-teaching writes to the top-level
+  // column, so the metadata read returned empty content for every skill.)
   const { data: skills, error } = await supabase
     .from('companion_skills')
-    .select('skill_name, skill_category, metadata')
+    .select('skill_name, skill_category, skill_content')
     .eq('companion_id', companionId)
     .or(searchTerms)
     .limit(limit);
@@ -494,13 +499,13 @@ export async function getSkillsForContext(
   interface SkillContextResult {
     skill_name: string;
     skill_category: string;
-    metadata: { skill_content?: string } | null;
+    skill_content: string;
   }
 
   return (skills as SkillContextResult[]).map(s => {
     return {
       name: s.skill_name,
-      content: s.metadata?.skill_content || '',
+      content: s.skill_content,
       category: s.skill_category,
     };
   });
@@ -537,9 +542,12 @@ export async function findRelevantSkills(
   // Search for skills matching keywords
   const searchTerms = words.slice(0, 5).map(w => `skill_name.ilike.%${w}%`).join(',');
 
+  // Select skill_content / skill_summary as top-level columns. (Previously read
+  // from metadata which was the wrong location — manual-teaching writes to the
+  // top-level columns, so the metadata reads returned empty for every skill.)
   const { data: skills, error } = await supabase
     .from('companion_skills')
-    .select('id, skill_name, skill_category, proficiency_level, metadata')
+    .select('id, skill_name, skill_category, skill_content, skill_summary, proficiency_level')
     .eq('companion_id', companionId)
     .or(searchTerms)
     .order('times_used', { ascending: false })
@@ -562,18 +570,19 @@ export async function findRelevantSkills(
     id: string;
     skill_name: string;
     skill_category: string;
-    proficiency_level: number;
-    metadata: { skill_content?: string; skill_summary?: string } | null;
+    skill_content: string;
+    skill_summary: string | null;
+    proficiency_level: number | null;
   }
 
   return (skills as SkillQueryResult[]).map(s => {
     return {
       id: s.id,
       skill_name: s.skill_name,
-      skill_summary: s.metadata?.skill_summary || null,
-      skill_content: s.metadata?.skill_content || '',
+      skill_summary: s.skill_summary,
+      skill_content: s.skill_content,
       skill_category: s.skill_category,
-      proficiency: proficiencyMap[s.proficiency_level] || 'novice',
+      proficiency: proficiencyMap[s.proficiency_level ?? 1] || 'novice',
     };
   });
 }

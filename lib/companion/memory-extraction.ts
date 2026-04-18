@@ -7,6 +7,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { generateEmbedding } from '@/lib/ai/embeddings';
+import type { MemoryInsert } from '@/types/database';
 
 // ============================================================
 // TYPES
@@ -180,6 +181,7 @@ export async function saveExtractedMemories(
       }
 
       // Save new memory
+      // embedding is number[] at runtime but pgvector types it as string | null in generated types
       const { error } = await supabase
         .from('memories')
         .insert({
@@ -190,7 +192,7 @@ export async function saveExtractedMemories(
           importance_score: memory.importance,
           memory_type: memory.category,
           embedding: embedding as never,
-        } as never);
+        } satisfies MemoryInsert);
       
       if (error) {
         console.error('Error saving memory:', error);

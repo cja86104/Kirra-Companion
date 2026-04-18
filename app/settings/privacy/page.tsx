@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils/cn';
+import type { ProfileUpdate, Json } from '@/types/database';
 
 interface PrivacySettings {
   shareAnalytics: boolean;
@@ -109,11 +110,8 @@ export default function PrivacyPage() {
       const { error } = await supabase
         .from('profiles')
         .update({
-          preferences: {
-            ...currentPrefs,
-            privacy: newSettings,
-          },
-        } as never)
+          preferences: { ...currentPrefs, privacy: newSettings } as unknown as Json,
+        } satisfies ProfileUpdate)
         .eq('id', user.id);
 
       if (error) throw error;

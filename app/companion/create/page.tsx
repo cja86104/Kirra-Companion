@@ -27,7 +27,7 @@ import { Slider } from '@/components/ui/slider';
 import { getClient } from '@/lib/supabase/client';
 import { BackstoryGenerator } from '@/components/companion/BackstoryGenerator';
 import { VoiceSelector } from '@/components/companion/VoiceSelector';
-import type { Profile, Companion, VoiceConfig } from '@/types/database';
+import type { Profile, Companion, VoiceConfig, Json, CompanionInsert, CompanionDNAInsert } from '@/types/database';
 
 type RelationshipType = 'friend' | 'mentor' | 'romantic' | 'family' | 'custom';
 
@@ -291,7 +291,13 @@ export default function CreateCompanionPage() {
       
       const { data: newCompanionData, error: companionError } = await supabase
         .from('companions')
-        .insert(insertData as never)
+        .insert({
+          ...insertData,
+          personality_base: insertData.personality_base as unknown as Json,
+          current_mood: insertData.current_mood as unknown as Json,
+          needs: insertData.needs as unknown as Json,
+          voice_config: insertData.voice_config as unknown as Json,
+        } satisfies CompanionInsert)
         .select()
         .single();
 
@@ -313,21 +319,21 @@ export default function CreateCompanionPage() {
           learning_style_matrix: {
             traits: companionData.traits,
             learning_rate: 0.5,
-          },
+          } as unknown as Json,
           humor_genome: {
             style: companionData.communicationStyle.humorLevel > 50 ? 'playful' : 'subtle',
             level: companionData.communicationStyle.humorLevel,
-          },
+          } as unknown as Json,
           emotional_resonance_map: {
             baseline_mood: 'content',
             mood_stability: 70,
             empathy_level: companionData.traits.agreeableness,
             expression_style: companionData.traits.extraversion > 50 ? 'expressive' : 'subtle',
-          },
+          } as unknown as Json,
           interest_evolution_tree: {
             interests: companionData.interests,
             growth_potential: companionData.interests.map(i => ({ name: i, level: 50 })),
-          },
+          } as unknown as Json,
           communication_dialect: {
             formality: companionData.communicationStyle.formality,
             emoji_frequency: companionData.communicationStyle.emojiUsage,
@@ -335,13 +341,13 @@ export default function CreateCompanionPage() {
             humor_style: companionData.communicationStyle.humorLevel > 50 ? 'playful' : 'subtle',
             favorite_expressions: [],
             speech_patterns: [],
-          },
+          } as unknown as Json,
           memory_weighting_algorithm: {
             recency_weight: 0.3,
             importance_weight: 0.5,
             emotional_weight: 0.2,
-          },
-        } as never, {
+          } as unknown as Json,
+        } satisfies CompanionDNAInsert, {
           onConflict: 'companion_id',
         });
 

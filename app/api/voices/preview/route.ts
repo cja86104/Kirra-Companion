@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit } from '@/lib/rate-limit';
 import {
   generateSpeech,
   generateVoicePreview,
@@ -183,9 +185,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const VoicePreviewSchema = z.object({
+  voiceId: z.string().min(1).refine((v) => v in OPENAI_VOICES, { message: 'Invalid voice ID' }),
+  text: z.string().min(1).max(200),
+  speed: z.number().min(0.25).max(4.0).optional(),
+});
+
 /**
  * POST /api/voices/preview
- * 
+ *
  * Generate a custom preview with user-provided text.
  * Limited to prevent abuse.
  */
@@ -219,33 +227,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { voiceId, text, speed } = body;
-
-    // Validate inputs
-    if (!voiceId || !OPENAI_VOICES[voiceId as OpenAIVoiceId]) {
+    const rateLimitResult = await checkRateLimit(user.id, 'voices-preview', 50, 86400);
+    if (!rateLimitResult.allowed) {
       return NextResponse.json(
-        { error: 'Invalid voice ID' },
-        { status: 400 }
+        { error: 'Rate limit exceeded', remaining: rateLimitResult.remaining, resetsAt: rateLimitResult.resetsAt },
+        { status: 429 }
       );
     }
 
-    if (!text || typeof text !== 'string') {
+    const rawBody: unknown = await request.json();
+    const parseResult = VoicePreviewSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'Text is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-
-    // Limit custom text to 200 characters for previews
-    const MAX_PREVIEW_CHARS = 200;
-    const truncatedText = text.slice(0, MAX_PREVIEW_CHARS);
-
-    // Validate speed (OpenAI uses 0.25 to 4.0)
-    let speedValue = 1.0;
-    if (typeof speed === 'number' && speed >= 0.25 && speed <= 4.0) {
-      speedValue = speed;
-    }
+    const { voiceId, text, speed } = parseResult.data;
+    const truncatedText = text.slice(0, 200);
+    const speedValue = speed ?? 1.0;
 
     // Check API key
     if (!process.env.OPENAI_API_KEY) {

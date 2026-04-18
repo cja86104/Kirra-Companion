@@ -13,16 +13,28 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
 import type {
   CompanionSkill,
   CompanionSkillInsert,
   SkillCategory,
-  TeachSkillRequest,
+  SkillStructuredData,
   TeachSkillResponse,
   SkillsSummary,
 } from '@/types/skills';
+import type { CompanionSkillInsert as DBCompanionSkillInsert, Json } from '@/types/database';
+
+const TeachSkillSchema = z.object({
+  skill_name: z.string().min(1).max(100),
+  skill_category: z.enum(['coding', 'recipes', 'domain', 'traditions', 'games', 'creative', 'language', 'procedures', 'trivia', 'other']).optional().default('other'),
+  skill_content: z.string().min(1).max(10000),
+  skill_description: z.string().max(500).optional(),
+  structured_data: z.record(z.unknown()).optional(),
+  tags: z.array(z.string()).optional(),
+  teaching_context: z.string().max(1000).optional(),
+});
 
 interface CompanionRow {
   id: string;
@@ -147,22 +159,15 @@ export async function POST(
   try {
     const { id: companionId } = await params;
     const supabase = await createClient();
-    const body: TeachSkillRequest = await request.json();
-
-    // Validate required fields
-    if (!body.skill_name?.trim()) {
+    const rawBody: unknown = await request.json();
+    const parseResult = TeachSkillSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'skill_name is required' },
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-
-    if (!body.skill_content?.trim()) {
-      return NextResponse.json(
-        { error: 'skill_content is required' },
-        { status: 400 }
-      );
-    }
+    const body = parseResult.data;
 
     // Verify user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -235,16 +240,19 @@ export async function POST(
       skill_description: body.skill_description?.trim() || null,
       skill_content: body.skill_content.trim(),
       skill_summary: skillSummary,
-      structured_data: body.structured_data || { type: 'generic' },
+      structured_data: (body.structured_data || { type: 'generic' }) as unknown as SkillStructuredData,
       tags: body.tags || [],
       taught_via: 'manual',
       teaching_context: body.teaching_context || null,
     };
 
-    // Insert the skill
+    // Insert the skill — spread app-layer object and cast structured_data to Json at the DB boundary
     const { data: skill, error: insertError } = await supabase
       .from('companion_skills')
-      .insert(skillInsert as never)
+      .insert({
+        ...skillInsert,
+        structured_data: skillInsert.structured_data as unknown as Json,
+      } satisfies DBCompanionSkillInsert)
       .select()
       .single();
 

@@ -14,7 +14,7 @@
 
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
-import type { CompanionDNA } from '@/types/database';
+import type { CompanionDNA, CompanionDNAUpdate, Json } from '@/types/database';
 
 /**
  * Get an admin Supabase client for background processes.
@@ -977,15 +977,15 @@ export async function evolveCompanionDNA(
   const { error: updateError } = await supabase
     .from('companion_dna')
     .update({
-      communication_dialect: updatedDialect,
-      humor_genome: updatedHumor,
-      emotional_resonance_map: updatedEmotional,
-      learning_style_matrix: updatedLearning,
-      memory_weighting_algorithm: updatedMemory,
+      communication_dialect: updatedDialect as unknown as Json,
+      humor_genome: updatedHumor as unknown as Json,
+      emotional_resonance_map: updatedEmotional as unknown as Json,
+      learning_style_matrix: updatedLearning as unknown as Json,
+      memory_weighting_algorithm: updatedMemory as unknown as Json,
       personality_version: (currentDNA.personality_version || 0) + 1,
       last_evolution: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    } as never)
+    } satisfies CompanionDNAUpdate)
     .eq('companion_id', companionId);
   
   if (updateError) {

@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClient, updateUserMetadata } from '@/lib/supabase/client';
-import type { Profile } from '@/types/database';
+import type { Profile, ProfileUpdate } from '@/types/database';
 
 const accountSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -67,7 +67,7 @@ export default function AccountSettingsPage() {
       // Update profile in database
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ full_name: data.fullName } as never)
+        .update({ full_name: data.fullName } satisfies ProfileUpdate)
         .eq('id', user.id);
 
       if (profileError) throw profileError;
@@ -118,7 +118,7 @@ export default function AccountSettingsPage() {
       // Update profile
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: publicUrl } as never)
+        .update({ avatar_url: publicUrl } satisfies ProfileUpdate)
         .eq('id', user.id);
 
       if (updateError) throw updateError;

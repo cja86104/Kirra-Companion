@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { generateSimpleCompletion } from '@/lib/ai/chat-client';
+import { checkRateLimit } from '@/lib/rate-limit';
 
-interface BackstoryRequest {
-  name: string;
-  relationshipType: string;
-  traits: {
-    openness: number;
-    conscientiousness: number;
-    extraversion: number;
-    agreeableness: number;
-    neuroticism: number;
-  };
-  interests: string[];
-  previousBackstory?: string;
-}
+const BackstorySchema = z.object({
+  name: z.string().min(1).max(50),
+  relationshipType: z.string().min(1),
+  traits: z.object({
+    openness: z.number().min(0).max(100),
+    conscientiousness: z.number().min(0).max(100),
+    extraversion: z.number().min(0).max(100),
+    agreeableness: z.number().min(0).max(100),
+    neuroticism: z.number().min(0).max(100),
+  }),
+  interests: z.array(z.string().min(1)).min(1).max(50),
+  previousBackstory: z.string().max(5000).optional(),
+});
 
 /**
  * Generate a unique backstory for a companion using AI
@@ -32,16 +34,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: BackstoryRequest = await request.json();
-    const { name, relationshipType, traits, interests, previousBackstory } = body;
-
-    // Validate required fields
-    if (!name || !relationshipType || !traits || !interests || interests.length === 0) {
+    const rateLimitResult = await checkRateLimit(user.id, 'generate-backstory', 20, 86400);
+    if (!rateLimitResult.allowed) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Rate limit exceeded', remaining: rateLimitResult.remaining, resetsAt: rateLimitResult.resetsAt },
+        { status: 429 }
+      );
+    }
+
+    const rawBody: unknown = await request.json();
+    const parseResult = BackstorySchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const { name, relationshipType, traits, interests, previousBackstory } = parseResult.data;
 
     // Build personality description from traits
     const personalityDescription = buildPersonalityDescription(traits);
@@ -101,7 +110,7 @@ Write a warm, engaging backstory that makes ${name} feel like a real person with
 /**
  * Build a natural language personality description from Big Five traits
  */
-function buildPersonalityDescription(traits: BackstoryRequest['traits']): string {
+function buildPersonalityDescription(traits: z.infer<typeof BackstorySchema>['traits']): string {
   const descriptions: string[] = [];
 
   // Extraversion

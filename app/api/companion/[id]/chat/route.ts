@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { 
   createChatCompletion, 
   buildCompanionSystemPrompt,
@@ -32,20 +34,53 @@ import { processEvolutionTrigger, quickShouldCheck } from '@/lib/companion/evolu
 import { processSkillTeaching, findRelevantSkills } from '@/lib/companion/skill-detection';
 import { trackSkillUsage } from '@/lib/companion/skill-usage';
 import { analyzeConversationMood, shouldUpdateMood } from '@/lib/companion/mood-analysis';
-import type { Json, Profile, Companion, CompanionDNA, Message, MoodState } from '@/types/database';
+import type {
+  Json,
+  Profile,
+  Companion,
+  CompanionDNA,
+  Message,
+  MoodState,
+  ProfileUpdate,
+  CrisisLogInsert,
+  MessageInsert,
+  BehavioralDetectionLogInsert,
+  CompanionUpdate,
+  ConversationUpdate,
+} from '@/types/database';
 
-interface ChatAttachment {
-  url: string;
-  filename: string;
-  type: 'image' | 'file';
-  size: number;
+// Lazily instantiated service-role client — only called inside safety-log branches,
+// never at module scope (avoids Vercel build-time env var access issues).
+function getAdminClient() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 }
 
-interface ChatRequestBody {
-  message: string;
-  conversationId: string;
-  attachments?: ChatAttachment[];
-}
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const ChatAttachmentSchema = z.object({
+  url: z.string().url().refine(
+    (url) => {
+      const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      return typeof base === 'string' && base.length > 0
+        ? url.startsWith(`${base}/storage/`)
+        : false;
+    },
+    { message: 'Attachment URL must be from authorized storage' }
+  ),
+  filename: z.string().min(1).max(255),
+  type: z.enum(['image', 'file']),
+  size: z.number().int().positive().max(MAX_ATTACHMENT_SIZE_BYTES),
+});
+
+const ChatRequestSchema = z.object({
+  message: z.string().max(10000).optional(),
+  conversationId: z.string().uuid(),
+  attachments: z.array(ChatAttachmentSchema).max(10).optional(),
+});
+
 
 // Type for companion with DNA joined
 interface CompanionWithDNA extends Companion {
@@ -73,8 +108,16 @@ export async function POST(
 ) {
   try {
     const { id: companionId } = await params;
-    const body: ChatRequestBody = await request.json();
-    const { message, conversationId, attachments } = body;
+    const rawBody: unknown = await request.json();
+    const parseResult = ChatRequestSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { message: parsedMessage, conversationId, attachments } = parseResult.data;
+    const message: string = parsedMessage ?? '';
 
     // Allow empty message if there are attachments
     if (!message?.trim() && (!attachments || attachments.length === 0)) {
@@ -117,7 +160,7 @@ export async function POST(
       if (resetAt.toDateString() !== now.toDateString()) {
         await supabase
           .from('profiles')
-          .update({ messages_today: 0, messages_reset_at: now.toISOString() } as never)
+          .update({ messages_today: 0, messages_reset_at: now.toISOString() } satisfies ProfileUpdate)
           .eq('id', user.id);
       } else if (profile.messages_today >= messageLimit) {
         return NextResponse.json(
@@ -142,8 +185,8 @@ export async function POST(
         safetyResult
       );
       
-      // Store in database for review
-      await supabase
+      // Store in database for review — must use service-role client (RLS blocks user-context writes)
+      await getAdminClient()
         .from('crisis_logs')
         .insert({
           user_id: crisisLog.userId,
@@ -151,10 +194,10 @@ export async function POST(
           conversation_id: crisisLog.conversationId,
           message_excerpt: crisisLog.messageContent,
           crisis_type: crisisLog.crisisType,
-          severity: crisisLog.severity,
+          severity: crisisLog.severity as "low" | "medium" | "high" | "critical",
           keywords_matched: crisisLog.matchedKeywords,
           response_provided: crisisLog.responseProvided,
-        } as never);
+        } satisfies CrisisLogInsert);
 
       // Save user message
       await supabase
@@ -167,8 +210,8 @@ export async function POST(
           content: message.trim(),
           content_type: 'text',
           tokens_used: 0,
-          metadata: { crisis_detected: true, crisis_type: safetyResult.crisisType },
-        } as never);
+          metadata: { crisis_detected: true, crisis_type: safetyResult.crisisType } as unknown as Json,
+        } satisfies MessageInsert);
 
       // Return the safety response - COMPANION BREAKS CHARACTER
       const { data: safetyMessage } = await supabase
@@ -178,11 +221,11 @@ export async function POST(
           companion_id: companionId,
           user_id: user.id,
           role: 'companion',
-          content: safetyResult.response,
+          content: safetyResult.response ?? '',
           content_type: 'text',
           tokens_used: 0,
-          metadata: { is_safety_response: true, crisis_type: safetyResult.crisisType },
-        } as never)
+          metadata: { is_safety_response: true, crisis_type: safetyResult.crisisType } as unknown as Json,
+        } satisfies MessageInsert)
         .select()
         .single();
 
@@ -206,24 +249,24 @@ export async function POST(
       // Flag the user as minor - THIS IS PERMANENT
       await supabase
         .from('profiles')
-        .update({ 
+        .update({
           is_minor_flagged: true,
           minor_flagged_at: new Date().toISOString(),
           minor_flag_reason: behavioralDetection.triggers.join('; '),
-        } as never)
+        } satisfies ProfileUpdate)
         .eq('id', user.id);
 
-      // Log the detection
-      await supabase
+      // Log the detection — must use service-role client (RLS blocks user-context writes)
+      await getAdminClient()
         .from('behavioral_detection_logs')
         .insert({
           user_id: user.id,
           message_excerpt: message.substring(0, 200),
           triggers: behavioralDetection.triggers,
           categories: behavioralDetection.triggerCategories,
-          confidence: behavioralDetection.confidence,
+          confidence: ({ high: 0.9, medium: 0.6, low: 0.3, none: 0.0 } as const)[behavioralDetection.confidence] ?? 0.0,
           detected_age: behavioralDetection.detectedAge,
-        } as never);
+        } satisfies BehavioralDetectionLogInsert);
 
       console.log(`User ${user.id} flagged as minor. Triggers: ${behavioralDetection.triggers.join(', ')}`);
     }
@@ -254,6 +297,21 @@ export async function POST(
       );
     }
 
+    const { data: ownedConversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('user_id', user.id)
+      .eq('companion_id', companionId)
+      .maybeSingle();
+
+    if (conversationError || !ownedConversation) {
+      return NextResponse.json(
+        { error: 'Conversation not found' },
+        { status: 404 }
+      );
+    }
+
     // ============================================================
     // UPDATE COMPANION NEEDS (Sims-like system)
     // ============================================================
@@ -268,7 +326,7 @@ export async function POST(
       // Update needs in database
       await supabase
         .from('companions')
-        .update({ needs: companionNeeds } as never)
+        .update({ needs: companionNeeds as unknown as Json } satisfies CompanionUpdate)
         .eq('id', companionId);
     }
 
@@ -315,15 +373,26 @@ export async function POST(
             speechPatterns?: string[];
           },
           communication_style: (() => {
-            // Communication style is stored inside communication_dialect at creation time.
-            // Extract it here so buildCompanionSystemPrompt can apply it directly.
-            const dialect = companion.companion_dna![0].communication_dialect as Record<string, number> | null;
+            // communication_dialect has two possible shapes:
+            //   creation-time: formality/emoji_frequency/verbosity (0-100), humor_style (string)
+            //   post-evolution: formalityLevel/emojiUsage/sentenceComplexity (0-1), no humor_style
+            const dialect = companion.companion_dna![0].communication_dialect as {
+              formality?: number;
+              emoji_frequency?: number;
+              verbosity?: number;
+              humor_style?: string;
+              formalityLevel?: number;
+              emojiUsage?: number;
+              sentenceComplexity?: number;
+            } | null;
             if (!dialect) return undefined;
             return {
-              formality:   dialect.formality   !== undefined ? dialect.formality / 100   : undefined,
-              emojiUsage:  dialect.emoji_frequency !== undefined ? dialect.emoji_frequency / 100 : undefined,
-              verbosity:   dialect.verbosity   !== undefined ? dialect.verbosity / 100   : undefined,
-              humorLevel:  dialect.humor_style  !== undefined ? (dialect.humor_style as unknown === 'playful' ? 0.7 : 0.4) : undefined,
+              formality: dialect.formalityLevel ?? (dialect.formality !== undefined ? dialect.formality / 100 : undefined),
+              emojiUsage: dialect.emojiUsage ?? (dialect.emoji_frequency !== undefined ? dialect.emoji_frequency / 100 : undefined),
+              verbosity: dialect.sentenceComplexity ?? (dialect.verbosity !== undefined ? dialect.verbosity / 100 : undefined),
+              humorLevel: dialect.humor_style !== undefined
+                ? (dialect.humor_style === 'playful' ? 0.7 : 0.4)
+                : undefined,
             };
           })(),
           personality_traits: (() => {
@@ -400,7 +469,7 @@ export async function POST(
         : attachmentDescriptions;
     }
 
-    // Call Anthropic Claude
+    // Generate companion response via OpenRouter (DeepSeek V3)
     const completion = await createChatCompletion({
       systemPrompt,
       messages: conversationHistory,
@@ -426,8 +495,8 @@ export async function POST(
         content: userMessageContent,
         content_type: 'text',
         tokens_used: completion.inputTokens,
-        metadata: attachments && attachments.length > 0 ? { attachments } : null,
-      } as never)
+        metadata: (attachments && attachments.length > 0 ? { attachments } : null) as unknown as Json,
+      } satisfies MessageInsert)
       .select()
       .single();
 
@@ -446,7 +515,7 @@ export async function POST(
         content: completion.content,
         content_type: 'text',
         tokens_used: completion.outputTokens,
-      } as never)
+      } satisfies MessageInsert)
       .select()
       .single();
 
@@ -460,7 +529,7 @@ export async function POST(
       .update({
         message_count: (recentMessages?.length || 0) + 2,
         last_message_at: new Date().toISOString(),
-      } as never)
+      } satisfies ConversationUpdate)
       .eq('id', conversationId);
 
     // Calculate affection growth (small increase per exchange, capped at 100)
@@ -498,14 +567,14 @@ export async function POST(
         last_interaction: new Date().toISOString(),
         affection_level: newAffection,
         trust_level: newTrust,
-        current_mood: newMood,
-      } as never)
+        current_mood: newMood as unknown as Json,
+      } satisfies CompanionUpdate)
       .eq('id', companionId);
 
     // Increment user's daily message count
     await supabase
       .from('profiles')
-      .update({ messages_today: (profile?.messages_today || 0) + 1 } as never)
+      .update({ messages_today: (profile?.messages_today || 0) + 1 } satisfies ProfileUpdate)
       .eq('id', user.id);
 
     // Process life event from this chat exchange (non-blocking)
@@ -587,13 +656,8 @@ export async function POST(
     });
   } catch (error) {
     console.error('Chat error:', error);
-    
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : 'Failed to process message';
-    
     return NextResponse.json(
-      { error: errorMessage },
+      { error: 'Failed to process message' },
       { status: 500 }
     );
   }
