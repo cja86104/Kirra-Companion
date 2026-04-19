@@ -29,7 +29,10 @@
       "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db push 2>&1)",
       "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db execute --file supabase/migrations/015_proactive_messages_schema.sql 2>&1)",
       "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && cat supabase/migrations/015_proactive_messages_schema.sql | npx supabase db query --project-ref znfoftmeggrkpxxvtqey 2>&1)",
-      "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db query --linked -f supabase/migrations/015_proactive_messages_schema.sql 2>&1)"
+      "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db query --linked -f supabase/migrations/015_proactive_messages_schema.sql 2>&1)",
+      "Bash(git *)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }

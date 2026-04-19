@@ -1,10 +1,12 @@
 /**
  * Life Simulation System Types
- * 
+ *
  * Core types for the companion life simulation engine.
  * This system enables companions to have autonomous "lives"
  * that continue even when users aren't actively chatting.
  */
+
+import type { RelationshipType } from './database-helpers';
 
 // ============================================================================
 // Activity Types
@@ -64,6 +66,28 @@ export interface ActivityTemplate {
   }[];
   unlockLevel?: number;               // Relationship level required
   timeOfDayPreference?: TimeOfDay[];  // When this activity is preferred
+
+  /**
+   * Optional filter: ALL listed gates must pass for the template to be
+   * eligible for this companion. Absent means universally eligible.
+   */
+  personalityGate?: {
+    relationshipTypes?: RelationshipType[];
+    minAffection?: number;
+    minTrust?: number;
+    requiredPersonalityTraits?: {
+      trait: 'openness' | 'extraversion' | 'conscientiousness' | 'agreeableness' | 'neuroticism' | 'curiosity';
+      min: number;
+    }[];
+    interestKeywords?: string[];
+    excludedQuirks?: string[];
+  };
+
+  /** Tells the AI enrichment call what kind of specific to invent. */
+  enrichmentHint?: {
+    specific_type: 'book' | 'song' | 'podcast' | 'dish' | 'destination' | 'artwork' | 'game' | 'topic' | 'person' | 'place' | 'project' | 'memory' | 'none';
+    first_person_verb: string;
+  };
 }
 
 /**

@@ -427,12 +427,17 @@ const DEFAULT_ACTIVITY_EMOJI = '✨';
 
 /**
  * Resolve the emoji for an activity event. Falls back to a neutral default
- * if the category is somehow missing from the map rather than throwing —
- * a bad emoji is not worth failing a life-event write over.
+ * if the category string isn't one of the known ActivityCategory values —
+ * a bad emoji is not worth failing a life-event write over, and
+ * `activity_category` is stored as a free text column in the DB so the
+ * type system can't guarantee membership at compile time.
  */
-function emojiForActivityCategory(category: ActivityCategory | undefined): string {
+function emojiForActivityCategory(category: string | undefined): string {
   if (!category) return DEFAULT_ACTIVITY_EMOJI;
-  return ACTIVITY_CATEGORY_EMOJI[category] ?? DEFAULT_ACTIVITY_EMOJI;
+  if (category in ACTIVITY_CATEGORY_EMOJI) {
+    return ACTIVITY_CATEGORY_EMOJI[category as ActivityCategory];
+  }
+  return DEFAULT_ACTIVITY_EMOJI;
 }
 
 /**
