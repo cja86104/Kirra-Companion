@@ -405,6 +405,37 @@ export async function updateSimulationState(
 // ============================================================================
 
 /**
+ * Maps an activity category to the emoji rendered in the notification bell
+ * and in Life Feed surfaces. Keyed by `ActivityCategory`; all 10 known
+ * categories have an entry so a runtime miss here would indicate a type
+ * drift rather than a missing case.
+ */
+const ACTIVITY_CATEGORY_EMOJI: Record<ActivityCategory, string> = {
+  hobby: '🎨',
+  learning: '📚',
+  social: '💭',
+  creative: '✨',
+  exploration: '🧭',
+  reflection: '🕯️',
+  entertainment: '🎬',
+  physical: '🏃',
+  relaxation: '😌',
+  productivity: '📝',
+};
+
+const DEFAULT_ACTIVITY_EMOJI = '✨';
+
+/**
+ * Resolve the emoji for an activity event. Falls back to a neutral default
+ * if the category is somehow missing from the map rather than throwing —
+ * a bad emoji is not worth failing a life-event write over.
+ */
+function emojiForActivityCategory(category: ActivityCategory | undefined): string {
+  if (!category) return DEFAULT_ACTIVITY_EMOJI;
+  return ACTIVITY_CATEGORY_EMOJI[category] ?? DEFAULT_ACTIVITY_EMOJI;
+}
+
+/**
  * Create a life event from an activity
  */
 export async function createActivityLifeEvent(
@@ -419,7 +450,19 @@ export async function createActivityLifeEvent(
     activity.outcome === 'great' ? 'major' :
     activity.thinking_of_user ? 'moderate' :
     'minor';
-  
+
+  // Notification gating:
+  //   - major:    always notify (outcome === 'great' is rare and meaningful)
+  //   - moderate: always notify (thinking_of_user — inherently user-relevant)
+  //   - minor:    suppressed — routine background living shouldn't flood the bell
+  // This tracks the same rule used for `shareable` (non-minor) so anything
+  // shown in the Life Feed is also eligible for the bell.
+  const shouldNotifyUser = significance !== 'minor';
+  const emoji = emojiForActivityCategory(activity.activity_category);
+  const notificationMessage = shouldNotifyUser
+    ? `${emoji} ${activity.activity_name}`
+    : null;
+
   const eventInsert = {
     companion_id: companionId,
     event_type: 'activity_completed',
@@ -427,6 +470,9 @@ export async function createActivityLifeEvent(
     description: activity.description,
     narrative: activity.narrative,
     significance,
+    emoji,
+    should_notify_user: shouldNotifyUser,
+    notification_message: notificationMessage,
     occurred_at: activity.ended_at || new Date().toISOString(),
     duration_minutes: activity.duration_minutes,
     mood_after: JSON.parse(JSON.stringify(mood)),
@@ -465,7 +511,10 @@ export async function createUserThoughtEvent(
   relatedActivityId?: string
 ): Promise<LifeEvent | null> {
   const supabase = getAdminClient();
-  
+
+  // "Thought of you" events are by definition user-centered and should always
+  // reach the notification bell. Significance is 'moderate' so they also pass
+  // the non-minor rule used by activity events.
   const eventInsert = {
     companion_id: companionId,
     event_type: 'thought_of_user',
@@ -473,6 +522,9 @@ export async function createUserThoughtEvent(
     description: context,
     narrative: context,
     significance: 'moderate' as const,
+    emoji: '💭',
+    should_notify_user: true,
+    notification_message: '💭 Thought of you',
     occurred_at: new Date().toISOString(),
     mood_after: JSON.parse(JSON.stringify(mood)),
     related_activity_id: relatedActivityId,

@@ -29,7 +29,6 @@ import {
   Clock,
   ChevronRight,
   Star,
-  Bell,
   Plus,
   Trash2,
   Settings,
@@ -41,6 +40,8 @@ import {
   Activity,
   Target,
   Flame,
+  RefreshCw,
+  Award,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -84,6 +85,8 @@ interface Stats {
   totalMemories: number;
   daysKnown: number;
   streakDays: number;
+  messagesToday: number;
+  memoriesToday: number;
 }
 
 // ============================================================================
@@ -198,6 +201,20 @@ const NEED_COLORS: Record<string, string> = {
   affection: 'bg-rose-500',
 };
 
+// Actual numeric needs rendered as bars in the Needs panel grid.
+// The CompanionNeeds interface also includes `lastUpdated` and `lastInteraction`
+// timestamps used for decay calculations — those render separately as relative
+// time in the panel footer, not as percentage bars.
+const NEED_KEYS = [
+  'social',
+  'energy',
+  'fun',
+  'comfort',
+  'affection',
+  'intellectual',
+  'creativity',
+] as const;
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -212,25 +229,77 @@ function getTimeOfDayGreeting(): { greeting: string; emoji: string; bg: string }
   return { greeting: 'Night owl mode', emoji: '🦉', bg: 'from-indigo-500/20 to-violet-500/20' };
 }
 
-function getTimeSince(timestamp: string): string {
-  const now = Date.now();
+function getTimeSince(timestamp: string | null | undefined): string {
+  if (!timestamp) return '—';
+
   const then = new Date(timestamp).getTime();
+  if (Number.isNaN(then)) return '—';
+
+  const now = Date.now();
   const diffMs = now - then;
+
+  // Defensive: a timestamp slightly in the future (clock skew, server/client drift)
+  // shouldn't render as a negative duration.
+  if (diffMs < 0) return 'Just now';
+
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
 
   if (diffMins < 1) return 'Just now';
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays === 1) return 'Yesterday';
-  return `${diffDays} days ago`;
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffWeeks === 1) return 'Last week';
+  if (diffWeeks < 5) return `${diffWeeks} weeks ago`;
+  if (diffMonths === 1) return 'Last month';
+  if (diffMonths < 12) return `${diffMonths} months ago`;
+  if (diffYears === 1) return 'Last year';
+  return `${diffYears} years ago`;
 }
 
 function getDaysKnown(createdAt: string): number {
   const created = new Date(createdAt).getTime();
   const now = Date.now();
   return Math.floor((now - created) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+/**
+ * Returns the UTC ISO string corresponding to 00:00:00 local time today.
+ *
+ * The Date constructor `new Date(year, month, date, 0, 0, 0, 0)` interprets the
+ * components in the browser's local timezone, and `.toISOString()` serializes
+ * that moment as UTC. This gives us the correct lower bound for "created today"
+ * queries against Supabase columns stored as timestamptz (UTC).
+ */
+function getStartOfTodayLocalISO(): string {
+  const now = new Date();
+  const start = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  return start.toISOString();
+}
+
+/**
+ * Serializes a Date to a stable YYYY-MM-DD key in the browser's local timezone.
+ * Used to group message timestamps into unique local-calendar days for the
+ * streak calculation, so a midnight-adjacent message lands on the correct day.
+ */
+function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 // ============================================================================
@@ -305,7 +374,14 @@ export default function DashboardPage() {
   const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([]);
   const [currentActivity, setCurrentActivity] = useState<CompanionActivity | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
-  const [stats, setStats] = useState<Stats>({ totalMessages: 0, totalMemories: 0, daysKnown: 0, streakDays: 0 });
+  const [stats, setStats] = useState<Stats>({
+    totalMessages: 0,
+    totalMemories: 0,
+    daysKnown: 0,
+    streakDays: 0,
+    messagesToday: 0,
+    memoriesToday: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<Companion | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -354,6 +430,10 @@ export default function DashboardPage() {
     try {
       const supabase = getClient();
 
+      // Local-day boundary used for "today" counts and the streak walk.
+      // Computed in the browser's timezone so "today" matches the user's wall clock.
+      const todayStartISO = getStartOfTodayLocalISO();
+
       // Life events
       const { data: events } = await supabase
         .from('life_events')
@@ -374,7 +454,7 @@ export default function DashboardPage() {
 
       setCurrentActivity(activity);
 
-      // Memories
+      // Memories (latest 5 for display + exact total count)
       const { data: memoriesData, count: memoriesCount } = await supabase
         .from('memories')
         .select('id, title, memory_type, importance, created_at', { count: 'exact' })
@@ -384,21 +464,95 @@ export default function DashboardPage() {
 
       if (memoriesData) setMemories(memoriesData as Memory[]);
 
-      // Message count
+      // Memories created today (for the "+N today" trend on the Memories card)
+      const { count: memoriesTodayCount, error: memoriesTodayError } = await supabase
+        .from('memories')
+        .select('*', { count: 'exact', head: true })
+        .eq('companion_id', companionId)
+        .eq('is_active', true)
+        .gte('created_at', todayStartISO);
+
+      if (memoriesTodayError) {
+        console.error('Failed to count memories today:', memoriesTodayError);
+      }
+
+      // Total message count for this companion
       const { count: messageCount } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true })
-        .eq('companion_id', companionId);
+        .eq('companion_id', companionId)
+        .eq('is_deleted', false);
 
-      // Get companion for days known
+      // Messages created today (both user + assistant roles, excluding deleted)
+      // Drives the "+N today" trend on the Messages card.
+      const { count: messagesTodayCount, error: messagesTodayError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('companion_id', companionId)
+        .eq('is_deleted', false)
+        .gte('created_at', todayStartISO);
+
+      if (messagesTodayError) {
+        console.error('Failed to count messages today:', messagesTodayError);
+      }
+
+      // Real day-streak calculation.
+      // Consecutive local-calendar days with at least one user message to THIS
+      // companion. Streak is forgiving on the current day: if the user hasn't
+      // messaged yet today, the cursor starts at yesterday so a long-running
+      // streak isn't broken just because they haven't opened the app yet.
+      const sixtyDaysAgoISO = new Date(
+        Date.now() - 60 * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      const { data: streakRows, error: streakError } = await supabase
+        .from('messages')
+        .select('created_at')
+        .eq('companion_id', companionId)
+        .eq('role', 'user')
+        .eq('is_deleted', false)
+        .gte('created_at', sixtyDaysAgoISO)
+        .order('created_at', { ascending: false });
+
+      if (streakError) {
+        console.error('Failed to load streak messages:', streakError);
+      }
+
+      const localDateSet = new Set<string>();
+      for (const row of (streakRows as { created_at: string }[] | null) ?? []) {
+        const d = new Date(row.created_at);
+        if (!Number.isNaN(d.getTime())) {
+          localDateSet.add(toLocalDateKey(d));
+        }
+      }
+
+      let streak = 0;
+      const cursor = new Date();
+      cursor.setHours(0, 0, 0, 0);
+
+      if (!localDateSet.has(toLocalDateKey(cursor))) {
+        cursor.setDate(cursor.getDate() - 1);
+      }
+
+      // Safety cap matches the 60-day lookback window.
+      let guard = 0;
+      while (localDateSet.has(toLocalDateKey(cursor)) && guard < 120) {
+        streak++;
+        cursor.setDate(cursor.getDate() - 1);
+        guard++;
+      }
+
+      // Days known (companion age in days)
       const companion = companions.find(c => c.id === companionId);
       const daysKnown = companion ? getDaysKnown(companion.created_at) : 0;
 
       setStats({
-        totalMessages: messageCount || 0,
-        totalMemories: memoriesCount || 0,
+        totalMessages: messageCount ?? 0,
+        totalMemories: memoriesCount ?? 0,
         daysKnown,
-        streakDays: Math.min(daysKnown, 7), // Simplified streak
+        streakDays: streak,
+        messagesToday: messagesTodayCount ?? 0,
+        memoriesToday: memoriesTodayCount ?? 0,
       });
 
     } catch (error) {
@@ -508,9 +662,9 @@ export default function DashboardPage() {
           
           {/* Quick Actions */}
           <div className="flex items-center gap-2">
-            <Link href="/settings/notifications">
+            <Link href="/settings/notifications" aria-label="Notification settings">
               <Button variant="ghost" size="icon" className="rounded-full">
-                <Bell className="h-5 w-5" />
+                <Settings className="h-5 w-5" />
               </Button>
             </Link>
             <Link href="/companion/create">
@@ -637,7 +791,26 @@ export default function DashboardPage() {
                       
                       {/* Quick Actions */}
                       <div className="flex gap-2">
-                        <Link href={`/companion/${selectedCompanion.id}`}>
+                        <Link
+                          href={`/companion/${selectedCompanion.id}/journal`}
+                          aria-label={`Open ${selectedCompanion.name}'s journal`}
+                        >
+                          <Button variant="ghost" size="icon" className="rounded-full">
+                            <Book className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <Link
+                          href={`/companion/${selectedCompanion.id}/milestones`}
+                          aria-label={`View ${selectedCompanion.name}'s milestones`}
+                        >
+                          <Button variant="ghost" size="icon" className="rounded-full">
+                            <Award className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <Link
+                          href={`/companion/${selectedCompanion.id}`}
+                          aria-label={`Customize ${selectedCompanion.name}`}
+                        >
                           <Button variant="ghost" size="icon" className="rounded-full">
                             <Settings className="h-4 w-4" />
                           </Button>
@@ -647,6 +820,7 @@ export default function DashboardPage() {
                           size="icon" 
                           className="rounded-full text-destructive hover:text-destructive"
                           onClick={() => setDeleteConfirm(selectedCompanion)}
+                          aria-label={`Delete ${selectedCompanion.name}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -720,13 +894,14 @@ export default function DashboardPage() {
                 label="Messages"
                 value={stats.totalMessages.toLocaleString()}
                 color="bg-blue-500"
-                trend={stats.totalMessages > 0 ? "+12 today" : undefined}
+                trend={stats.messagesToday > 0 ? `+${stats.messagesToday} today` : undefined}
               />
               <StatCard 
                 icon={<Brain className="h-5 w-5 text-violet-500" />}
                 label="Memories"
                 value={stats.totalMemories}
                 color="bg-violet-500"
+                trend={stats.memoriesToday > 0 ? `+${stats.memoriesToday} today` : undefined}
               />
               <StatCard 
                 icon={<Calendar className="h-5 w-5 text-emerald-500" />}
@@ -762,15 +937,36 @@ export default function DashboardPage() {
                   </Link>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {Object.entries(needs).map(([key, value]) => (
-                    <NeedBar 
-                      key={key}
-                      name={key}
-                      value={value as number}
-                      icon={NEED_ICONS[key] || <Sparkles className="h-3.5 w-3.5" />}
-                      color={NEED_COLORS[key] || 'bg-primary'}
-                    />
-                  ))}
+                  {NEED_KEYS.map((key) => {
+                    const raw = (needs as unknown as Record<string, unknown>)[key];
+                    // Defensive: the DB defaults could have drifted; only render
+                    // bars for entries that are actually numeric.
+                    if (typeof raw !== 'number' || Number.isNaN(raw)) return null;
+                    return (
+                      <NeedBar
+                        key={key}
+                        name={key}
+                        value={raw}
+                        icon={NEED_ICONS[key] ?? <Sparkles className="h-3.5 w-3.5" />}
+                        color={NEED_COLORS[key] ?? 'bg-primary'}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Decay / activity timestamps — stored inside the needs JSON but
+                    not themselves needs. Rendered here as relative time so the
+                    data is preserved and visible, just in its correct form. */}
+                <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <RefreshCw className="h-3 w-3" />
+                    Updated {getTimeSince(needs.lastUpdated)}
+                  </span>
+                  <span className="text-muted-foreground/40">•</span>
+                  <span className="flex items-center gap-1.5">
+                    <MessageCircle className="h-3 w-3" />
+                    Last chat {getTimeSince(needs.lastInteraction)}
+                  </span>
                 </div>
               </motion.div>
             )}
@@ -895,7 +1091,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
             >
               <Link href="/activities" className="group">
                 <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all">
@@ -904,11 +1100,25 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground">Play games together</p>
                 </div>
               </Link>
+              <Link href={`/companion/${selectedCompanion.id}/journal`} className="group">
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-500/10 to-pink-500/10 border border-rose-500/20 hover:border-rose-500/40 transition-all">
+                  <Book className="h-6 w-6 text-rose-500 mb-2" />
+                  <p className="font-medium text-sm">Journal</p>
+                  <p className="text-xs text-muted-foreground">{selectedCompanion.name}&apos;s entries</p>
+                </div>
+              </Link>
               <Link href={`/companion/${selectedCompanion.id}/memory-palace`} className="group">
                 <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20 hover:border-violet-500/40 transition-all">
                   <Brain className="h-6 w-6 text-violet-500 mb-2" />
                   <p className="font-medium text-sm">Memory Palace</p>
                   <p className="text-xs text-muted-foreground">Shared memories</p>
+                </div>
+              </Link>
+              <Link href={`/companion/${selectedCompanion.id}/milestones`} className="group">
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-yellow-500/10 to-amber-500/10 border border-yellow-500/20 hover:border-yellow-500/40 transition-all">
+                  <Award className="h-6 w-6 text-yellow-500 mb-2" />
+                  <p className="font-medium text-sm">Milestones</p>
+                  <p className="text-xs text-muted-foreground">Achievements</p>
                 </div>
               </Link>
               <Link href="/life-feed" className="group">
