@@ -32,7 +32,8 @@
       "Bash(cd \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\" && npx supabase db query --linked -f supabase/migrations/015_proactive_messages_schema.sql 2>&1)",
       "Bash(git *)",
       "Bash(echo \"Exit code: $?\")",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(python -c ' *)"
     ]
   }
 }

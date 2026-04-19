@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VoiceConversationMode, useVoiceConversationSupported } from './VoiceConversationMode';
 import { VoiceMessageRecorder, useVoiceRecordingSupported } from './VoiceMessageRecorder';
+import { VoiceChoiceModal } from './VoiceChoiceModal';
 import { useSceneUpdater } from './useSceneUpdater';
 import { useQueuedVoicePlayback } from './useQueuedVoicePlayback';
 import { getClient } from '@/lib/supabase/client';
@@ -103,7 +104,16 @@ export function ChatWindow({
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [autoPlayVoice, setAutoPlayVoice] = useState(true);
+  // `null` = user has not yet chosen voice on/off for this session.
+  // The VoiceChoiceModal renders while null (provided the companion has voice
+  // configured); user taps on/off, we persist to sessionStorage, and we flip
+  // this to true/false. Keeping it null means every TTS gate (`autoPlayVoice &&
+  // …`) evaluates falsy, so no TTS cost is incurred before consent is given.
+  const [autoPlayVoice, setAutoPlayVoice] = useState<boolean | null>(null);
+  // Prevents a frame flash of the modal on refresh: we don't render it until
+  // the sessionStorage read has completed (or determined there's nothing to
+  // read). Starts false, flips true after the mount effect runs once.
+  const [voiceChoiceLoaded, setVoiceChoiceLoaded] = useState(false);
   const [voiceConversationActive, setVoiceConversationActive] = useState(false);
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -125,6 +135,65 @@ export function ChatWindow({
   // The same companion message can arrive via both the API response AND the Supabase
   // realtime subscription — this ref ensures we only play it once.
   const playedMessageIdsRef = useRef<Set<string>>(new Set());
+
+  // =============================================================================
+  // VOICE CHOICE — restore session-scoped decision OR prompt for one
+  // =============================================================================
+  //
+  // Runs on mount and when the companion changes. Three outcomes:
+  //   1. Companion has no voice configured     → autoPlayVoice=false, skip modal
+  //   2. Session has a stored choice           → restore it, skip modal
+  //   3. Fresh companion / no stored choice    → leave null, modal renders
+  //
+  // The `sessionStorage` reads/writes are wrapped in try/catch because some
+  // browsers (private mode, locked-down corporate profiles) throw on access.
+  // Fallback behavior in those cases: prompt on every page load. Acceptable.
+  useEffect(() => {
+    if (!hasVoiceEnabled) {
+      setAutoPlayVoice(false);
+      setVoiceChoiceLoaded(true);
+      return;
+    }
+
+    const storageKey = `kirra-voice-choice-${companion.id}`;
+    try {
+      const stored = sessionStorage.getItem(storageKey);
+      if (stored === 'true') {
+        setAutoPlayVoice(true);
+      } else if (stored === 'false') {
+        setAutoPlayVoice(false);
+      } else {
+        // Companion switch with no stored value — reset so modal shows for
+        // the new companion even if the previous one had a choice set.
+        setAutoPlayVoice(null);
+      }
+    } catch (err) {
+      console.error(
+        'sessionStorage unavailable — voice choice prompt will reappear on refresh:',
+        err
+      );
+      setAutoPlayVoice(null);
+    }
+
+    setVoiceChoiceLoaded(true);
+  }, [companion.id, hasVoiceEnabled]);
+
+  // Handler fired by the VoiceChoiceModal buttons. Persists the choice for
+  // the session and flips state so TTS gates resolve correctly.
+  const handleVoiceChoice = useCallback(
+    (voiceOn: boolean) => {
+      try {
+        sessionStorage.setItem(
+          `kirra-voice-choice-${companion.id}`,
+          String(voiceOn)
+        );
+      } catch (err) {
+        console.error('Failed to persist voice choice to sessionStorage:', err);
+      }
+      setAutoPlayVoice(voiceOn);
+    },
+    [companion.id]
+  );
   
   // Mood
   const moodData = companion.current_mood as { primary?: string } | null;
@@ -300,11 +369,31 @@ export function ChatWindow({
   // =============================================================================
 
   const handleVoiceToggle = useCallback(() => {
+    // If the modal hasn't been answered yet we shouldn't get here (modal is
+    // blocking, speaker button is behind it visually), but guard anyway so a
+    // stray click doesn't flip null → true and silently enable TTS.
+    if (autoPlayVoice === null) return;
+
+    const newValue = !autoPlayVoice;
     if (autoPlayVoice && isVoicePlaying) {
       stopVoice();
     }
-    setAutoPlayVoice(!autoPlayVoice);
-  }, [autoPlayVoice, isVoicePlaying, stopVoice]);
+    setAutoPlayVoice(newValue);
+
+    // Persist the override so a refresh within the session honors the most
+    // recent choice rather than re-prompting. Matches what the modal does.
+    try {
+      sessionStorage.setItem(
+        `kirra-voice-choice-${companion.id}`,
+        String(newValue)
+      );
+    } catch (err) {
+      console.error(
+        'Failed to persist voice toggle to sessionStorage:',
+        err
+      );
+    }
+  }, [autoPlayVoice, isVoicePlaying, stopVoice, companion.id]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -686,6 +775,15 @@ export function ChatWindow({
           hasVoiceEnabled={hasVoiceEnabled}
         />
       )}
+
+      {/* =================================================================
+          VOICE CHOICE MODAL — blocking one-time-per-session consent prompt
+          ================================================================= */}
+      <VoiceChoiceModal
+        open={voiceChoiceLoaded && autoPlayVoice === null && hasVoiceEnabled}
+        companionName={companion.name}
+        onChoice={handleVoiceChoice}
+      />
     </div>
   );
 }
