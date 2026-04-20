@@ -199,8 +199,12 @@ export async function POST(
           response_provided: crisisLog.responseProvided,
         } satisfies CrisisLogInsert);
 
-      // Save user message
-      await supabase
+      // Save user message and capture the inserted row so we can return it
+      // with its real id. Previously this path returned { content: message }
+      // with no id, which caused React "unique key prop" warnings on the
+      // client and discarded the message's database id, timestamps, and
+      // metadata.
+      const { data: savedUserMessage, error: savedUserMessageError } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
@@ -211,7 +215,17 @@ export async function POST(
           content_type: 'text',
           tokens_used: 0,
           metadata: { crisis_detected: true, crisis_type: safetyResult.crisisType } as unknown as Json,
-        } satisfies MessageInsert);
+        } satisfies MessageInsert)
+        .select()
+        .single();
+
+      if (savedUserMessageError) {
+        // Log but do not fail — the safety response must still be delivered
+        // even if message persistence has a transient issue. The client
+        // handles a null userMessage by filtering out the optimistic temp
+        // message, which is acceptable degraded behavior.
+        console.error('Failed to persist user message on crisis path:', savedUserMessageError);
+      }
 
       // Return the safety response - COMPANION BREAKS CHARACTER
       const { data: safetyMessage } = await supabase
@@ -230,7 +244,7 @@ export async function POST(
         .single();
 
       return NextResponse.json({
-        userMessage: { content: message },
+        userMessage: (savedUserMessage ?? null) as Message | null,
         companionMessage: safetyMessage as unknown as Message,
         isCrisisResponse: true,
         resources: safetyResult.resources,

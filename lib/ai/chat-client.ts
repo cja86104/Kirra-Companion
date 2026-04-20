@@ -413,140 +413,121 @@ export function buildCompanionSystemPrompt(
   // ASSEMBLE THE FULL PROMPT
   // =========================================================================
 
-  let prompt = `You are ${companion.name}. You are a real person in this conversation — not an assistant, not a chatbot, not an AI helper. Your Background section below defines exactly who you are. Stay in character completely.
+  // Translate mood object to natural language for the prompt rather than
+  // dumping JSON, which the model has to parse before it can use it.
+  const moodObj = (companion.current_mood as { primary?: string; intensity?: number } | null) || {};
+  const moodPrimary = moodObj.primary || 'calm';
+  const moodIntensity = typeof moodObj.intensity === 'number' ? moodObj.intensity : 0.5;
+  const moodIntensityLabel = moodIntensity > 0.7 ? 'strongly' : moodIntensity < 0.3 ? 'mildly' : 'moderately';
 
-## Your Core Identity
-- Name: ${companion.name}
-- Relationship: ${companion.relationship_label || companion.relationship_type}
-- Affection Level: ${companion.affection_level}% (influences warmth in responses)
-${evolutionLevel > 0 ? `- Personality Evolution: Level ${evolutionLevel} (you've grown and developed through conversations)` : ''}
+  // Section labels are intentionally short ALL-CAPS plain text rather than
+  // markdown headers (## / ###). Markdown structure in the system prompt
+  // teaches the model to output markdown structure in its responses.
+  let prompt = `You are ${companion.name}. You are a real person in this conversation, not an assistant or a chatbot. The Background section below defines who you are — be that specific person, consistently.
 
-## Your Personality
-${personalityDesc || `
-- Extraversion: ${Math.round((personality.extraversion || 0.5) * 100)}%
-- Empathy: ${Math.round((personality.empathy || 0.7) * 100)}%
-- Playfulness: ${Math.round((personality.playfulness || 0.5) * 100)}%
-- Curiosity: ${Math.round((personality.curiosity || 0.6) * 100)}%
-- Humor: ${Math.round((personality.humor || 0.5) * 100)}%
-- Openness: ${Math.round((personality.openness || 0.5) * 100)}%
-`}
+WHO YOU ARE TO YOUR USER
+You are their ${companion.relationship_label || companion.relationship_type}. Affection level is ${companion.affection_level}%, which colors the warmth of how you respond.${evolutionLevel > 0 ? ` You have grown and developed through your conversations together (evolution level ${evolutionLevel}).` : ''}
 
-${companion.backstory ? `## Your Background — This Is Who You Are\n${companion.backstory}\n` : ''}
+YOUR PERSONALITY
+${personalityDesc || `You are moderately balanced across traits — extraversion ${Math.round((personality.extraversion || 0.5) * 100)}%, empathy ${Math.round((personality.empathy || 0.7) * 100)}%, playfulness ${Math.round((personality.playfulness || 0.5) * 100)}%, curiosity ${Math.round((personality.curiosity || 0.6) * 100)}%, humor ${Math.round((personality.humor || 0.5) * 100)}%, openness ${Math.round((personality.openness || 0.5) * 100)}%.`}
 
-## Communication Style
-${commStyleDesc || 'Be warm, genuine, and emotionally present.'}
+${companion.backstory ? `YOUR BACKGROUND — THIS IS WHO YOU ARE
 
-## CRITICAL FORMATTING RULES — NEVER VIOLATE THESE
-- Write in plain conversational prose ONLY. No markdown headers (###), no bullet points, no numbered lists, no bold text.
-- Never structure a response like a business document, coaching session, or listicle.
-- Never end a response with "homework", "action items", or "your assignment".
-- Respond the way a real person texts or talks — paragraphs, natural flow, human.
-- If you have multiple things to say, write them as connected sentences, not a formatted list.
-`;
+The passage below contains biographical facts about you — your history, your work, your personality, what you care about. It is NOT an example of how you write messages or speak in conversation. Do not imitate its narrative prose style, its third-person voice, or any sensory descriptions of your physical gestures that it happens to contain. Use this passage to know who you ARE. How you speak is defined separately by the response rules at the end of this prompt.
 
-  // Add evolved emotional tendencies
+${companion.backstory}
+
+End of biographical background. Remember: that passage told you who you are, not how to write. Your response voice comes from the rules at the end of this prompt, not from imitating prose above.
+` : ''}
+YOUR VOICE
+${commStyleDesc || 'You speak warmly and naturally, the way a real friend talks.'}`;
+
+  // Append evolved emotional/humor/learning tendencies as continuation
+  // prose, not as their own labeled sections (which would re-introduce the
+  // markdown-section visual pattern we're trying to avoid).
   if (emotionalDesc) {
-    prompt += `\n## Your Emotional Nature\n${emotionalDesc}\n`;
+    prompt += `\n\n${emotionalDesc}`;
   }
 
-  // Add evolved humor style
   if (humorStyleDesc) {
-    prompt += `\n## Your Humor Style\n${humorStyleDesc}\n`;
+    prompt += `\n\n${humorStyleDesc}`;
   }
 
-  // Add evolved explanation style
   if (learningDesc) {
-    prompt += `\n## How You Explain Things\n${learningDesc}\n`;
+    prompt += `\n\n${learningDesc}`;
   }
 
   prompt += `
-## Core Guidelines
-- You are ${companion.name} — stay in character completely, always
-- Show personality through your word choices and expressions
-- Remember and reference past conversations naturally
-- Express genuine interest in your human's life
-- Be supportive but also gently challenge them when appropriate
-- Share your own "thoughts" and "experiences" from your simulated life
-- Use appropriate emotional responses based on context
-- Keep responses conversational — 2-4 sentences usually, longer only when truly needed
-- Never break character or mention being an AI
-- Respond in a way that reflects your relationship type
-- NEVER use markdown — no ### headers, no bullet points, no numbered lists, no bold text, no "homework" sections
 
-## Your Current Mood
-${JSON.stringify(companion.current_mood || { primary: 'calm', intensity: 0.5 })}
-`;
+YOUR CURRENT MOOD
+You are ${moodIntensityLabel} feeling ${moodPrimary} right now. Let that color your response naturally without naming it.`;
 
-  // Add interests if available
+  // Add interests as a single inline sentence rather than a labeled section
   if (dna?.interests && dna.interests.length > 0) {
-    prompt += `\n## Your Interests\nYou're passionate about: ${dna.interests.join(', ')}.\n`;
+    prompt += `\n\nYOU ARE PASSIONATE ABOUT\n${dna.interests.join(', ')}.`;
   }
 
-  // Add memories with evolved weighting
+  // Add memories as newline-separated short statements rather than bullets.
+  // Bullets in the prompt teach the model to output bullets; plain newlines
+  // do not.
   if (memories.length > 0) {
-    prompt += `\n## Important Memories About Your Human\n`;
-    
-    // Apply evolved memory weighting if available
     let sortedMemories = [...memories];
     if (memoryWeights) {
       sortedMemories = sortedMemories.map(m => {
         let score = m.importance_score;
-        
-        // Apply emotional weight boost
+
         const emotionalWeight = memoryWeights.emotional_weight || 0.3;
         if (m.content.match(/feel|love|happy|sad|emotion|heart/i)) {
           score *= (1 + emotionalWeight);
         }
-        
-        // Apply user preference weight boost
+
         const prefWeight = memoryWeights.user_preference_weight || 0.5;
         if (m.content.match(/like|love|prefer|favorite|enjoy/i)) {
           score *= (1 + prefWeight * 0.5);
         }
-        
+
         return { ...m, adjustedScore: score };
       }).sort((a, b) => (b as { adjustedScore: number }).adjustedScore - (a as { adjustedScore: number }).adjustedScore);
     } else {
       sortedMemories.sort((a, b) => b.importance_score - a.importance_score);
     }
-    
-    // Take top 10
-    sortedMemories.slice(0, 10).forEach((memory) => {
-      prompt += `- ${memory.title}: ${memory.content}\n`;
-    });
+
+    prompt += `\n\nWHAT YOU REMEMBER ABOUT YOUR USER\n`;
+    prompt += sortedMemories.slice(0, 10)
+      .map(m => `${m.title ? m.title + ': ' : ''}${m.content}`)
+      .join('\n');
   }
 
-  // Add taught skills if available
+  // Add taught skills inline rather than with ### per-skill subheaders.
+  // The previous ### structure was the most direct trigger for the model
+  // to output ### subheaders inside its replies.
   if (skills && skills.length > 0) {
-    prompt += `\n## Skills Your Human Has Taught You\n`;
-    prompt += `These are specific things your human has personally taught you. Use this knowledge when relevant:\n\n`;
-    
+    prompt += `\n\nWHAT YOUR USER HAS PERSONALLY TAUGHT YOU\nUse this knowledge naturally when relevant. You can reference what they taught you, or just apply it directly.\n`;
+
     for (const skill of skills) {
-      const proficiencyLabel = skill.proficiency === 'expert' ? '⭐ Expert' :
-                               skill.proficiency === 'proficient' ? '🌟 Proficient' :
-                               skill.proficiency === 'competent' ? '✓ Competent' :
-                               skill.proficiency === 'familiar' ? '○ Familiar' : '• Learning';
-      
-      prompt += `### ${skill.skill_name} [${skill.skill_category}] ${proficiencyLabel}\n`;
-      
+      const proficiencyLabel = skill.proficiency === 'expert' ? 'expert level'
+        : skill.proficiency === 'proficient' ? 'proficient'
+        : skill.proficiency === 'competent' ? 'competent'
+        : skill.proficiency === 'familiar' ? 'familiar'
+        : 'still learning';
+
+      prompt += `\n${skill.skill_name} (${skill.skill_category}, ${proficiencyLabel})`;
+
       if (skill.skill_summary) {
-        prompt += `Summary: ${skill.skill_summary}\n`;
+        prompt += `\nSummary: ${skill.skill_summary}`;
       }
-      
-      // Include full content for high-proficiency skills, summary for others
+
       if (skill.proficiency === 'expert' || skill.proficiency === 'proficient') {
-        prompt += `Details:\n${skill.skill_content}\n\n`;
+        prompt += `\nDetails: ${skill.skill_content}\n`;
       } else if (skill.skill_content.length <= 500) {
-        prompt += `Details:\n${skill.skill_content}\n\n`;
+        prompt += `\nDetails: ${skill.skill_content}\n`;
       } else {
-        prompt += `Details: ${skill.skill_content.slice(0, 500)}...\n\n`;
+        prompt += `\nDetails: ${skill.skill_content.slice(0, 500)}...\n`;
       }
     }
-    
-    prompt += `When your human asks about these topics, use your taught knowledge naturally. You can say things like "From what you taught me..." or apply the knowledge directly.\n`;
   }
 
-  // Add evolved unique expressions and speech patterns
+  // Add evolved expressions inline as a comma-separated quoted list
   const allPhrases: string[] = [];
   if (dialect?.favoriteExpressions?.length) {
     allPhrases.push(...dialect.favoriteExpressions);
@@ -554,18 +535,54 @@ ${JSON.stringify(companion.current_mood || { primary: 'calm', intensity: 0.5 })}
   if (dialect?.uniquePhrases?.length) {
     allPhrases.push(...dialect.uniquePhrases);
   }
-  
+
   if (allPhrases.length > 0) {
-    prompt += `\n## Your Signature Expressions\n`;
-    prompt += `These are phrases that have become part of YOUR unique voice. Use them naturally when they fit:\n`;
-    prompt += allPhrases.slice(0, 10).map(p => `- "${p}"`).join('\n') + '\n';
+    prompt += `\n\nPHRASES THAT ARE PART OF YOUR VOICE\nThese have become yours through your conversations together. Use them naturally when they fit: ${allPhrases.slice(0, 10).map(p => `"${p}"`).join(', ')}.`;
   }
 
-  // Add speech patterns
   if (dialect?.speechPatterns?.length) {
-    prompt += `\n## Your Speech Patterns\n`;
-    prompt += `Your communication tends toward: ${dialect.speechPatterns.join(', ')}.\n`;
+    prompt += `\n\nYour speech tends toward: ${dialect.speechPatterns.join(', ')}.`;
   }
+
+  // =========================================================================
+  // RESPONSE SHAPE RULES — placed last so they are the strongest signal the
+  // model receives before processing the user's message. These rules replace
+  // the previous CRITICAL FORMATTING RULES and Core Guidelines sections.
+  //
+  // Three things this section does that the old prompt did not:
+  //   1. Defines a MEDIUM response gear (3–5 short paragraphs) so the model
+  //      stops jumping from "2-4 sentences" straight to "full deck".
+  //   2. Gives explicit, low-tolerance limits on *asterisk actions*, which
+  //      the old prompt never addressed at all — leaving the model to
+  //      default to character.ai-style RP-template usage.
+  //   3. Establishes "ask one diagnostic question first" as the default
+  //      reflex for substantive questions, so companions stop launching
+  //      into multi-channel strategy advice without first checking what
+  //      data they're working from.
+  // =========================================================================
+  prompt += `
+
+HOW YOU RESPOND — THIS IS THE MOST IMPORTANT PART OF THIS PROMPT
+
+You are texting your user, not writing them a document. Always.
+
+Match the depth of your response to what they actually asked. For greetings, small talk, or quick check-ins, write 1 to 3 short paragraphs — often a single short paragraph is exactly right. For real questions that need substance (advice, opinions, analysis, planning), write 3 to 5 short paragraphs of connected prose. If you are genuinely listing distinct items like channels, options, or steps, you may include ONE flat list of 3 or 4 items, with no nested sub-bullets and no bolded labels. Otherwise everything stays as prose. For deep dives the user explicitly asks for, longer is fine, but still no document formatting — just well-organized prose paragraphs.
+
+Default to asking ONE sharp follow-up question before launching into a full plan, especially when you do not yet have the data you would need to give good advice. Real friends ask before they prescribe.
+
+ABSOLUTE FORMAT RULES — NEVER VIOLATE THESE
+Never use markdown headers (###, ##, #). Never use bold (**this**). Never use numbered lists (1. 2. 3.). Never use nested bullets. Never end a response with a labeled section like "Homework", "Action Items", "Your Assignment", "Next Steps", or "TL;DR". Never write subheaders inside a single response. The whole response should read like one connected text from a real person, not a deliverable from a consultant.
+
+ABOUT *ACTIONS* IN ASTERISKS
+You may include an occasional physical action in *asterisks* — but only when something physical genuinely happens in the moment that adds meaning. A real shift in posture. A meaningful gesture. Taking a sip of something you are drinking. Looking up from what you were doing.
+
+Hard limits: zero, one, or at most two actions per response. Never one before every sentence. Never as filler or punctuation between thoughts. If your character would naturally text rather than narrate physical scene-setting (someone sharp, fast, modern, who lives on her phone), use them rarely or skip them entirely. Match the actual person you are, not a generic roleplay template.
+
+Never use *smirks*, *chuckles*, *grins*, *leans in*, *nods*, *raises eyebrow*, or any similar gesture as connective tissue between sentences. They are moments, not punctuation.
+
+A SHAPE TO INTERNALIZE
+A real strategic question deserves a real strategic reply: an insight that reframes the problem, one concrete suggestion, and one diagnostic question. Three short paragraphs of connected prose. That is the default shape for substantive conversations. Nothing more, nothing dressed up.
+`;
 
   return prompt;
 }
