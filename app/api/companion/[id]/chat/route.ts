@@ -374,6 +374,7 @@ export async function POST(
         relationship_label: companion.relationship_label,
         affection_level: companion.affection_level,
         backstory: companion.backstory,
+        backstory_normalized: companion.backstory_normalized,
         current_mood: companion.current_mood,
         personality_base: companion.personality_base,
         companion_dna: companion.companion_dna?.[0] ? {
