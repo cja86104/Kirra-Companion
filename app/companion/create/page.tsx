@@ -356,6 +356,36 @@ export default function CreateCompanionPage() {
         throw new Error(dnaError.message || 'Failed to create companion DNA');
       }
 
+      // Normalize the backstory register synchronously before the user starts
+      // chatting. This converts 3rd-person narrative prose and sensory gesture
+      // descriptions into 2nd-person factual register, which prevents the chat
+      // model from pattern-matching the backstory as a style example and
+      // producing theatrical RP output.
+      //
+      // Soft-fail: if normalization fails (e.g. OpenRouter transient error),
+      // the companion is still fully created and the user proceeds to chat.
+      // The first messages will use the raw backstory; the edit-path retry
+      // (Section 4) can normalize later. Failure is logged but not surfaced
+      // as a toast — from the user's perspective, creation succeeded.
+      try {
+        const normalizeResponse = await fetch(
+          `/api/companion/${companion.id}/normalize-backstory`,
+          { method: 'POST' }
+        );
+        if (!normalizeResponse.ok) {
+          const errorBody: unknown = await normalizeResponse
+            .json()
+            .catch(() => ({}));
+          console.error(
+            'Backstory normalization failed:',
+            normalizeResponse.status,
+            errorBody
+          );
+        }
+      } catch (normalizeError) {
+        console.error('Backstory normalization threw:', normalizeError);
+      }
+
       toast.success(`${companionData.name} has been created!`);
       router.push(`/chat/${companion.id}`);
       

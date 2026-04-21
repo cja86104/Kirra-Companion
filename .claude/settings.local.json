@@ -33,7 +33,11 @@
       "Bash(git *)",
       "Bash(echo \"Exit code: $?\")",
       "Bash(echo \"Exit: $?\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(xargs grep *)",
+      "Read(//mnt/c/Users/cja86/Documents/Kirra-Companion/**)",
+      "Bash(dir \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\\\\scripts\")",
+      "Bash(npx tsx *)"
     ]
   }
 }

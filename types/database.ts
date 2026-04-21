@@ -684,6 +684,8 @@ export type Database = {
           avatar_3d_config: Json | null
           avatar_url: string | null
           backstory: string | null
+          backstory_normalized: string | null
+          backstory_normalized_hash: string | null
           created_at: string
           current_mood: Json | null
           id: string
@@ -709,6 +711,8 @@ export type Database = {
           avatar_3d_config?: Json | null
           avatar_url?: string | null
           backstory?: string | null
+          backstory_normalized?: string | null
+          backstory_normalized_hash?: string | null
           created_at?: string
           current_mood?: Json | null
           id?: string
@@ -734,6 +738,8 @@ export type Database = {
           avatar_3d_config?: Json | null
           avatar_url?: string | null
           backstory?: string | null
+          backstory_normalized?: string | null
+          backstory_normalized_hash?: string | null
           created_at?: string
           current_mood?: Json | null
           id?: string
