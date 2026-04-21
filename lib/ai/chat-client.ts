@@ -147,6 +147,7 @@ export function buildCompanionSystemPrompt(
     relationship_label?: unknown;
     affection_level: unknown;
     backstory?: unknown;
+    backstory_normalized?: unknown;
     current_mood?: unknown;
     personality_base?: unknown;
     companion_dna?: {
@@ -413,6 +414,14 @@ export function buildCompanionSystemPrompt(
   // ASSEMBLE THE FULL PROMPT
   // =========================================================================
 
+  // Prefer the normalized (2nd-person factual) backstory when available.
+  // Fall back to the raw backstory for any companion whose normalization
+  // legitimately failed so no one gets a broken system prompt.
+  const backstoryText =
+    (companion.backstory_normalized as string | null | undefined)?.trim() ||
+    (companion.backstory as string | null | undefined)?.trim() ||
+    '';
+
   // Translate mood object to natural language for the prompt rather than
   // dumping JSON, which the model has to parse before it can use it.
   const moodObj = (companion.current_mood as { primary?: string; intensity?: number } | null) || {};
@@ -431,13 +440,10 @@ You are their ${companion.relationship_label || companion.relationship_type}. Af
 YOUR PERSONALITY
 ${personalityDesc || `You are moderately balanced across traits — extraversion ${Math.round((personality.extraversion || 0.5) * 100)}%, empathy ${Math.round((personality.empathy || 0.7) * 100)}%, playfulness ${Math.round((personality.playfulness || 0.5) * 100)}%, curiosity ${Math.round((personality.curiosity || 0.6) * 100)}%, humor ${Math.round((personality.humor || 0.5) * 100)}%, openness ${Math.round((personality.openness || 0.5) * 100)}%.`}
 
-${companion.backstory ? `YOUR BACKGROUND — THIS IS WHO YOU ARE
+${backstoryText ? `YOUR BACKGROUND — THIS IS WHO YOU ARE
 
-The passage below contains biographical facts about you — your history, your work, your personality, what you care about. It is NOT an example of how you write messages or speak in conversation. Do not imitate its narrative prose style, its third-person voice, or any sensory descriptions of your physical gestures that it happens to contain. Use this passage to know who you ARE. How you speak is defined separately by the response rules at the end of this prompt.
+${backstoryText}
 
-${companion.backstory}
-
-End of biographical background. Remember: that passage told you who you are, not how to write. Your response voice comes from the rules at the end of this prompt, not from imitating prose above.
 ` : ''}
 YOUR VOICE
 ${commStyleDesc || 'You speak warmly and naturally, the way a real friend talks.'}`;

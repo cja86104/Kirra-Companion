@@ -20,8 +20,30 @@
  *   npx tsx scripts/backfill-backstory-normalization.ts
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { normalizeBackstory } from '../lib/companion/backstory-normalizer';
+
+function loadEnvFile(): void {
+  const envPath = path.resolve(process.cwd(), '.env.local');
+  if (!fs.existsSync(envPath)) return;
+  const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const rawVal = trimmed.slice(eqIdx + 1).trim();
+    const value = rawVal.replace(/^(['"])(.*)\1$/, '$2');
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
+
+loadEnvFile();
 
 interface CompanionRow {
   id: string;
