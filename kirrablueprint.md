@@ -466,13 +466,13 @@ Replaces the old 17-template generic activity generator with personality-driven,
 | A | `lib/companion/activity-templates/` — 64 personality-gated templates split across 6 category files | ✅ Done |
 | A (cont.) | `lib/companion/activity-templates/index.ts` — barrel export + `ALL_TEMPLATES` aggregate | ✅ Done |
 | A.5 | Category consolidation (10 → 6) — narrow `ActivityCategory` union; switch `activity-generator.ts` to consume `ALL_TEMPLATES`; remap `categoryMap`s in 3 files; remap 19 `daily-routine.ts` slot arrays; ship migration `022_consolidate_activity_categories.sql` + rollback at `supabase/rollbacks/022_rollback.sql` | ✅ Done |
-| B | `lib/companion/activity-context.ts` — context loader (backstory, interests, memories, recent chats, recent activities) | ⬜ Not started |
+| B | `lib/companion/activity-context.ts` — context loader (backstory, interests, memories, recent chats, recent activities). Uses Promise.allSettled across 5 parallel queries; maps DB role `'companion'` → output role `'assistant'`; logs subquery failures and degrades to empty sections rather than failing the simulation tick | ✅ Done |
 | C | `lib/companion/activity-enrichment.ts` — OpenRouter enrichment call with Zod validation and graceful degradation | ⬜ Not started |
 | D | Rewrite `lib/companion/activity-generator.ts` to consume the new template catalog (✅ done in A.5) + context (B) + enrichment (C) | 🟡 Partially done — catalog consumption ✅; context + enrichment still pending |
 | E | Update `vercel.json` and `DEFAULT_SIMULATION_CONFIG` for the new schedule (2× per 24h) | ⬜ Not started |
 | F | Smoke test plan | ⬜ Not started |
 
-**Next concrete step:** Begin Section B — write `lib/companion/activity-context.ts` (context loader gathering backstory, interests, memories, recent chats, recent activities). See SPEC §7.1.
+**Next concrete step:** Begin Section C — write `lib/companion/activity-enrichment.ts` (OpenRouter enrichment call with the Zod schema, JSON parsing via the existing `parseAIResponse` utility, and graceful degradation back to template defaults on AI/validation failure). See SPEC §7.2–§7.5.
 
 **Locked design decisions (with Chris, 2026-04-18; amended 2026-04-28):**
 - 64 personality-gated templates across 6 categories with AI enrichment (was originally planned at 100+ across 10 categories — see SPEC scope amendment)
