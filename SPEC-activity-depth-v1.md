@@ -5,6 +5,13 @@
 **Target:** Kirra Companion (production)
 **Supersedes:** The current 17-template activity generator in `lib/companion/activity-generator.ts`
 
+> **Scope Amendment — 2026-04-28**
+> The original spec assumed all 10 `ActivityCategory` values would be retained. Section A's split-file rollout shipped only 6 category files (`creative`, `entertainment`, `hobby`, `learning`, `reflection`, `social`) for a total of 64 templates. After review, Chris locked the catalog at those 6 categories and dropped `exploration`, `physical`, `relaxation`, and `productivity` from the type union.
+> - `ActivityCategory` (types/life-simulation.ts) narrowed to 6 values
+> - Migration `022_consolidate_activity_categories.sql` remaps existing `companion_activities.activity_category` rows: `exploration → learning`, `physical → hobby`, `relaxation → reflection`, `productivity → reflection`
+> - Rollback at `supabase/rollbacks/022_rollback.sql` (manual run only)
+> - The original 10-category 114-template plan in §6.2 below is the *original design intent* — the actual catalog and accompanying tables in §3, §4, §6.2 are annotated to reflect the shipped 6-category scope.
+
 ---
 
 ## 1. Problem Statement
@@ -47,14 +54,16 @@ The current life-simulation generates activities that feel generic, computer-wri
 - **Not implementing manual user-authored journal entries.** That's Chris's separate feature request, queued after notification work.
 - **Not building long-range planning or goal-setting.** Companions don't have multi-day arcs in v1.
 - **Not adding new AI providers.** OpenRouter/DeepSeek exclusive per standing rule.
+- **Not maintaining all 10 historical `ActivityCategory` values.** Per the 2026-04-28 scope amendment, the catalog ships with 6 categories — `creative`, `entertainment`, `hobby`, `learning`, `reflection`, `social`. The previously-defined `exploration`, `physical`, `relaxation`, and `productivity` values are removed from the type union and remapped at the data layer. Future templates and routines must use the 6-category set.
 
 ---
 
-## 4. Scope Decisions (locked with Chris 2026-04-18)
+## 4. Scope Decisions (locked with Chris 2026-04-18, amended 2026-04-28)
 
 | Decision | Value |
 |---|---|
-| How big | 100+ personality-gated templates with AI enrichment |
+| How big | 64 personality-gated templates with AI enrichment (originally planned 100+, reduced when scope narrowed to 6 categories) |
+| Categories | 6 — `creative`, `entertainment`, `hobby`, `learning`, `reflection`, `social` (amended 2026-04-28; was 10) |
 | AI context | Backstory + interests + quirks + memories + recent chats + recent activities |
 | Memory gating | Prefer memories that reference companion by name/role; fall back to high-importance |
 | Schedule | 2x per 24h (midnight + noon UTC, no timezone juggling) |
@@ -190,6 +199,24 @@ New additions:
 All three signals work. A structured taxonomy would require a migration and constrain creativity.
 
 ### 6.2 The 100+ templates — distribution plan
+
+> **Amended 2026-04-28:** Shipped catalog is **64 templates across 6 categories**, not the original 114 across 10. The table below records the original design intent. The "Shipped" column shows the actual distribution after the 4 dropped categories were folded into their replacements (per §3 amendment).
+
+| Category (original) | Original count | Shipped | Notes |
+|---|---:|---:|---|
+| hobby | 18 | 11 | includes formerly-`physical` activities |
+| learning | 14 | 11 | includes the migrated `exploration_discovery` template |
+| creative | 16 | 10 | |
+| social | 10 | 10 | |
+| ~~exploration~~ | ~~12~~ | — | category dropped; `exploration_discovery` → learning, `exploration_virtual_travel` → entertainment |
+| reflection | 10 | 11 | includes the migrated `relaxation_daydreaming` template; formerly-`productivity` activities |
+| entertainment | 12 | 11 | includes the migrated `exploration_virtual_travel` template |
+| ~~physical~~ | ~~8~~ | — | category dropped; rolled into hobby |
+| ~~relaxation~~ | ~~6~~ | — | category dropped; `relaxation_daydreaming` → reflection, `relaxation_nap` removed entirely |
+| ~~productivity~~ | ~~8~~ | — | category dropped; rolled into reflection |
+| **Total** | **114** | **64** | |
+
+**Original design rationale (preserved for context):**
 
 We need breadth so personality-gating actually produces variety across 8+ companions. Proposed distribution:
 

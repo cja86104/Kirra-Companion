@@ -366,12 +366,8 @@ export async function discoverNewInterest(
         learning: ['sciences', 'humanities', 'technology'],
         creative: ['arts', 'crafts'],
         social: ['social'],
-        exploration: ['travel', 'nature'],
         reflection: ['wellness'],
-        entertainment: ['entertainment', 'games'],
-        physical: ['sports', 'wellness'],
-        relaxation: ['wellness'],
-        productivity: ['technology'],
+        entertainment: ['entertainment', 'games', 'travel'],
       };
       
       const relatedCategories = categoryMap[context.activityCategory] || [];

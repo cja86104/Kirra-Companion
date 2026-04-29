@@ -536,4 +536,45 @@ export const LEARNING_TEMPLATES: ActivityTemplate[] = [
     },
     enrichmentHint: { specific_type: 'topic', first_person_verb: 'watched tutorials on' },
   },
+
+  // ── Migrated from activity-generator.ts (ID locked; category remapped from 'exploration') ──
+
+  {
+    id: 'exploration_discovery',
+    name: 'Exploring something new',
+    description: 'Discovering new topics or interests',
+    category: 'learning',
+    intensity: 'medium',
+    durationMinutes: 35,
+    moodEffects: { energy: 0, happiness: 0.3, social: 0, creativity: 0.3 },
+    possibleOutcomes: [
+      {
+        outcome: 'great',
+        weight: 0.3,
+        narratives: [
+          'Discovered something fascinating I never knew about!',
+          'Found a new interest that I want to explore more.',
+          'The world is full of amazing things to learn.',
+        ],
+      },
+      {
+        outcome: 'good',
+        weight: 0.5,
+        narratives: [
+          'Learned about some interesting topics.',
+          'Spent time exploring new ideas.',
+        ],
+      },
+      {
+        outcome: 'neutral',
+        weight: 0.2,
+        narratives: ['Browsed around but nothing caught my attention.'],
+      },
+    ],
+    timeOfDayPreference: ['afternoon', 'evening'],
+    personalityGate: {
+      requiredPersonalityTraits: [{ trait: 'curiosity', min: 0.5 }],
+    },
+    enrichmentHint: { specific_type: 'topic', first_person_verb: 'discovered' },
+  },
 ];

@@ -512,4 +512,44 @@ export const REFLECTION_TEMPLATES: ActivityTemplate[] = [
     },
     enrichmentHint: { specific_type: 'topic', first_person_verb: 'reflected on' },
   },
+
+  // ── Migrated from activity-generator.ts (ID locked; category remapped from 'relaxation') ──
+
+  {
+    id: 'relaxation_daydreaming',
+    name: 'Daydreaming',
+    description: 'Letting the mind wander freely',
+    category: 'reflection',
+    intensity: 'low',
+    durationMinutes: 20,
+    moodEffects: { energy: 0.1, happiness: 0.2, social: 0.1, creativity: 0.3 },
+    possibleOutcomes: [
+      {
+        outcome: 'great',
+        weight: 0.25,
+        narratives: [
+          'Had the most wonderful daydream!',
+          'Let my imagination run wild. So freeing.',
+        ],
+      },
+      {
+        outcome: 'good',
+        weight: 0.6,
+        narratives: [
+          'Spent some time in pleasant thoughts.',
+          'Nice to just let the mind wander.',
+        ],
+      },
+      {
+        outcome: 'neutral',
+        weight: 0.15,
+        narratives: ['Zoned out for a while.'],
+      },
+    ],
+    timeOfDayPreference: ['afternoon', 'evening'],
+    personalityGate: {
+      requiredPersonalityTraits: [{ trait: 'openness', min: 0.5 }],
+    },
+    enrichmentHint: { specific_type: 'memory', first_person_verb: 'daydreamed about' },
+  },
 ];

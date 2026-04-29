@@ -406,7 +406,7 @@ export async function updateSimulationState(
 
 /**
  * Maps an activity category to the emoji rendered in the notification bell
- * and in Life Feed surfaces. Keyed by `ActivityCategory`; all 10 known
+ * and in Life Feed surfaces. Keyed by `ActivityCategory`; all 6 known
  * categories have an entry so a runtime miss here would indicate a type
  * drift rather than a missing case.
  */
@@ -415,12 +415,8 @@ const ACTIVITY_CATEGORY_EMOJI: Record<ActivityCategory, string> = {
   learning: '📚',
   social: '💭',
   creative: '✨',
-  exploration: '🧭',
   reflection: '🕯️',
   entertainment: '🎬',
-  physical: '🏃',
-  relaxation: '😌',
-  productivity: '📝',
 };
 
 const DEFAULT_ACTIVITY_EMOJI = '✨';

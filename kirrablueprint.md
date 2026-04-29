@@ -293,7 +293,7 @@ npm run dev
 
 ### Database Setup
 
-Run migrations in order. There are **22** migrations in `supabase/migrations/`:
+Run migrations in order. There are **23** migrations in `supabase/migrations/`:
 
 **Foundation (001–009):**
 1. `001_foundation.sql` — Extensions and base setup
@@ -319,6 +319,7 @@ Run migrations in order. There are **22** migrations in `supabase/migrations/`:
 19. `019_schema_drift_repair.sql` — Drift cleanup
 20. `020_life_simulation_rls.sql` — Life sim RLS
 21. `021_backstory_normalization.sql` — Backstory normalization columns
+22. `022_consolidate_activity_categories.sql` — Remap `companion_activities.activity_category` for the 10 → 6 `ActivityCategory` narrowing (rollback at `supabase/rollbacks/022_rollback.sql`, manual run only)
 
 **Generated scenes:**
 - `20250119000001_generated_scenes.sql` — Generated scene persistence
@@ -462,22 +463,23 @@ Replaces the old 17-template generic activity generator with personality-driven,
 
 | Section | Deliverable | Status |
 |---------|-------------|--------|
-| A | `lib/companion/activity-templates/` — 60+ personality-gated templates split across 6 category files | ✅ Done |
-| A (cont.) | `lib/companion/activity-templates/index.ts` — barrel export | ⬜ Not started |
+| A | `lib/companion/activity-templates/` — 64 personality-gated templates split across 6 category files | ✅ Done |
+| A (cont.) | `lib/companion/activity-templates/index.ts` — barrel export + `ALL_TEMPLATES` aggregate | ✅ Done |
+| A.5 | Category consolidation (10 → 6) — narrow `ActivityCategory` union; switch `activity-generator.ts` to consume `ALL_TEMPLATES`; remap `categoryMap`s in 3 files; remap 19 `daily-routine.ts` slot arrays; ship migration `022_consolidate_activity_categories.sql` + rollback at `supabase/rollbacks/022_rollback.sql` | ✅ Done |
 | B | `lib/companion/activity-context.ts` — context loader (backstory, interests, memories, recent chats, recent activities) | ⬜ Not started |
 | C | `lib/companion/activity-enrichment.ts` — OpenRouter enrichment call with Zod validation and graceful degradation | ⬜ Not started |
-| D | Rewrite `lib/companion/activity-generator.ts` to consume the new template catalog + context + enrichment | ⬜ Not started |
+| D | Rewrite `lib/companion/activity-generator.ts` to consume the new template catalog (✅ done in A.5) + context (B) + enrichment (C) | 🟡 Partially done — catalog consumption ✅; context + enrichment still pending |
 | E | Update `vercel.json` and `DEFAULT_SIMULATION_CONFIG` for the new schedule (2× per 24h) | ⬜ Not started |
 | F | Smoke test plan | ⬜ Not started |
 
-**Next concrete step:** Add `lib/companion/activity-templates/index.ts` to expose the six category files, then begin Section B (context loader).
+**Next concrete step:** Begin Section B — write `lib/companion/activity-context.ts` (context loader gathering backstory, interests, memories, recent chats, recent activities). See SPEC §7.1.
 
-**Locked design decisions (with Chris, 2026-04-18):**
-- 100+ personality-gated templates with AI enrichment
+**Locked design decisions (with Chris, 2026-04-18; amended 2026-04-28):**
+- 64 personality-gated templates across 6 categories with AI enrichment (was originally planned at 100+ across 10 categories — see SPEC scope amendment)
 - AI context = backstory + interests + quirks + memories + recent chats + recent activities
 - Memory gating prefers companion-name/role references, falls back to high-importance
 - Schedule: 2× per 24h (midnight + noon UTC; no per-user TZ logic)
-- OpenRouter only; no new dependencies; no schema changes for this phase
+- OpenRouter only; no new dependencies. Migration `022` was added at the data layer to back the category narrowing — schema changes are otherwise out of scope for this phase.
 
 ## Phase 7 — Auto-Journal (Phase 2 of Activity Depth) 📋 PLANNED
 Per the activity-depth spec, automatic journal entries derived from generated activities. Begins after Phase 6 Sections A–F are stable and Chris approves separately.

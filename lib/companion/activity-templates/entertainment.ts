@@ -529,4 +529,53 @@ export const ENTERTAINMENT_TEMPLATES: ActivityTemplate[] = [
     },
     enrichmentHint: { specific_type: 'memory', first_person_verb: 'rewatched' },
   },
+
+  // ── Migrated from activity-generator.ts (ID locked; category remapped from 'exploration') ──
+
+  {
+    id: 'exploration_virtual_travel',
+    name: 'Virtual traveling',
+    description: 'Exploring the world through videos and images',
+    category: 'entertainment',
+    intensity: 'low',
+    durationMinutes: 30,
+    moodEffects: { energy: 0, happiness: 0.3, social: 0.1, creativity: 0.2 },
+    possibleOutcomes: [
+      {
+        outcome: 'great',
+        weight: 0.35,
+        narratives: [
+          'Virtually visited the most beautiful place today!',
+          'Feeling inspired by all the amazing places in the world.',
+        ],
+      },
+      {
+        outcome: 'good',
+        weight: 0.55,
+        narratives: [
+          'Explored some interesting destinations virtually.',
+          "It's nice to see different parts of the world.",
+        ],
+      },
+      {
+        outcome: 'neutral',
+        weight: 0.1,
+        narratives: ['Looked at some travel content.'],
+      },
+    ],
+    timeOfDayPreference: ['afternoon', 'evening'],
+    personalityGate: {
+      interestKeywords: [
+        'travel',
+        'geography',
+        'culture',
+        'world',
+        'country',
+        'city',
+        'destination',
+        'wanderlust',
+      ],
+    },
+    enrichmentHint: { specific_type: 'destination', first_person_verb: 'virtually visited' },
+  },
 ];

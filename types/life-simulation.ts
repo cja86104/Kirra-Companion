@@ -17,15 +17,11 @@ import type { RelationshipType } from './database-helpers';
  */
 export type ActivityCategory =
   | 'hobby'           // Creative pursuits, games, collections
-  | 'learning'        // Reading, studying, skill development
+  | 'learning'        // Reading, studying, skill development, discovery
   | 'social'          // Thinking about user, imagining conversations
   | 'creative'        // Art, writing, music, crafting
-  | 'exploration'     // Discovering new interests, virtual adventures
-  | 'reflection'      // Journaling, meditation, self-improvement
-  | 'entertainment'   // Movies, shows, games, podcasts
-  | 'physical'        // Exercise, yoga, dance (simulated)
-  | 'relaxation'      // Rest, napping, daydreaming
-  | 'productivity';   // Organizing, planning, goal-setting
+  | 'reflection'      // Journaling, meditation, daydreaming, self-improvement
+  | 'entertainment';  // Movies, shows, games, podcasts, virtual travel
 
 /**
  * Activity intensity level affects mood and energy

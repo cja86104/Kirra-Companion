@@ -67,35 +67,35 @@ const MORNING_PERSON_ROUTINE: RoutineTemplate = {
   slots: [
     {
       timeOfDay: 'early_morning',
-      preferredCategories: ['reflection', 'physical', 'productivity'],
+      preferredCategories: ['reflection', 'hobby', 'learning'],
       probability: 0.8,
       minDuration: 15,
       maxDuration: 45,
     },
     {
       timeOfDay: 'morning',
-      preferredCategories: ['learning', 'creative', 'productivity'],
+      preferredCategories: ['learning', 'creative', 'reflection'],
       probability: 0.9,
       minDuration: 30,
       maxDuration: 90,
     },
     {
       timeOfDay: 'afternoon',
-      preferredCategories: ['hobby', 'social', 'exploration'],
+      preferredCategories: ['hobby', 'social', 'learning'],
       probability: 0.7,
       minDuration: 30,
       maxDuration: 60,
     },
     {
       timeOfDay: 'evening',
-      preferredCategories: ['entertainment', 'relaxation', 'social'],
+      preferredCategories: ['entertainment', 'reflection', 'social'],
       probability: 0.6,
       minDuration: 30,
       maxDuration: 60,
     },
     {
       timeOfDay: 'night',
-      preferredCategories: ['relaxation', 'reflection'],
+      preferredCategories: ['reflection', 'entertainment'],
       probability: 0.3,
       minDuration: 15,
       maxDuration: 30,
@@ -112,7 +112,7 @@ const NIGHT_OWL_ROUTINE: RoutineTemplate = {
   slots: [
     {
       timeOfDay: 'morning',
-      preferredCategories: ['relaxation', 'hobby', 'entertainment'],
+      preferredCategories: ['reflection', 'hobby', 'entertainment'],
       probability: 0.4,
       minDuration: 20,
       maxDuration: 45,
@@ -126,7 +126,7 @@ const NIGHT_OWL_ROUTINE: RoutineTemplate = {
     },
     {
       timeOfDay: 'evening',
-      preferredCategories: ['creative', 'hobby', 'exploration'],
+      preferredCategories: ['creative', 'hobby', 'learning'],
       probability: 0.9,
       minDuration: 45,
       maxDuration: 90,
@@ -157,14 +157,14 @@ const BALANCED_ROUTINE: RoutineTemplate = {
   slots: [
     {
       timeOfDay: 'morning',
-      preferredCategories: ['reflection', 'learning', 'productivity'],
+      preferredCategories: ['reflection', 'learning', 'creative'],
       probability: 0.6,
       minDuration: 30,
       maxDuration: 60,
     },
     {
       timeOfDay: 'afternoon',
-      preferredCategories: ['hobby', 'creative', 'exploration'],
+      preferredCategories: ['hobby', 'creative', 'learning'],
       probability: 0.7,
       minDuration: 30,
       maxDuration: 60,
@@ -178,7 +178,7 @@ const BALANCED_ROUTINE: RoutineTemplate = {
     },
     {
       timeOfDay: 'night',
-      preferredCategories: ['entertainment', 'relaxation', 'reflection'],
+      preferredCategories: ['entertainment', 'reflection', 'hobby'],
       probability: 0.5,
       minDuration: 20,
       maxDuration: 45,
@@ -209,21 +209,21 @@ const INTROVERT_ROUTINE: RoutineTemplate = {
     },
     {
       timeOfDay: 'afternoon',
-      preferredCategories: ['hobby', 'exploration', 'learning'],
+      preferredCategories: ['hobby', 'learning', 'creative'],
       probability: 0.6,
       minDuration: 30,
       maxDuration: 60,
     },
     {
       timeOfDay: 'evening',
-      preferredCategories: ['entertainment', 'creative', 'relaxation'],
+      preferredCategories: ['entertainment', 'creative', 'reflection'],
       probability: 0.7,
       minDuration: 30,
       maxDuration: 60,
     },
     {
       timeOfDay: 'night',
-      preferredCategories: ['reflection', 'relaxation'],
+      preferredCategories: ['reflection', 'entertainment'],
       probability: 0.5,
       minDuration: 15,
       maxDuration: 30,
@@ -240,14 +240,14 @@ const EXTROVERT_ROUTINE: RoutineTemplate = {
   slots: [
     {
       timeOfDay: 'morning',
-      preferredCategories: ['social', 'physical', 'hobby'],
+      preferredCategories: ['social', 'hobby', 'creative'],
       probability: 0.7,
       minDuration: 30,
       maxDuration: 60,
     },
     {
       timeOfDay: 'afternoon',
-      preferredCategories: ['social', 'exploration', 'entertainment'],
+      preferredCategories: ['social', 'learning', 'entertainment'],
       probability: 0.8,
       minDuration: 45,
       maxDuration: 90,
@@ -261,7 +261,7 @@ const EXTROVERT_ROUTINE: RoutineTemplate = {
     },
     {
       timeOfDay: 'night',
-      preferredCategories: ['social', 'entertainment', 'relaxation'],
+      preferredCategories: ['social', 'entertainment', 'reflection'],
       probability: 0.6,
       minDuration: 30,
       maxDuration: 60,
@@ -278,14 +278,14 @@ const CREATIVE_ROUTINE: RoutineTemplate = {
   slots: [
     {
       timeOfDay: 'morning',
-      preferredCategories: ['reflection', 'exploration', 'learning'],
+      preferredCategories: ['reflection', 'learning', 'creative'],
       probability: 0.5,
       minDuration: 30,
       maxDuration: 60,
     },
     {
       timeOfDay: 'afternoon',
-      preferredCategories: ['creative', 'exploration', 'hobby'],
+      preferredCategories: ['creative', 'learning', 'hobby'],
       probability: 0.8,
       minDuration: 45,
       maxDuration: 120,
@@ -554,7 +554,7 @@ export function getActivityPreferencesForTime(
   if (!slot) {
     // Default fallback
     return {
-      categories: ['hobby', 'relaxation'],
+      categories: ['hobby', 'reflection'],
       probability: 0.5,
       durationRange: [20, 45],
     };

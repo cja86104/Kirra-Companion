@@ -37,7 +37,8 @@
       "Bash(xargs grep *)",
       "Read(//mnt/c/Users/cja86/Documents/Kirra-Companion/**)",
       "Bash(dir \"C:\\\\Users\\\\cja86\\\\Documents\\\\Kirra-Companion\\\\scripts\")",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(wait)"
     ]
   }
 }
