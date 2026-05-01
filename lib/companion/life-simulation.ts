@@ -27,12 +27,8 @@ import type {
   PrimaryMood,
   TimeOfDay,
 } from '@/types/life-simulation';
-import type { Companion, CompanionDNA } from '@/types/database';
+import type { Companion } from '@/types/database';
 import type { Database } from '@/types/database';
-import type {
-  SimulationStateRow,
-  CompanionActivityRow,
-} from '@/types/life-simulation-db';
 
 /**
  * Get an admin Supabase client for background processes.
@@ -97,7 +93,7 @@ const MOOD_TRANSITIONS: Record<PrimaryMood, PrimaryMood[]> = {
   happy: ['content', 'excited', 'playful', 'loving', 'energetic'],
   content: ['happy', 'calm', 'thoughtful', 'hopeful'],
   excited: ['happy', 'energetic', 'playful', 'curious'],
-  calm: ['content', 'thoughtful', 'peaceful' as PrimaryMood, 'nostalgic'],
+  calm: ['content', 'thoughtful', 'nostalgic'],
   thoughtful: ['calm', 'curious', 'nostalgic', 'focused'],
   melancholic: ['thoughtful', 'nostalgic', 'calm', 'hopeful'],
   anxious: ['thoughtful', 'tired', 'calm', 'hopeful'],
@@ -133,9 +129,9 @@ const VALID_LIFE_EVENT_TYPES: readonly LifeEventType[] = [
 ];
 
 const VALID_EVENT_SIGNIFICANCE: readonly EventSignificance[] = [
+  'trivial',
   'minor',
-  'normal',
-  'notable',
+  'moderate',
   'major',
   'milestone',
 ];
@@ -195,13 +191,18 @@ function isActivityCategory(s: string): s is ActivityCategory {
 }
 
 /**
- * Validate that an unknown value is a hand-written CompanionActivityRow.
- * Used at line ~704 to narrow the canonical row returned by the typed
- * client into the hand-written shape that the deferred downstream
- * `as CompanionActivity` casts (lines 789/813) rely on. Domain reconciliation
- * is owned by Section 6D-cleanup-1b.
+ * Validate that an unknown value is a domain `CompanionActivity`. Used at
+ * the boundary right after a Supabase insert returns a canonical row, to
+ * narrow the canonical row's wider field types (`outcome: string | null`,
+ * `mood_effects_applied: Json | null`) into the application's strict
+ * domain shape (`ActivityOutcome | null`, structured mood-effects record).
+ *
+ * Description and narrative are required non-null per both the canonical
+ * schema and the domain — the producer (activity-generator) always writes
+ * non-null strings; the validator enforces the same so downstream code
+ * (e.g. createActivityLifeEvent's life-feed write) can rely on them.
  */
-function isCompanionActivityRow(v: unknown): v is CompanionActivityRow {
+function isCompanionActivity(v: unknown): v is CompanionActivity {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const r = v as Record<string, unknown>;
   return typeof r.id === 'string'
@@ -209,8 +210,8 @@ function isCompanionActivityRow(v: unknown): v is CompanionActivityRow {
     && typeof r.template_id === 'string'
     && typeof r.activity_name === 'string'
     && typeof r.activity_category === 'string'
-    && (r.description === null || typeof r.description === 'string')
-    && (r.narrative === null || typeof r.narrative === 'string')
+    && typeof r.description === 'string'
+    && typeof r.narrative === 'string'
     && typeof r.started_at === 'string'
     && (r.ended_at === null || typeof r.ended_at === 'string')
     && typeof r.duration_minutes === 'number'
@@ -238,14 +239,18 @@ function metadataFromUnknown(v: unknown): Record<string, unknown> {
 
 /**
  * Validating constructor that turns a canonical `life_events` row (or any
- * unknown candidate) into a domain-shaped `LifeEvent`. Bridges Scope Gap #1
- * (domain `LifeEvent` in `types/life-simulation.ts` drifts from the
- * canonical schema): synthesizes `shared_at: null` (the domain field has
- * no corresponding column), defaults nullable canonical `description` /
- * `narrative` to empty string, validates `event_type` and `significance`
- * against their union membership, and validates `mood_before/after` /
- * `metadata` shape via the helpers above. Returns null on any required-field
- * mismatch and logs with the row id when available.
+ * unknown candidate) into a domain-shaped `LifeEvent`. Defaults nullable
+ * canonical `description` / `narrative` to empty string, validates
+ * `event_type` and `significance` against their union membership, and
+ * validates `mood_before/after` / `metadata` shape via the helpers above.
+ * Returns null on any required-field mismatch and logs with the row id
+ * when available.
+ *
+ * Section 6D-cleanup-1b dropped the dead `shared_at` field from the
+ * domain `LifeEvent` (no producer wrote it, no consumer read it, no such
+ * column exists), and aligned `EventSignificance` to the DB enum so the
+ * 'moderate'/'trivial' values that producers actually ship pass
+ * validation.
  */
 function lifeEventFromRow(v: unknown): LifeEvent | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
@@ -303,7 +308,6 @@ function lifeEventFromRow(v: unknown): LifeEvent | null {
     user_context: r.user_context as string | null,
     shareable: r.shareable,
     shared_with_user: r.shared_with_user,
-    shared_at: null, // domain field absent from canonical life_events schema
     metadata: metadataFromUnknown(r.metadata),
     created_at: r.created_at,
   };
@@ -508,7 +512,7 @@ export function shouldThinkOfUser(
  * Generate a context for why companion thought of user
  */
 export async function generateUserThinkingContext(
-  companion: Companion & { companion_dna?: CompanionDNA },
+  companion: Companion,
   activity: { name: string; category: ActivityCategory },
   memories: Array<{ title: string; content: string }>
 ): Promise<string> {
@@ -559,7 +563,10 @@ export async function getSimulationState(companionId: string): Promise<Simulatio
 
   if (!data) {
     // Create default state
-    const defaultState: Omit<SimulationStateRow, 'id' | 'companion_id' | 'created_at' | 'updated_at'> = {
+    const defaultState: Omit<
+      Database['public']['Tables']['simulation_states']['Insert'],
+      'companion_id'
+    > = {
       last_simulation_at: new Date().toISOString(),
       activities_today: 0,
       last_activity_at: null,
@@ -591,7 +598,7 @@ export async function getSimulationState(companionId: string): Promise<Simulatio
     return newState;
   }
 
-  return data as SimulationState;
+  return data;
 }
 
 /**
@@ -911,7 +918,7 @@ export async function runSimulationTick(
 
   // Generate an activity
   const activity = await generateActivity(
-    companion as Companion & { companion_dna?: CompanionDNA },
+    companion,
     currentMood,
     getCurrentTimeOfDay(timezone || undefined)
   );
@@ -932,12 +939,13 @@ export async function runSimulationTick(
     return { moodChanged: false, thoughtOfUser: false };
   }
 
-  // The canonical row is wider than the hand-written CompanionActivityRow on
-  // two fields (`outcome: string | null`, `mood_effects_applied: Json | null`).
-  // The guard validates the runtime narrowing so the deferred downstream
-  // `as CompanionActivity` casts at lines ~789/813 (Section 6D-cleanup-1b)
-  // continue to be honest.
-  if (!isCompanionActivityRow(savedActivity)) {
+  // The canonical row is wider than the domain CompanionActivity on two
+  // fields (`outcome: string | null`, `mood_effects_applied: Json | null`).
+  // isCompanionActivity validates the runtime narrowing — every consumer
+  // downstream then sees the strict domain shape (e.g.
+  // calculateMoodAfterActivity which indexes outcomeMultipliers with the
+  // strict 5-member ActivityOutcome union).
+  if (!isCompanionActivity(savedActivity)) {
     console.error(
       '[life-simulation] companion_activities row shape mismatch after insert',
       { companionId }
@@ -991,7 +999,7 @@ export async function runSimulationTick(
           .limit(5);
 
         const generatedContext = await generateUserThinkingContext(
-          companion as Companion & { companion_dna?: CompanionDNA },
+          companion,
           { name: savedActivity.activity_name, category: savedActivity.activity_category },
           (memories || []).map(m => ({ title: m.title || 'Memory', content: m.content }))
         );
@@ -1033,8 +1041,8 @@ export async function runSimulationTick(
   // actually persisted. Side-fixes a pre-existing bug where activityForEvent
   // forwarded only the (then-probability-derived) thinking_of_user flag and
   // dropped the generated user_mention_context entirely.
-  const activityForEvent = {
-    ...(savedActivity as CompanionActivity),
+  const activityForEvent: CompanionActivity = {
+    ...savedActivity,
     thinking_of_user: finalThinkingOfUser,
     user_mention_context: finalUserMentionContext,
   };
@@ -1058,7 +1066,7 @@ export async function runSimulationTick(
   });
 
   return {
-    activity: savedActivity as CompanionActivity,
+    activity: savedActivity,
     event: userThoughtEvent || lifeEvent || undefined,
     moodChanged: true,
     thoughtOfUser: finalThinkingOfUser,

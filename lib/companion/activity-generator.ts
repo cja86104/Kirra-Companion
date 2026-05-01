@@ -34,7 +34,7 @@ import type {
   CompanionInterest,
   CompanionActivityInsert,
 } from '@/types/life-simulation';
-import type { Companion, CompanionDNA } from '@/types/database';
+import type { Companion } from '@/types/database';
 
 import { ALL_TEMPLATES } from './activity-templates';
 import { loadActivityContext, type ActivityEnrichmentContext } from './activity-context';
@@ -426,7 +426,7 @@ function selectOutcome(template: ActivityTemplate): {
  *   6. Build CompanionActivityInsert from the validated AI output.
  */
 export async function generateActivity(
-  companion: Companion & { companion_dna?: CompanionDNA },
+  companion: Companion,
   mood: CompanionMoodState,
   timeOfDay: TimeOfDay
 ): Promise<CompanionActivityInsert | null> {

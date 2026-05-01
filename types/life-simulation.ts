@@ -222,9 +222,20 @@ export type LifeEventType =
   | 'routine_event';          // Regular daily occurrence
 
 /**
- * Significance level affects how events are displayed/mentioned
+ * Significance level affects how events are displayed/mentioned.
+ *
+ * Aligned with the canonical `event_significance` Postgres enum
+ * (see types/database.ts). Earlier this union declared `'normal'` and
+ * `'notable'`, neither of which exists in the DB enum or is written by
+ * any producer — that mismatch silently broke `lifeEventFromRow`'s
+ * post-validation return path during Section 6D-cleanup-1, because every
+ * `'moderate'` row produced by createUserThoughtEvent (and by
+ * createActivityLifeEvent when outcome ≠ 'great' AND thinking_of_user)
+ * was rejected by the validator. Aligning the union to the DB enum
+ * (the producer set + `'trivial'` from the chat-driven life-events flow)
+ * fixes the validator round-trip.
  */
-export type EventSignificance = 'minor' | 'normal' | 'notable' | 'major' | 'milestone';
+export type EventSignificance = 'trivial' | 'minor' | 'moderate' | 'major' | 'milestone';
 
 /**
  * A life event - something that happened in companion's simulated life
@@ -247,7 +258,6 @@ export interface LifeEvent {
   user_context: string | null;        // How user was involved
   shareable: boolean;                 // Should companion mention this?
   shared_with_user: boolean;          // Has it been mentioned in chat?
-  shared_at: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
 }
@@ -390,20 +400,16 @@ export interface SimulationConfig {
 }
 
 /**
- * Current simulation state for a companion
+ * Current simulation state for a companion.
+ *
+ * Re-exported from the canonical row alias in `database-helpers.ts`. The
+ * previous hand-written interface was a structural subset of the canonical
+ * `simulation_states.Row` (omitted `id`, `created_at`, `updated_at`),
+ * which forced consumers to round-trip through plain-`as`-cast Supabase
+ * results to satisfy TypeScript. Re-exporting the canonical row eliminates
+ * the cast at the boundary and matches the schema 1:1.
  */
-export interface SimulationState {
-  companion_id: string;
-  last_simulation_at: string;
-  activities_today: number;
-  last_activity_at: string | null;
-  last_journal_at: string | null;
-  last_proactive_message_at: string | null;
-  is_sleeping: boolean;
-  current_activity_id: string | null;
-  next_scheduled_at: string;
-  simulation_version: number;
-}
+export type { SimulationState } from './database-helpers';
 
 // ============================================================================
 // API Response Types
