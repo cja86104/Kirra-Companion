@@ -1,292 +1,200 @@
 /**
  * useQueuedVoicePlayback
- * 
- * Optimized voice playback that reduces perceived latency by:
- * 1. Playing first sentence immediately (~500ms vs 3+ sec)
- * 2. Pre-fetching remaining sentences while playing
- * 3. Seamlessly chaining audio playback
- * 
- * Result: User hears voice ~500ms after response, not 3+ seconds
+ *
+ * Single-call voice playback hook. Sends the full message text to /api/speak
+ * in one POST and plays the resulting audio back as one continuous performance.
+ *
+ * The previous implementation chunked each response into sentences and made
+ * one TTS request per sentence. That destroyed prosody — every fragment got
+ * its own falling cadence with no rise-and-fall across the full thought, so
+ * the voice sounded like a dictionary entry instead of a person talking.
+ *
+ * Trade-off: time-to-first-audio is longer (~4–8s for typical responses
+ * instead of ~2s) but every audio that plays sounds natural. /speak/sentences
+ * and the sentence-mode branches in /speak remain in the codebase for any
+ * future longform-narration feature, but chat playback no longer uses them.
+ *
+ * The hook keeps its public API identical to the previous implementation:
+ *   - playQueued(text)            — plays full text
+ *   - stop()                      — cancels in-flight fetch and stops audio
+ *   - isPlaying                   — true while fetching or playing
+ *   - currentSentenceIndex        — -1 idle, 0 while playing (kept for
+ *                                   backward compatibility with consumers
+ *                                   that historically read it; no caller in
+ *                                   this codebase currently does)
  */
 
 import { useRef, useCallback, useState } from 'react';
 
-interface AudioQueueItem {
-  index: number;
-  text: string;
-  audio: HTMLAudioElement | null;
-  url: string | null;
-  status: 'pending' | 'fetching' | 'ready' | 'playing' | 'done' | 'error';
-}
-
-interface SentenceInfo {
-  index: number;
-  text: string;
-  charCount: number;
-  isLast: boolean;
-  estimatedDuration: number;
-}
-
-interface SentencesResponse {
-  sentences: SentenceInfo[];
-  totalCount: number;
-  totalCharacters: number;
-  estimatedTotalDuration: number;
-}
-
 export function useQueuedVoicePlayback(companionId: string) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
-  
-  const queueRef = useRef<AudioQueueItem[]>([]);
-  const isPlayingRef = useRef(false);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  /**
-   * Fetch audio for a single sentence
-   */
-  const fetchSentenceAudio = useCallback(async (
-    text: string,
-    fullText: string,
-    index: number,
-    signal: AbortSignal
-  ): Promise<{ audio: HTMLAudioElement; url: string } | null> => {
-    try {
-      const response = await fetch(`/api/companion/${companionId}/speak`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: fullText,
-          companionId,
-          mode: 'sentence',
-          sentenceIndex: index,
-        }),
-        signal,
-      });
-
-      if (!response.ok) {
-        console.error(`Failed to fetch sentence ${index}:`, response.status);
-        return null;
+  // ── Internal cleanup ────────────────────────────────────────────────────
+  // Used by stop(), by error paths, and by the ended/error event handlers.
+  // Releases the audio element and the object URL backing it. Idempotent.
+  const releaseAudio = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      try {
+        audio.pause();
+        audio.src = '';
+      } catch (err) {
+        // pause()/src clearing is best-effort cleanup. Log so we know if
+        // a browser ever throws here, but don't fail the cleanup path.
+        console.error('[voice] error releasing audio element:', err);
       }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      
-      // Preload the audio
-      audio.preload = 'auto';
-      
-      return { audio, url };
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        return null;
-      }
-      console.error(`Error fetching sentence ${index}:`, error);
-      return null;
-    }
-  }, [companionId]);
-
-  /**
-   * Play the next item in the queue
-   */
-  const playNext = useCallback(() => {
-    const queue = queueRef.current;
-    const nextIndex = queue.findIndex(item => item.status === 'ready');
-    
-    if (nextIndex === -1) {
-      // Check if all items are done or errored
-      const allDone = queue.every(item => 
-        item.status === 'done' || item.status === 'error'
-      );
-      
-      if (allDone) {
-        setIsPlaying(false);
-        isPlayingRef.current = false;
-        setCurrentSentenceIndex(-1);
-        
-        // Clean up URLs
-        queue.forEach(item => {
-          if (item.url) {
-            URL.revokeObjectURL(item.url);
-          }
-        });
-        queueRef.current = [];
-      }
-      return;
+      audioRef.current = null;
     }
 
-    const item = queue[nextIndex];
-    if (!item.audio) return;
-
-    item.status = 'playing';
-    setCurrentSentenceIndex(item.index);
-
-    item.audio.onended = () => {
-      item.status = 'done';
-      if (item.url) {
-        URL.revokeObjectURL(item.url);
-        item.url = null;
-      }
-      playNext();
-    };
-
-    item.audio.onerror = () => {
-      item.status = 'error';
-      if (item.url) {
-        URL.revokeObjectURL(item.url);
-        item.url = null;
-      }
-      playNext();
-    };
-
-    item.audio.play().catch((err) => {
-      console.error('Playback error:', err);
-      item.status = 'error';
-      playNext();
-    });
+    const url = objectUrlRef.current;
+    if (url) {
+      URL.revokeObjectURL(url);
+      objectUrlRef.current = null;
+    }
   }, []);
 
-  /**
-   * Main function: Play text with queued sentences
-   */
-  const playQueued = useCallback(async (text: string): Promise<void> => {
-    // Cancel any ongoing playback
+  // ── Stop ────────────────────────────────────────────────────────────────
+  const stop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
-    
-    // Clean up existing queue
-    queueRef.current.forEach(item => {
-      if (item.audio) {
-        item.audio.pause();
-        item.audio.src = '';
-      }
-      if (item.url) {
-        URL.revokeObjectURL(item.url);
-      }
-    });
-    queueRef.current = [];
+    releaseAudio();
+    setIsPlaying(false);
+    setCurrentSentenceIndex(-1);
+  }, [releaseAudio]);
+
+  // ── Main playback ───────────────────────────────────────────────────────
+  // Fetch audio for the entire text in one call, then play it. If a new
+  // playback starts while a previous one is still active (in-flight fetch
+  // OR playing audio), the previous one is aborted/released first.
+  const playQueued = useCallback(async (text: string): Promise<void> => {
+    // Cancel any in-flight fetch from a previous playback.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    // Release any audio element from a previous playback.
+    releaseAudio();
+
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+      setIsPlaying(false);
+      setCurrentSentenceIndex(-1);
+      return;
+    }
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     setIsPlaying(true);
-    isPlayingRef.current = true;
+    setCurrentSentenceIndex(0);
 
     try {
-      // Step 1: Get sentence metadata
-      const sentencesResponse = await fetch(`/api/companion/${companionId}/speak/sentences`, {
+      const response = await fetch(`/api/companion/${companionId}/speak`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({
+          text: trimmed,
+          mode: 'full',
+        }),
         signal: abortController.signal,
       });
 
-      if (!sentencesResponse.ok) {
-        throw new Error('Failed to get sentences');
-      }
-
-      const sentencesData: SentencesResponse = await sentencesResponse.json();
-      const { sentences } = sentencesData;
-
-      if (sentences.length === 0) {
-        setIsPlaying(false);
-        isPlayingRef.current = false;
+      if (abortController.signal.aborted) {
         return;
       }
 
-      // Initialize queue
-      queueRef.current = sentences.map(s => ({
-        index: s.index,
-        text: s.text,
-        audio: null,
-        url: null,
-        status: 'pending' as const,
-      }));
-
-      // Step 2: Fetch first sentence immediately
-      const firstItem = queueRef.current[0];
-      firstItem.status = 'fetching';
-
-      const firstResult = await fetchSentenceAudio(
-        firstItem.text,
-        text,
-        0,
-        abortController.signal
-      );
-
-      if (!firstResult) {
-        throw new Error('Failed to fetch first sentence');
+      if (!response.ok) {
+        console.error(
+          `[voice] /speak returned ${response.status} for companion ${companionId}`
+        );
+        setIsPlaying(false);
+        setCurrentSentenceIndex(-1);
+        abortControllerRef.current = null;
+        return;
       }
 
-      firstItem.audio = firstResult.audio;
-      firstItem.url = firstResult.url;
-      firstItem.status = 'ready';
+      const blob = await response.blob();
 
-      // Step 3: Start playing immediately
-      playNext();
+      // Re-check abort after the body finishes streaming. A stop() call
+      // during blob() resolution should be honored before we wire up audio.
+      if (abortController.signal.aborted) {
+        return;
+      }
 
-      // Step 4: Pre-fetch remaining sentences in background
-      for (let i = 1; i < queueRef.current.length; i++) {
-        if (abortController.signal.aborted) break;
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.preload = 'auto';
 
-        const item = queueRef.current[i];
-        item.status = 'fetching';
+      objectUrlRef.current = url;
+      audioRef.current = audio;
 
-        const result = await fetchSentenceAudio(
-          item.text,
-          text,
-          i,
-          abortController.signal
-        );
-
-        if (result) {
-          item.audio = result.audio;
-          item.url = result.url;
-          item.status = 'ready';
-
-          // If playback finished waiting for this, continue
-          if (!queueRef.current.some(q => q.status === 'playing')) {
-            playNext();
+      audio.onended = () => {
+        // Natural completion. Release the element and reset state.
+        if (audioRef.current === audio) {
+          releaseAudio();
+          setIsPlaying(false);
+          setCurrentSentenceIndex(-1);
+          if (abortControllerRef.current === abortController) {
+            abortControllerRef.current = null;
           }
-        } else {
-          item.status = 'error';
+        }
+      };
+
+      audio.onerror = () => {
+        console.error('[voice] audio element fired error event');
+        if (audioRef.current === audio) {
+          releaseAudio();
+          setIsPlaying(false);
+          setCurrentSentenceIndex(-1);
+          if (abortControllerRef.current === abortController) {
+            abortControllerRef.current = null;
+          }
+        }
+      };
+
+      try {
+        await audio.play();
+      } catch (err) {
+        // Browsers reject play() on autoplay-policy violations and on
+        // interruption. Treat as a non-fatal end-of-playback: log, clean up,
+        // reset state. If this was an interruption from a newer playback
+        // starting, the new one has already taken over.
+        if ((err as Error).name === 'AbortError') {
+          return;
+        }
+        console.error('[voice] audio.play() rejected:', err);
+        if (audioRef.current === audio) {
+          releaseAudio();
+          setIsPlaying(false);
+          setCurrentSentenceIndex(-1);
+          if (abortControllerRef.current === abortController) {
+            abortControllerRef.current = null;
+          }
         }
       }
-
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
+        // Expected — a newer playback or stop() call cancelled this one.
         return;
       }
-      console.error('Queued playback error:', error);
+      console.error('[voice] playback error:', error);
+      releaseAudio();
       setIsPlaying(false);
-      isPlayingRef.current = false;
-    }
-  }, [companionId, fetchSentenceAudio, playNext]);
-
-  /**
-   * Stop playback and clean up
-   */
-  const stop = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    queueRef.current.forEach(item => {
-      if (item.audio) {
-        item.audio.pause();
-        item.audio.src = '';
+      setCurrentSentenceIndex(-1);
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
       }
-      if (item.url) {
-        URL.revokeObjectURL(item.url);
-      }
-    });
-    queueRef.current = [];
-
-    setIsPlaying(false);
-    isPlayingRef.current = false;
-    setCurrentSentenceIndex(-1);
-  }, []);
+    }
+  }, [companionId, releaseAudio]);
 
   return {
     playQueued,

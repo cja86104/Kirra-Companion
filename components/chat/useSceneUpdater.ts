@@ -17,6 +17,28 @@ const DEFAULT_COOLDOWN_MINUTES = 20; // Match server-side cooldown
 const DEFAULT_CHECK_INTERVAL_SECONDS = 60; // Check every minute
 const MIN_MESSAGES_FOR_GENERATION = 4; // Need at least 4 messages to analyze
 
+/**
+ * Debounce window between a new message arriving and the message-driven
+ * scene-generation check firing.
+ *
+ * Why: scene generation is an expensive multi-step request (DeepSeek analysis
+ * + external image generation, ~10–14s end-to-end). When it fires the same
+ * tick the user gets a chat response, it competes with TTS for the dev-mode
+ * Next.js single-worker process and causes voice to start late. Voice is the
+ * thing the user is waiting on; the scene update can comfortably wait a few
+ * seconds without anyone noticing.
+ *
+ * The debounce only applies to the message-driven path. The 60-second
+ * periodic check is unaffected, the cooldown system is unaffected, and the
+ * manual "Generate New Scene" button bypasses this entirely (it calls
+ * triggerGeneration with force=true, which doesn't go through this path).
+ *
+ * If a second message arrives during the debounce window, the timer resets —
+ * rapid back-and-forth turns into one scene check at the end of the burst,
+ * not one per message.
+ */
+const MESSAGE_DEBOUNCE_MS = 6000;
+
 // ============================================================================
 // FALLBACK SCENE URL GENERATOR
 // ============================================================================
@@ -84,6 +106,9 @@ export function useSceneUpdater(
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const messageCountRef = useRef(messages.length);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Holds the pending debounce timer for the message-driven scene check.
+  // A new message arriving while this is set should reset the timer.
+  const messageDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derived state
   const fallbackSceneUrl = getFallbackSceneUrl(relationshipType);
@@ -191,30 +216,22 @@ export function useSceneUpdater(
 
   // ============================================================================
   // PERIODIC CHECK
+  //
+  // Runs once per `checkIntervalSeconds` (default 60s) regardless of message
+  // activity. Catches the case where the user has been chatting steadily and
+  // the cooldown finally elapses partway between messages.
   // ============================================================================
 
   useEffect(() => {
     if (!enabled) return;
 
-    // Check function
-    const checkAndGenerate = () => {
-      // Only generate if:
-      // 1. Cooldown has passed
-      // 2. There are new messages since last check
-      // 3. We have enough messages
-      const hasNewMessages = messages.length > messageCountRef.current;
-      messageCountRef.current = messages.length;
-
-      if (canGenerate() && hasNewMessages && messages.length >= MIN_MESSAGES_FOR_GENERATION) {
+    const periodicCheck = () => {
+      if (canGenerate() && messages.length >= MIN_MESSAGES_FOR_GENERATION) {
         triggerGeneration();
       }
     };
 
-    // Set up interval
-    checkIntervalRef.current = setInterval(checkAndGenerate, checkIntervalSeconds * 1000);
-
-    // Initial check
-    checkAndGenerate();
+    checkIntervalRef.current = setInterval(periodicCheck, checkIntervalSeconds * 1000);
 
     return () => {
       if (checkIntervalRef.current) {
@@ -222,6 +239,44 @@ export function useSceneUpdater(
       }
     };
   }, [enabled, canGenerate, messages.length, checkIntervalSeconds, triggerGeneration]);
+
+  // ============================================================================
+  // MESSAGE-DRIVEN CHECK (debounced)
+  //
+  // Fires when `messages.length` changes — i.e. a new message just arrived.
+  // Waits MESSAGE_DEBOUNCE_MS before checking-and-generating so this doesn't
+  // race voice playback on the server in dev mode. Resets if another message
+  // arrives during the window so a burst of messages produces one scene
+  // check at the end, not one per message.
+  // ============================================================================
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const hasNewMessages = messages.length > messageCountRef.current;
+    messageCountRef.current = messages.length;
+
+    if (!hasNewMessages) return;
+    if (messages.length < MIN_MESSAGES_FOR_GENERATION) return;
+
+    if (messageDebounceTimerRef.current) {
+      clearTimeout(messageDebounceTimerRef.current);
+    }
+
+    messageDebounceTimerRef.current = setTimeout(() => {
+      messageDebounceTimerRef.current = null;
+      if (canGenerate()) {
+        triggerGeneration();
+      }
+    }, MESSAGE_DEBOUNCE_MS);
+
+    return () => {
+      if (messageDebounceTimerRef.current) {
+        clearTimeout(messageDebounceTimerRef.current);
+        messageDebounceTimerRef.current = null;
+      }
+    };
+  }, [enabled, canGenerate, messages.length, triggerGeneration]);
 
   // ============================================================================
   // AUDIO CONTROL

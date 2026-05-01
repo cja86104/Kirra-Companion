@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Sparkles,
-  User,
+  User as UserIcon,
   Heart,
   Brain,
   Palette,
@@ -15,7 +15,9 @@ import {
   Loader2,
   BookOpen,
   Volume2,
+  PenLine,
 } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
@@ -27,9 +29,29 @@ import { Slider } from '@/components/ui/slider';
 import { getClient } from '@/lib/supabase/client';
 import { BackstoryGenerator } from '@/components/companion/BackstoryGenerator';
 import { VoiceSelector } from '@/components/companion/VoiceSelector';
-import type { Profile, Companion, VoiceConfig, Json, CompanionInsert, CompanionDNAInsert } from '@/types/database';
+import { SeedFlow, type SeedFlowResult } from '@/components/companion/SeedFlow';
+import type {
+  Profile,
+  Companion,
+  Conversation,
+  ConversationInsert,
+  VoiceConfig,
+  Json,
+  CompanionInsert,
+  CompanionDNAInsert,
+} from '@/types/database';
 
 type RelationshipType = 'friend' | 'mentor' | 'romantic' | 'family' | 'custom';
+
+type CreationPath = 'picker' | 'wizard' | 'seed';
+
+type ValidationResult =
+  | {
+      ok: true;
+      user: User;
+      profile: Pick<Profile, 'subscription_tier' | 'age_tier' | 'is_minor_flagged'> | null;
+    }
+  | { ok: false };
 
 interface CompanionData {
   name: string;
@@ -53,7 +75,7 @@ interface CompanionData {
 }
 
 const STEPS = [
-  { id: 'basics', title: 'Basics', icon: User },
+  { id: 'basics', title: 'Basics', icon: UserIcon },
   { id: 'relationship', title: 'Relationship', icon: Heart },
   { id: 'personality', title: 'Personality', icon: Brain },
   { id: 'style', title: 'Style', icon: Palette },
@@ -83,7 +105,11 @@ export default function CreateCompanionPage() {
   const [subscriptionTier, setSubscriptionTier] = useState('free');
   // CRITICAL: Age verification state
   const [isMinor, setIsMinor] = useState<boolean | null>(null);
-  
+
+  const [selectedPath, setSelectedPath] = useState<CreationPath>('picker');
+  const [wizardInitialBackstoryMode, setWizardInitialBackstoryMode] =
+    useState<'generate' | 'custom'>('generate');
+
   const [companionData, setCompanionData] = useState<CompanionData>({
     name: '',
     relationshipType: 'friend',
@@ -116,17 +142,17 @@ export default function CreateCompanionPage() {
           .select('subscription_tier, age_tier, is_minor_flagged')
           .eq('id', user.id)
           .single();
-        
+
         const profile = profileData as Pick<Profile, 'subscription_tier' | 'age_tier' | 'is_minor_flagged'> | null;
         if (profile?.subscription_tier) {
           setSubscriptionTier(profile.subscription_tier);
         }
-        
+
         // CRITICAL: Set age verification status
         const userAgeTier = profile?.age_tier || 'adult';
         const isMinorFlagged = profile?.is_minor_flagged || false;
         setIsMinor(userAgeTier === 'minor' || userAgeTier === 'blocked' || isMinorFlagged);
-        
+
         // If blocked, redirect away
         if (userAgeTier === 'blocked') {
           toast.error('Account access restricted');
@@ -192,65 +218,85 @@ export default function CreateCompanionPage() {
     }
   };
 
+  // ===========================================================================
+  // Validation helper — auth, blocked-account, companion-limit checks shared
+  // by both creation paths. Path-specific minor-relationship-mismatch handling
+  // stays inlined in each caller because the recovery action differs.
+  // ===========================================================================
+  const validateCompanionCreation = async (
+    supabase: ReturnType<typeof getClient>,
+  ): Promise<ValidationResult> => {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      toast.error('Please sign in to create a companion');
+      router.push('/login');
+      return { ok: false };
+    }
+
+    // CRITICAL: Re-verify age status before creation (defense in depth)
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('subscription_tier, age_tier, is_minor_flagged')
+      .eq('id', user.id)
+      .single();
+
+    const profile = profileData as Pick<Profile, 'subscription_tier' | 'age_tier' | 'is_minor_flagged'> | null;
+
+    // Block blocked users entirely
+    if (profile?.age_tier === 'blocked') {
+      toast.error('Account access restricted');
+      router.push('/dashboard');
+      return { ok: false };
+    }
+
+    const { count: companionCount } = await supabase
+      .from('companions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+
+    const limits: Record<string, number> = {
+      free: 1,
+      basic: 3,
+      pro: 10,
+      ultimate: Infinity,
+    };
+
+    const limit = limits[profile?.subscription_tier || 'free'] || 1;
+
+    if ((companionCount || 0) >= limit) {
+      toast.error("You've reached your companion limit. Upgrade to create more!");
+      router.push('/settings/billing');
+      return { ok: false };
+    }
+
+    return { ok: true, user, profile };
+  };
+
+  // ===========================================================================
+  // Path 1 / Path 2 — wizard-driven creation
+  // ===========================================================================
   const createCompanion = async () => {
     setIsCreating(true);
-    
+
     try {
       const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast.error('Please sign in to create a companion');
-        router.push('/login');
-        return;
-      }
 
-      // CRITICAL: Re-verify age status before creation (defense in depth)
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('subscription_tier, age_tier, is_minor_flagged')
-        .eq('id', user.id)
-        .single();
+      const validation = await validateCompanionCreation(supabase);
+      if (!validation.ok) return;
+      const { user, profile } = validation;
 
-      const profile = profileData as Pick<Profile, 'subscription_tier' | 'age_tier' | 'is_minor_flagged'> | null;
-      
-      // CRITICAL: Block adult-only relationship types for minors
-      const userIsMinor = profile?.age_tier === 'minor' || 
-                          profile?.age_tier === 'blocked' || 
+      // CRITICAL: Block adult-only relationship types for minors. Wizard
+      // recovery: revert to 'friend' and bounce back to the relationship step
+      // so the user can pick something allowed.
+      const userIsMinor = profile?.age_tier === 'minor' ||
+                          profile?.age_tier === 'blocked' ||
                           profile?.is_minor_flagged === true;
-      
+
       if (userIsMinor && (companionData.relationshipType === 'romantic' || companionData.relationshipType === 'custom')) {
         toast.error('This relationship type is not available for your account');
         setCompanionData(prev => ({ ...prev, relationshipType: 'friend' }));
-        setCurrentStep(1); // Go back to relationship step
-        setIsCreating(false);
-        return;
-      }
-      
-      // Block blocked users entirely
-      if (profile?.age_tier === 'blocked') {
-        toast.error('Account access restricted');
-        router.push('/dashboard');
-        return;
-      }
-
-      const { count: companionCount } = await supabase
-        .from('companions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      const limits: Record<string, number> = {
-        free: 1,
-        basic: 3,
-        pro: 10,
-        ultimate: Infinity,
-      };
-
-      const limit = limits[profile?.subscription_tier || 'free'] || 1;
-      
-      if ((companionCount || 0) >= limit) {
-        toast.error(`You've reached your companion limit. Upgrade to create more!`);
-        router.push('/settings/billing');
+        setCurrentStep(1);
         return;
       }
 
@@ -288,7 +334,7 @@ export default function CreateCompanionPage() {
         avatar_3d_config: null,
         voice_config: companionData.voiceConfig,
       };
-      
+
       const { data: newCompanionData, error: companionError } = await supabase
         .from('companions')
         .insert({
@@ -388,9 +434,222 @@ export default function CreateCompanionPage() {
 
       toast.success(`${companionData.name} has been created!`);
       router.push(`/chat/${companion.id}`);
-      
+
     } catch (error) {
       console.error('Failed to create companion:', error);
+      toast.error('Failed to create companion. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  // ===========================================================================
+  // Path 3 — seed-driven creation
+  // ===========================================================================
+  const createCompanionFromSeed = async (result: SeedFlowResult) => {
+    setIsCreating(true);
+
+    try {
+      const supabase = getClient();
+
+      const validation = await validateCompanionCreation(supabase);
+      if (!validation.ok) return;
+      const { user, profile } = validation;
+
+      // Defense-in-depth minor check using the seed-flow's chosen relationship
+      // type. SeedFlow already gates adult-only types in its UI, so this only
+      // fires on a tampered or stale state. No wizard-style recovery — just
+      // toast and bail; the user can hit Back inside SeedFlow to change.
+      const userIsMinor = profile?.age_tier === 'minor' ||
+                          profile?.age_tier === 'blocked' ||
+                          profile?.is_minor_flagged === true;
+
+      if (userIsMinor && (result.relationshipType === 'romantic' || result.relationshipType === 'custom')) {
+        toast.error('This relationship type is not available for your account');
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const initialNeeds = {
+        social: 70,
+        energy: 80,
+        fun: 60,
+        comfort: 75,
+        affection: 50,
+        intellectual: 60,
+        creativity: 50,
+        lastUpdated: now,
+        lastInteraction: now,
+      };
+
+      const insertData = {
+        user_id: user.id,
+        name: result.name,
+        relationship_type: result.relationshipType,
+        backstory: result.backstory,
+        personality_base: result.personality_base,
+        interests: result.interests,
+        affection_level: result.affection_level,
+        trust_level: result.trust_level,
+        current_mood: {
+          primary: 'happy',
+          secondary: 'curious',
+          intensity: 0.7,
+        },
+        needs: initialNeeds,
+        avatar_url: null,
+        avatar_3d_config: null,
+        voice_config: null,
+      };
+
+      const { data: newCompanionData, error: companionError } = await supabase
+        .from('companions')
+        .insert({
+          ...insertData,
+          personality_base: insertData.personality_base as unknown as Json,
+          current_mood: insertData.current_mood as unknown as Json,
+          needs: insertData.needs as unknown as Json,
+          voice_config: insertData.voice_config as unknown as Json,
+        } satisfies CompanionInsert)
+        .select()
+        .single();
+
+      const companion = newCompanionData as Companion | null;
+
+      if (companionError || !companion) {
+        if (companionError) {
+          console.error('Seed-path companion insert error:', JSON.stringify(companionError, null, 2));
+          throw new Error(companionError.message || 'Failed to create companion');
+        }
+        throw new Error('Failed to create companion');
+      }
+
+      // Create companion DNA
+      const { error: dnaError } = await supabase
+        .from('companion_dna')
+        .upsert({
+          companion_id: companion.id,
+          learning_style_matrix: {
+            traits: result.personality_base,
+            learning_rate: 0.5,
+          } as unknown as Json,
+          humor_genome: {
+            style: 'playful',
+            level: 60,
+          } as unknown as Json,
+          emotional_resonance_map: {
+            baseline_mood: 'content',
+            mood_stability: 70,
+            empathy_level: result.personality_base.agreeableness,
+            expression_style: result.personality_base.extraversion > 50 ? 'expressive' : 'subtle',
+          } as unknown as Json,
+          interest_evolution_tree: {
+            interests: result.interests,
+            growth_potential: result.interests.map(i => ({ name: i, level: 50 })),
+          } as unknown as Json,
+          communication_dialect: {
+            formality: 30,
+            emoji_frequency: 30,
+            verbosity: 50,
+            humor_style: 'playful',
+            favorite_expressions: [],
+            speech_patterns: [],
+          } as unknown as Json,
+          memory_weighting_algorithm: {
+            recency_weight: 0.3,
+            importance_weight: 0.5,
+            emotional_weight: 0.2,
+          } as unknown as Json,
+        } satisfies CompanionDNAInsert, {
+          onConflict: 'companion_id',
+        });
+
+      if (dnaError) {
+        console.error('Seed-path DNA upsert error:', JSON.stringify(dnaError, null, 2));
+        throw new Error(dnaError.message || 'Failed to create companion DNA');
+      }
+
+      // Create the conversation row that will hold the opening message.
+      // Soft-fail: if this fails, skip the opening message and let the chat
+      // page's get-or-create create a fresh conversation when the user lands.
+      let conversation: Conversation | null = null;
+      try {
+        const { data: newConversation, error: conversationError } = await supabase
+          .from('conversations')
+          .insert({
+            companion_id: companion.id,
+            user_id: user.id,
+            title: `Chat with ${result.name}`,
+          } satisfies ConversationInsert)
+          .select()
+          .single();
+
+        if (conversationError || !newConversation) {
+          console.error(
+            'Seed-path conversation insert failed:',
+            conversationError ? JSON.stringify(conversationError, null, 2) : 'no row returned'
+          );
+        } else {
+          conversation = newConversation as Conversation;
+        }
+      } catch (conversationThrow) {
+        console.error('Seed-path conversation insert threw:', conversationThrow);
+      }
+
+      // Insert the companion's opening line as the first message in the new
+      // conversation. Only fires when the conversation insert succeeded.
+      // Soft-fail: chat is still functional without it; the user can prompt.
+      if (conversation) {
+        try {
+          const { error: messageError } = await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversation.id,
+              companion_id: companion.id,
+              user_id: user.id,
+              role: 'companion',
+              content: result.opening_line,
+            });
+
+          if (messageError) {
+            console.error(
+              'Seed-path opening message insert failed:',
+              JSON.stringify(messageError, null, 2)
+            );
+          }
+        } catch (messageThrow) {
+          console.error('Seed-path opening message insert threw:', messageThrow);
+        }
+      }
+
+      // Normalize the backstory register synchronously. Seed-generated
+      // backstories are written in third person on purpose (per the seed
+      // prompt) and absolutely need normalization before chat starts.
+      // Soft-fail same as the wizard path.
+      try {
+        const normalizeResponse = await fetch(
+          `/api/companion/${companion.id}/normalize-backstory`,
+          { method: 'POST' }
+        );
+        if (!normalizeResponse.ok) {
+          const errorBody: unknown = await normalizeResponse
+            .json()
+            .catch(() => ({}));
+          console.error(
+            'Seed-path backstory normalization failed:',
+            normalizeResponse.status,
+            errorBody
+          );
+        }
+      } catch (normalizeError) {
+        console.error('Seed-path backstory normalization threw:', normalizeError);
+      }
+
+      toast.success(`${result.name} has been created!`);
+      router.push(`/chat/${companion.id}`);
+
+    } catch (error) {
+      console.error('Failed to create companion from seed:', error);
       toast.error('Failed to create companion. Please try again.');
     } finally {
       setIsCreating(false);
@@ -469,7 +728,7 @@ export default function CreateCompanionPage() {
             <p className="text-muted-foreground">
               Adjust {companionData.name}&apos;s personality traits
             </p>
-            
+
             {Object.entries(companionData.traits).map(([trait, value]) => (
               <div key={trait} className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -498,7 +757,7 @@ export default function CreateCompanionPage() {
               <p className="text-muted-foreground">
                 How does {companionData.name} communicate?
               </p>
-              
+
               {Object.entries(companionData.communicationStyle).map(([style, value]) => (
                 <div key={style} className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -542,6 +801,7 @@ export default function CreateCompanionPage() {
             interests={companionData.interests}
             backstory={companionData.backstory}
             onBackstoryChange={(backstory) => updateData('backstory', backstory)}
+            initialMode={wizardInitialBackstoryMode}
           />
         );
 
@@ -630,109 +890,211 @@ export default function CreateCompanionPage() {
 
   return (
     <div className="container max-w-3xl py-8">
-      {/* Progress Steps */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          {STEPS.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div
-                className={cn(
-                  'flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full transition-all',
-                  index < currentStep
-                    ? 'bg-primary text-primary-foreground'
-                    : index === currentStep
-                    ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {index < currentStep ? (
-                  <Check className="h-4 w-4 sm:h-5 sm:w-5" />
-                ) : (
-                  <step.icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                )}
-              </div>
-              {index < STEPS.length - 1 && (
-                <div
-                  className={cn(
-                    'mx-1 h-1 w-4 sm:mx-2 sm:w-8 lg:w-12 rounded-full transition-all',
-                    index < currentStep ? 'bg-primary' : 'bg-muted'
-                  )}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 flex justify-between text-xs sm:text-sm">
-          {STEPS.map((step, index) => (
-            <span
-              key={step.id}
+      {selectedPath === 'picker' && (
+        <div className="space-y-8">
+          <div className="space-y-2 text-center">
+            <h1 className="text-3xl font-bold tracking-tight">Create your companion</h1>
+            <p className="text-muted-foreground">How would you like to build them?</p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => {
+                setWizardInitialBackstoryMode('generate');
+                setSelectedPath('wizard');
+              }}
               className={cn(
-                'hidden sm:block text-center',
-                index === currentStep ? 'text-primary font-medium' : 'text-muted-foreground'
+                'flex flex-col items-start gap-3 rounded-lg border border-border p-6 text-left transition-all',
+                'hover:border-primary/50 hover:bg-muted/30',
               )}
-              style={{ width: `${100 / STEPS.length}%` }}
             >
-              {step.title}
-            </span>
-          ))}
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Brain className="h-6 w-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-semibold">Build with traits</h3>
+                <p className="text-sm text-muted-foreground">
+                  Pick personality, style, interests. Generate a backstory from those traits.
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setWizardInitialBackstoryMode('custom');
+                setSelectedPath('wizard');
+              }}
+              className={cn(
+                'flex flex-col items-start gap-3 rounded-lg border border-border p-6 text-left transition-all',
+                'hover:border-primary/50 hover:bg-muted/30',
+              )}
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-kirra-amber/10">
+                <PenLine className="h-6 w-6 text-kirra-amber" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-semibold">Write your own backstory</h3>
+                <p className="text-sm text-muted-foreground">
+                  Use the wizard for the basics, then write the character yourself.
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedPath('seed')}
+              className={cn(
+                'relative flex flex-col items-start gap-3 rounded-lg border border-primary/40 p-6 text-left transition-all',
+                'hover:border-primary/60 hover:bg-primary/5',
+              )}
+            >
+              <Badge variant="secondary" className="absolute right-3 top-3 text-xs">
+                New
+              </Badge>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-semibold">Describe them in one line</h3>
+                <p className="text-sm text-muted-foreground">
+                  Tell us who they are in a sentence. We&apos;ll generate the full character.
+                </p>
+              </div>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Step Content */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            {STEPS[currentStep].title}
-          </CardTitle>
-          <CardDescription>
-            Step {currentStep + 1} of {STEPS.length}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {renderStep()}
-        </CardContent>
-      </Card>
-
-      {/* Navigation */}
-      <div className="mt-6 flex justify-between">
-        <Button
-          variant="outline"
-          onClick={prevStep}
-          disabled={currentStep === 0}
-        >
-          <ChevronLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-
-        {currentStep === STEPS.length - 1 ? (
-          <Button
-            variant="gradient"
-            onClick={createCompanion}
-            disabled={isCreating}
+      {selectedPath === 'wizard' && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedPath('picker');
+              setCurrentStep(0);
+            }}
+            className="mb-4 inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
-            {isCreating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
-              </>
+            <ChevronLeft className="mr-1 h-3 w-3" />
+            Choose a different path
+          </button>
+
+          {/* Progress Steps */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              {STEPS.map((step, index) => (
+                <div key={step.id} className="flex items-center">
+                  <div
+                    className={cn(
+                      'flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full transition-all',
+                      index < currentStep
+                        ? 'bg-primary text-primary-foreground'
+                        : index === currentStep
+                        ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {index < currentStep ? (
+                      <Check className="h-4 w-4 sm:h-5 sm:w-5" />
+                    ) : (
+                      <step.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    )}
+                  </div>
+                  {index < STEPS.length - 1 && (
+                    <div
+                      className={cn(
+                        'mx-1 h-1 w-4 sm:mx-2 sm:w-8 lg:w-12 rounded-full transition-all',
+                        index < currentStep ? 'bg-primary' : 'bg-muted'
+                      )}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-between text-xs sm:text-sm">
+              {STEPS.map((step, index) => (
+                <span
+                  key={step.id}
+                  className={cn(
+                    'hidden sm:block text-center',
+                    index === currentStep ? 'text-primary font-medium' : 'text-muted-foreground'
+                  )}
+                  style={{ width: `${100 / STEPS.length}%` }}
+                >
+                  {step.title}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Step Content */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                {STEPS[currentStep].title}
+              </CardTitle>
+              <CardDescription>
+                Step {currentStep + 1} of {STEPS.length}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {renderStep()}
+            </CardContent>
+          </Card>
+
+          {/* Navigation */}
+          <div className="mt-6 flex justify-between">
+            <Button
+              variant="outline"
+              onClick={prevStep}
+              disabled={currentStep === 0}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+
+            {currentStep === STEPS.length - 1 ? (
+              <Button
+                variant="gradient"
+                onClick={createCompanion}
+                disabled={isCreating}
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Create {companionData.name}
+                  </>
+                )}
+              </Button>
             ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Create {companionData.name}
-              </>
+              <Button
+                onClick={nextStep}
+                disabled={!canProceed()}
+              >
+                {currentStep === 4 && !companionData.backstory ? 'Skip' : 'Next'}
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
             )}
-          </Button>
-        ) : (
-          <Button
-            onClick={nextStep}
-            disabled={!canProceed()}
-          >
-            {currentStep === 4 && !companionData.backstory ? 'Skip' : 'Next'}
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
-        )}
-      </div>
+          </div>
+        </>
+      )}
+
+      {selectedPath === 'seed' && (
+        <SeedFlow
+          isMinor={isMinor === true}
+          isCreating={isCreating}
+          onCancel={() => setSelectedPath('picker')}
+          onCreate={createCompanionFromSeed}
+        />
+      )}
     </div>
   );
 }

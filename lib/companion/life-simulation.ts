@@ -1,6 +1,6 @@
 /**
  * Life Simulation Service
- * 
+ *
  * Core orchestrator for companion life simulation.
  * Manages the autonomous life cycle of companions including:
  * - Activity scheduling and execution
@@ -8,7 +8,7 @@
  * - Mood state management
  * - Life event generation
  * - Journal entries
- * 
+ *
  * This is THE differentiator - companions feel alive 24/7.
  */
 
@@ -21,13 +21,16 @@ import type {
   SimulationState,
   SimulationConfig,
   ActivityCategory,
+  ActivityOutcome,
+  EventSignificance,
+  LifeEventType,
   PrimaryMood,
   TimeOfDay,
 } from '@/types/life-simulation';
 import type { Companion, CompanionDNA } from '@/types/database';
+import type { Database } from '@/types/database';
 import type {
   SimulationStateRow,
-  LifeEventRow,
   CompanionActivityRow,
 } from '@/types/life-simulation-db';
 
@@ -42,12 +45,18 @@ import type {
  * would fail in the cron path (no cookies → anon → RLS blocks everything),
  * so this library uses the service role throughout. Matches the pattern
  * already established in `lib/companion/dna-evolution.ts`.
+ *
+ * Generic-parameterized with `<Database>` so every chained query in this
+ * file infers row/insert/update types directly from the generated schema —
+ * eliminating the `as unknown as`/plain-`as` casts that previously masked
+ * the untyped builder. See standing-rule memory: cast cleanup section
+ * 6D-cleanup-1.
  */
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Missing Supabase admin credentials');
-  return createAdminClient(url, key);
+  return createAdminClient<Database>(url, key);
 }
 
 // ============================================================================
@@ -103,6 +112,204 @@ const MOOD_TRANSITIONS: Record<PrimaryMood, PrimaryMood[]> = {
 };
 
 // ============================================================================
+// Domain enum membership constants (used by the runtime guards below)
+// ============================================================================
+
+const VALID_LIFE_EVENT_TYPES: readonly LifeEventType[] = [
+  'activity_completed',
+  'interest_discovered',
+  'interest_evolved',
+  'mood_shift',
+  'milestone',
+  'thought_of_user',
+  'dream',
+  'realization',
+  'memory_formed',
+  'goal_set',
+  'goal_achieved',
+  'creative_output',
+  'social_thought',
+  'routine_event',
+];
+
+const VALID_EVENT_SIGNIFICANCE: readonly EventSignificance[] = [
+  'minor',
+  'normal',
+  'notable',
+  'major',
+  'milestone',
+];
+
+const VALID_ACTIVITY_OUTCOMES: readonly ActivityOutcome[] = [
+  'great',
+  'good',
+  'neutral',
+  'challenging',
+  'frustrating',
+];
+
+const VALID_ACTIVITY_CATEGORIES: readonly ActivityCategory[] = [
+  'hobby',
+  'learning',
+  'social',
+  'creative',
+  'reflection',
+  'entertainment',
+];
+
+// ============================================================================
+// Runtime type guards / domain-shape constructors
+// ----------------------------------------------------------------------------
+// Replaces the prior `as unknown as <Type>` and chain-result `as <Type>`
+// casts. Every guard validates every field that consuming code reads,
+// including union-membership for the four enum-typed columns and structural
+// shape checks for the JSONB-typed mood/effects columns.
+// ============================================================================
+
+function isCompanionMoodState(v: unknown): v is CompanionMoodState {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const m = v as Record<string, unknown>;
+  return typeof m.primary === 'string'
+    && (m.secondary === null || typeof m.secondary === 'string')
+    && typeof m.intensity === 'number'
+    && typeof m.energy_level === 'number'
+    && typeof m.social_need === 'number'
+    && typeof m.creativity_level === 'number'
+    && typeof m.stability === 'number'
+    && typeof m.last_updated === 'string';
+}
+
+function isMoodEffectsApplied(
+  v: unknown
+): v is { energy: number; happiness: number; social: number; creativity: number } {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const m = v as Record<string, unknown>;
+  return typeof m.energy === 'number'
+    && typeof m.happiness === 'number'
+    && typeof m.social === 'number'
+    && typeof m.creativity === 'number';
+}
+
+function isActivityCategory(s: string): s is ActivityCategory {
+  return VALID_ACTIVITY_CATEGORIES.includes(s as ActivityCategory);
+}
+
+/**
+ * Validate that an unknown value is a hand-written CompanionActivityRow.
+ * Used at line ~704 to narrow the canonical row returned by the typed
+ * client into the hand-written shape that the deferred downstream
+ * `as CompanionActivity` casts (lines 789/813) rely on. Domain reconciliation
+ * is owned by Section 6D-cleanup-1b.
+ */
+function isCompanionActivityRow(v: unknown): v is CompanionActivityRow {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const r = v as Record<string, unknown>;
+  return typeof r.id === 'string'
+    && typeof r.companion_id === 'string'
+    && typeof r.template_id === 'string'
+    && typeof r.activity_name === 'string'
+    && typeof r.activity_category === 'string'
+    && (r.description === null || typeof r.description === 'string')
+    && (r.narrative === null || typeof r.narrative === 'string')
+    && typeof r.started_at === 'string'
+    && (r.ended_at === null || typeof r.ended_at === 'string')
+    && typeof r.duration_minutes === 'number'
+    && (r.outcome === null
+        || (typeof r.outcome === 'string'
+            && VALID_ACTIVITY_OUTCOMES.includes(r.outcome as ActivityOutcome)))
+    && (r.mood_effects_applied === null || isMoodEffectsApplied(r.mood_effects_applied))
+    && (r.related_interest_id === null || typeof r.related_interest_id === 'string')
+    && typeof r.thinking_of_user === 'boolean'
+    && (r.user_mention_context === null || typeof r.user_mention_context === 'string')
+    && typeof r.created_at === 'string';
+}
+
+function moodFromUnknown(v: unknown): CompanionMoodState | null {
+  if (v === null || v === undefined) return null;
+  return isCompanionMoodState(v) ? v : null;
+}
+
+function metadataFromUnknown(v: unknown): Record<string, unknown> {
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    return v as Record<string, unknown>;
+  }
+  return {};
+}
+
+/**
+ * Validating constructor that turns a canonical `life_events` row (or any
+ * unknown candidate) into a domain-shaped `LifeEvent`. Bridges Scope Gap #1
+ * (domain `LifeEvent` in `types/life-simulation.ts` drifts from the
+ * canonical schema): synthesizes `shared_at: null` (the domain field has
+ * no corresponding column), defaults nullable canonical `description` /
+ * `narrative` to empty string, validates `event_type` and `significance`
+ * against their union membership, and validates `mood_before/after` /
+ * `metadata` shape via the helpers above. Returns null on any required-field
+ * mismatch and logs with the row id when available.
+ */
+function lifeEventFromRow(v: unknown): LifeEvent | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const r = v as Record<string, unknown>;
+
+  if (typeof r.id !== 'string'
+      || typeof r.companion_id !== 'string'
+      || typeof r.title !== 'string'
+      || typeof r.occurred_at !== 'string'
+      || typeof r.created_at !== 'string'
+      || typeof r.involves_user !== 'boolean'
+      || typeof r.shareable !== 'boolean'
+      || typeof r.shared_with_user !== 'boolean') {
+    console.error('[life-simulation] life_events row missing core fields', {
+      id: typeof r.id === 'string' ? r.id : null,
+    });
+    return null;
+  }
+  if (typeof r.event_type !== 'string'
+      || !VALID_LIFE_EVENT_TYPES.includes(r.event_type as LifeEventType)) {
+    console.error('[life-simulation] life_events.event_type out of domain', {
+      id: r.id,
+      event_type: r.event_type,
+    });
+    return null;
+  }
+  if (typeof r.significance !== 'string'
+      || !VALID_EVENT_SIGNIFICANCE.includes(r.significance as EventSignificance)) {
+    console.error('[life-simulation] life_events.significance out of domain', {
+      id: r.id,
+      significance: r.significance,
+    });
+    return null;
+  }
+  if (r.duration_minutes !== null && typeof r.duration_minutes !== 'number') return null;
+  if (r.related_activity_id !== null && typeof r.related_activity_id !== 'string') return null;
+  if (r.related_interest_id !== null && typeof r.related_interest_id !== 'string') return null;
+  if (r.user_context !== null && typeof r.user_context !== 'string') return null;
+
+  return {
+    id: r.id,
+    companion_id: r.companion_id,
+    event_type: r.event_type as LifeEventType,
+    title: r.title,
+    description: typeof r.description === 'string' ? r.description : '',
+    narrative: typeof r.narrative === 'string' ? r.narrative : '',
+    significance: r.significance as EventSignificance,
+    occurred_at: r.occurred_at,
+    duration_minutes: r.duration_minutes as number | null,
+    mood_before: moodFromUnknown(r.mood_before),
+    mood_after: moodFromUnknown(r.mood_after),
+    related_activity_id: r.related_activity_id as string | null,
+    related_interest_id: r.related_interest_id as string | null,
+    involves_user: r.involves_user,
+    user_context: r.user_context as string | null,
+    shareable: r.shareable,
+    shared_with_user: r.shared_with_user,
+    shared_at: null, // domain field absent from canonical life_events schema
+    metadata: metadataFromUnknown(r.metadata),
+    created_at: r.created_at,
+  };
+}
+
+// ============================================================================
 // Core Simulation Functions
 // ============================================================================
 
@@ -112,7 +319,7 @@ const MOOD_TRANSITIONS: Record<PrimaryMood, PrimaryMood[]> = {
 export function getCurrentTimeOfDay(timezone?: string): TimeOfDay {
   const now = new Date();
   // Apply timezone offset if provided
-  const hour = timezone 
+  const hour = timezone
     ? new Date(now.toLocaleString('en-US', { timeZone: timezone })).getHours()
     : now.getHours();
 
@@ -121,12 +328,12 @@ export function getCurrentTimeOfDay(timezone?: string): TimeOfDay {
       return tod as TimeOfDay;
     }
   }
-  
+
   // Handle midnight wrap
   if (hour >= 0 && hour < 5) {
     return 'late_night';
   }
-  
+
   return 'night';
 }
 
@@ -142,17 +349,17 @@ export function isCompanionSleeping(
   const currentTime = timezone
     ? new Date(now.toLocaleString('en-US', { timeZone: timezone }))
     : now;
-  
+
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
   const currentMinutes = currentHour * 60 + currentMinute;
-  
+
   const [wakeHour, wakeMinute] = schedule.wake.split(':').map(Number);
   const [sleepHour, sleepMinute] = schedule.sleep.split(':').map(Number);
-  
+
   const wakeMinutes = wakeHour * 60 + wakeMinute;
   const sleepMinutes = sleepHour * 60 + sleepMinute;
-  
+
   // Handle overnight sleep (e.g., 23:00 - 07:00)
   if (sleepMinutes > wakeMinutes) {
     // Normal day schedule
@@ -179,11 +386,11 @@ export function calculateMoodAfterActivity(
     challenging: 0.8,
     frustrating: 0.6,
   };
-  
+
   const multiplier = outcomeMultipliers[outcome];
-  
+
   // Calculate new levels
-  const newEnergy = Math.max(0, Math.min(100, 
+  const newEnergy = Math.max(0, Math.min(100,
     currentMood.energy_level + (moodEffects.energy * 20 * multiplier)
   ));
   const newSocial = Math.max(0, Math.min(100,
@@ -192,11 +399,11 @@ export function calculateMoodAfterActivity(
   const newCreativity = Math.max(0, Math.min(100,
     currentMood.creativity_level + (moodEffects.creativity * 15 * multiplier)
   ));
-  
+
   // Determine new primary mood based on changes
   let newPrimary = currentMood.primary;
   const happinessChange = moodEffects.happiness * multiplier;
-  
+
   if (happinessChange > 0.5) {
     const positiveOptions = MOOD_TRANSITIONS[currentMood.primary].filter(m =>
       ['happy', 'content', 'excited', 'playful', 'hopeful'].includes(m)
@@ -212,7 +419,7 @@ export function calculateMoodAfterActivity(
       newPrimary = negativeOptions[Math.floor(Math.random() * negativeOptions.length)];
     }
   }
-  
+
   // Calculate intensity based on outcome
   let newIntensity = currentMood.intensity;
   if (outcome === 'great') {
@@ -220,7 +427,7 @@ export function calculateMoodAfterActivity(
   } else if (outcome === 'frustrating') {
     newIntensity = Math.max(0.2, currentMood.intensity - 0.1);
   }
-  
+
   return {
     primary: newPrimary,
     secondary: currentMood.primary !== newPrimary ? currentMood.primary : currentMood.secondary,
@@ -239,19 +446,19 @@ export function calculateMoodAfterActivity(
 export function driftMood(currentMood: CompanionMoodState, hoursElapsed: number): CompanionMoodState {
   // Mood stability increases over time
   const newStability = Math.min(1, currentMood.stability + (hoursElapsed * 0.02));
-  
+
   // Energy slowly decreases
   const energyDrift = -hoursElapsed * 2;
   const newEnergy = Math.max(20, Math.min(100, currentMood.energy_level + energyDrift));
-  
+
   // Social need increases over time (they miss the user)
   const socialDrift = hoursElapsed * 3;
   const newSocial = Math.min(100, currentMood.social_need + socialDrift);
-  
+
   // Intensity gradually normalizes
   const intensityTarget = 0.5;
   const newIntensity = currentMood.intensity + (intensityTarget - currentMood.intensity) * 0.1;
-  
+
   // Occasionally drift to related mood
   let newPrimary = currentMood.primary;
   if (Math.random() < 0.1 * hoursElapsed) {
@@ -260,7 +467,7 @@ export function driftMood(currentMood: CompanionMoodState, hoursElapsed: number)
       newPrimary = options[Math.floor(Math.random() * options.length)];
     }
   }
-  
+
   return {
     ...currentMood,
     primary: newPrimary,
@@ -282,18 +489,18 @@ export function shouldThinkOfUser(
 ): boolean {
   // Base chance from config
   let chance = config.user_thinking_frequency;
-  
+
   // Higher affection = more likely to think of user
   chance += (companion.affection_level / 100) * 0.2;
-  
+
   // Higher social need = more likely
   chance += (currentMood.social_need / 100) * 0.15;
-  
+
   // Loving or nostalgic mood increases chance
   if (['loving', 'nostalgic', 'happy'].includes(currentMood.primary)) {
     chance += 0.1;
   }
-  
+
   return Math.random() < chance;
 }
 
@@ -338,21 +545,21 @@ Write a single sentence (20-40 words) explaining what specifically made you thin
  */
 export async function getSimulationState(companionId: string): Promise<SimulationState | null> {
   const supabase = getAdminClient();
-  
+
   const { data, error } = await supabase
     .from('simulation_states')
     .select('*')
     .eq('companion_id', companionId)
     .single();
-  
+
   if (error && error.code !== 'PGRST116') {
     console.error('Error fetching simulation state:', error);
     return null;
   }
-  
+
   if (!data) {
     // Create default state
-    const defaultState: Omit<SimulationState, 'companion_id'> = {
+    const defaultState: Omit<SimulationStateRow, 'id' | 'companion_id' | 'created_at' | 'updated_at'> = {
       last_simulation_at: new Date().toISOString(),
       activities_today: 0,
       last_activity_at: null,
@@ -363,21 +570,27 @@ export async function getSimulationState(companionId: string): Promise<Simulatio
       next_scheduled_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
       simulation_version: 1,
     };
-    
+
     const { data: newState, error: insertError } = await supabase
       .from('simulation_states')
       .insert({ companion_id: companionId, ...defaultState })
       .select()
-      .single() as unknown as { data: SimulationStateRow | null; error: Error | null };
-    
+      .single();
+
     if (insertError) {
       console.error('Error creating simulation state:', insertError);
       return null;
     }
-    
-    return newState as unknown as SimulationState;
+
+    if (!newState) return null;
+
+    // Canonical simulation_states row is a structural superset of the
+    // domain `SimulationState` (every required field of the domain exists
+    // on the row with the same type), so direct return without a cast is
+    // type-safe.
+    return newState;
   }
-  
+
   return data as SimulationState;
 }
 
@@ -389,12 +602,12 @@ export async function updateSimulationState(
   updates: Partial<SimulationState>
 ): Promise<void> {
   const supabase = getAdminClient();
-  
+
   const { error } = await supabase
     .from('simulation_states')
     .update(updates)
-    .eq('companion_id', companionId) as unknown as { error: Error | null };
-  
+    .eq('companion_id', companionId);
+
   if (error) {
     console.error('Error updating simulation state:', error);
   }
@@ -445,7 +658,7 @@ export async function createActivityLifeEvent(
   mood: CompanionMoodState
 ): Promise<LifeEvent | null> {
   const supabase = getAdminClient();
-  
+
   // Map to Supabase significance enum values
   const significance: 'major' | 'moderate' | 'minor' =
     activity.outcome === 'great' ? 'major' :
@@ -492,14 +705,14 @@ export async function createActivityLifeEvent(
     .from('life_events')
     .insert(eventInsert)
     .select()
-    .single() as unknown as { data: LifeEventRow | null; error: Error | null };
+    .single();
 
   if (error) {
     console.error('Error creating life event:', error);
     return null;
   }
 
-  return data as unknown as LifeEvent;
+  return lifeEventFromRow(data);
 }
 
 /**
@@ -539,14 +752,14 @@ export async function createUserThoughtEvent(
     .from('life_events')
     .insert(eventInsert)
     .select()
-    .single() as unknown as { data: LifeEventRow | null; error: Error | null };
+    .single();
 
   if (error) {
     console.error('Error creating thought event:', error);
     return null;
   }
 
-  return data as unknown as LifeEvent;
+  return lifeEventFromRow(data);
 }
 
 // ============================================================================
@@ -563,12 +776,22 @@ export async function getCompanionMood(companionId: string): Promise<CompanionMo
     .from('companions')
     .select('current_mood')
     .eq('id', companionId)
-    .single() as { data: { current_mood: CompanionMoodState | null } | null };
-  
-  if (data?.current_mood) {
-    return data.current_mood as CompanionMoodState;
+    .single();
+
+  // current_mood is a JSONB column (Json | null) on the canonical schema.
+  // The runtime guard validates the shape; if validation fails on a non-null
+  // value, fall through to default mood and log so corrupt rows are visible.
+  const moodValue = data?.current_mood;
+  if (moodValue !== null && moodValue !== undefined) {
+    if (isCompanionMoodState(moodValue)) {
+      return moodValue;
+    }
+    console.warn(
+      '[life-simulation] companions.current_mood shape invalid, returning default',
+      { companionId }
+    );
   }
-  
+
   // Default mood
   return {
     primary: 'content',
@@ -594,8 +817,8 @@ export async function updateCompanionMood(
   const { error } = await supabase
     .from('companions')
     .update({ current_mood: JSON.parse(JSON.stringify(mood)) })
-    .eq('id', companionId) as { error: Error | null };
-  
+    .eq('id', companionId);
+
   if (error) {
     console.error('Error updating companion mood:', error);
   }
@@ -621,7 +844,7 @@ export async function runSimulationTick(
   if (!config.enabled) {
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
+
   const supabase = getAdminClient();
 
   // Get companion data
@@ -633,13 +856,14 @@ export async function runSimulationTick(
       profiles:user_id (timezone)
     `)
     .eq('id', companionId)
-    .single() as { data: Companion & { companion_dna: CompanionDNA | null; profiles: { timezone?: string } | null } | null };
-  
+    .single();
+
   if (!companion) {
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
-  const timezone = (companion.profiles as { timezone?: string } | undefined)?.timezone;
+
+  const timezone: string | undefined =
+    companion.profiles?.timezone ?? undefined;
 
   // Check if sleeping - use default schedule since companion doesn't have sleep_schedule field
   const companionWithSchedule = { sleep_schedule: { wake: '07:00', sleep: '23:00' } };
@@ -647,29 +871,29 @@ export async function runSimulationTick(
     await updateSimulationState(companionId, { is_sleeping: true });
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
+
   // Get current state
   const state = await getSimulationState(companionId);
   if (!state) {
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
+
   // Check if we should run (based on frequency)
   const lastSim = new Date(state.last_simulation_at);
   const hoursSinceLastSim = (Date.now() - lastSim.getTime()) / (1000 * 60 * 60);
-  
+
   if (hoursSinceLastSim < config.activity_frequency_hours) {
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
+
   // Check daily limits
   const today = new Date().toDateString();
-  const lastActivityDate = state.last_activity_at 
-    ? new Date(state.last_activity_at).toDateString() 
+  const lastActivityDate = state.last_activity_at
+    ? new Date(state.last_activity_at).toDateString()
     : null;
-  
+
   const activitiesToday = lastActivityDate === today ? state.activities_today : 0;
-  
+
   if (activitiesToday >= config.max_activities_per_day) {
     // Already hit max for today
     await updateSimulationState(companionId, {
@@ -677,100 +901,150 @@ export async function runSimulationTick(
     });
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
+
   // Get current mood and apply drift
   let currentMood = await getCompanionMood(companionId);
   currentMood = driftMood(currentMood, hoursSinceLastSim);
-  
+
   // Import activity generator dynamically to avoid circular deps
   const { generateActivity } = await import('./activity-generator');
-  
+
   // Generate an activity
   const activity = await generateActivity(
     companion as Companion & { companion_dna?: CompanionDNA },
     currentMood,
     getCurrentTimeOfDay(timezone || undefined)
   );
-  
+
   if (!activity) {
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
+
   // Save activity
   const { data: savedActivity, error: activityError } = await supabase
     .from('companion_activities')
     .insert(activity)
     .select()
-    .single() as unknown as { data: CompanionActivityRow | null; error: Error | null };
-  
+    .single();
+
   if (activityError) {
     console.error('Error saving activity:', activityError);
     return { moodChanged: false, thoughtOfUser: false };
   }
-  
+
+  // The canonical row is wider than the hand-written CompanionActivityRow on
+  // two fields (`outcome: string | null`, `mood_effects_applied: Json | null`).
+  // The guard validates the runtime narrowing so the deferred downstream
+  // `as CompanionActivity` casts at lines ~789/813 (Section 6D-cleanup-1b)
+  // continue to be honest.
+  if (!isCompanionActivityRow(savedActivity)) {
+    console.error(
+      '[life-simulation] companion_activities row shape mismatch after insert',
+      { companionId }
+    );
+    return { moodChanged: false, thoughtOfUser: false };
+  }
+
   // Calculate new mood
   const newMood = calculateMoodAfterActivity(
     currentMood,
     activity.mood_effects_applied || { energy: 0, happiness: 0, social: 0, creativity: 0 },
     activity.outcome || 'neutral'
   );
-  
+
   await updateCompanionMood(companionId, newMood);
-  
-  // Check if they thought of user
-  const thoughtOfUser = shouldThinkOfUser(
-    companion as { affection_level: number },
-    config,
-    newMood
-  );
-  
+
+  // ── Q2(C) Hybrid thinking_of_user integration ─────────────────────────────
+  // If activity-generator's grounded enrichment already asserted the
+  // companion is thinking of the user (thinking_of_user === true) or
+  // supplied a non-null user_mention_context, that signal is authoritative.
+  // The legacy probability gate + secondary AI call do NOT run, and they
+  // cannot overwrite either field. The activity life event itself carries
+  // involves_user/user_context for the bell, so no separate
+  // "thought_of_user" event is created in the AI-promoted case (1 bell,
+  // grounded). The legacy probability path's redundant 2-event behavior
+  // (activity_completed + thought_of_user) is preserved verbatim when AI
+  // returned false/null for both fields.
+  const aiAssertedThinking = savedActivity.thinking_of_user === true;
+  const aiContextLocked = (savedActivity.user_mention_context ?? null) !== null;
+  const aiPromoted = aiAssertedThinking || aiContextLocked;
+
   let userThoughtEvent: LifeEvent | null = null;
-  if (thoughtOfUser) {
-    // Get some memories for context
-    const { data: memories } = await supabase
-      .from('memories')
-      .select('title, content')
-      .eq('companion_id', companionId)
-      .order('importance_score', { ascending: false })
-      .limit(5);
-    
-    const context = await generateUserThinkingContext(
-      companion as Companion & { companion_dna?: CompanionDNA },
-      { name: activity.activity_name, category: activity.activity_category as ActivityCategory },
-      (memories || []).map(m => ({ title: m.title || 'Memory', content: m.content }))
+  let finalThinkingOfUser = aiAssertedThinking;
+  let finalUserMentionContext: string | null =
+    savedActivity.user_mention_context ?? null;
+
+  if (!aiPromoted) {
+    const probabilityPromoted = shouldThinkOfUser(
+      companion as { affection_level: number },
+      config,
+      newMood
     );
-    
-    userThoughtEvent = await createUserThoughtEvent(
-      companionId,
-      context,
-      newMood,
-      savedActivity?.id
-    );
-    
-    // Update activity with user thinking context
-    if (savedActivity?.id) {
-      await supabase
-        .from('companion_activities')
-        .update({
-          thinking_of_user: true,
-          user_mention_context: context,
-        })
-        .eq('id', savedActivity.id) as unknown as Promise<{ error: Error | null }>;
+
+    if (probabilityPromoted) {
+      if (isActivityCategory(savedActivity.activity_category)) {
+        const { data: memories } = await supabase
+          .from('memories')
+          .select('title, content')
+          .eq('companion_id', companionId)
+          .order('importance_score', { ascending: false })
+          .limit(5);
+
+        const generatedContext = await generateUserThinkingContext(
+          companion as Companion & { companion_dna?: CompanionDNA },
+          { name: savedActivity.activity_name, category: savedActivity.activity_category },
+          (memories || []).map(m => ({ title: m.title || 'Memory', content: m.content }))
+        );
+
+        userThoughtEvent = await createUserThoughtEvent(
+          companionId,
+          generatedContext,
+          newMood,
+          savedActivity.id
+        );
+
+        const { error: writebackError } = await supabase
+          .from('companion_activities')
+          .update({
+            thinking_of_user: true,
+            user_mention_context: generatedContext,
+          })
+          .eq('id', savedActivity.id);
+        if (writebackError) {
+          console.error(
+            '[life-simulation] failed to write thinking_of_user back',
+            { id: savedActivity.id, error: writebackError.message }
+          );
+        }
+
+        finalThinkingOfUser = true;
+        finalUserMentionContext = generatedContext;
+      } else {
+        console.error(
+          '[life-simulation] activity_category not in ActivityCategory union; skipping secondary thought generation',
+          { companionId, activity_category: savedActivity.activity_category }
+        );
+      }
     }
   }
-  
-  // Create life event
-  const activityForEvent = savedActivity ? { 
-    ...(savedActivity as CompanionActivity), 
-    thinking_of_user: thoughtOfUser 
-  } : null;
-  
-  const lifeEvent = activityForEvent ? await createActivityLifeEvent(
+
+  // Create life event — pass the final thinking_of_user + user_mention_context
+  // so the activity life event's involves_user/user_context match what was
+  // actually persisted. Side-fixes a pre-existing bug where activityForEvent
+  // forwarded only the (then-probability-derived) thinking_of_user flag and
+  // dropped the generated user_mention_context entirely.
+  const activityForEvent = {
+    ...(savedActivity as CompanionActivity),
+    thinking_of_user: finalThinkingOfUser,
+    user_mention_context: finalUserMentionContext,
+  };
+
+  const lifeEvent = await createActivityLifeEvent(
     companionId,
     activityForEvent,
     newMood
-  ) : null;
-  
+  );
+
   // Update simulation state
   await updateSimulationState(companionId, {
     last_simulation_at: new Date().toISOString(),
@@ -782,11 +1056,11 @@ export async function runSimulationTick(
       Date.now() + config.activity_frequency_hours * 60 * 60 * 1000
     ).toISOString(),
   });
-  
+
   return {
     activity: savedActivity as CompanionActivity,
     event: userThoughtEvent || lifeEvent || undefined,
     moodChanged: true,
-    thoughtOfUser,
+    thoughtOfUser: finalThinkingOfUser,
   };
 }

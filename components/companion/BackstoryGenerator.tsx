@@ -23,6 +23,7 @@ interface BackstoryGeneratorProps {
   backstory: string;
   onBackstoryChange: (backstory: string) => void;
   disabled?: boolean;
+  initialMode?: 'generate' | 'custom';
 }
 
 export function BackstoryGenerator({
@@ -33,10 +34,11 @@ export function BackstoryGenerator({
   backstory,
   onBackstoryChange,
   disabled = false,
+  initialMode,
 }: BackstoryGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [isWritingCustom, setIsWritingCustom] = useState(false);
+  const [isWritingCustom, setIsWritingCustom] = useState(initialMode === 'custom');
   const [editedBackstory, setEditedBackstory] = useState(backstory);
   const [generationCount, setGenerationCount] = useState(0);
 
@@ -110,17 +112,17 @@ export function BackstoryGenerator({
 
   const getTraitDescription = () => {
     const traitDescriptions: string[] = [];
-    
+
     if (traits.extraversion > 70) traitDescriptions.push('outgoing');
     else if (traits.extraversion < 30) traitDescriptions.push('introspective');
-    
+
     if (traits.agreeableness > 70) traitDescriptions.push('warm-hearted');
     if (traits.openness > 70) traitDescriptions.push('creative');
     if (traits.conscientiousness > 70) traitDescriptions.push('dedicated');
-    
+
     if (traits.neuroticism < 30) traitDescriptions.push('calm');
     else if (traits.neuroticism > 70) traitDescriptions.push('sensitive');
-    
+
     return traitDescriptions.slice(0, 3).join(', ') || 'balanced';
   };
 
@@ -139,7 +141,7 @@ export function BackstoryGenerator({
 
 Include things like:
 • Their background and history
-• Personality quirks and traits  
+• Personality quirks and traits
 • What makes them unique
 • How they communicate
 • Their desires and motivations
@@ -190,7 +192,7 @@ The more detail you add, the more personalized your companion will be!`}
     return (
       <div className="space-y-4">
         <Label>Backstory</Label>
-        
+
         <div className="grid gap-4 md:grid-cols-2">
           {/* AI Generate Option */}
           <Card className="border-dashed hover:border-primary/50 transition-colors cursor-pointer"
@@ -303,7 +305,7 @@ The more detail you add, the more personalized your companion will be!`}
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        This backstory shapes {name}&apos;s personality and responses. 
+        This backstory shapes {name}&apos;s personality and responses.
         Edit anytime to refine their character.
       </p>
     </div>

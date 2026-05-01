@@ -96,6 +96,10 @@
   background: radial-gradient(circle at 50% 0%, rgba(199,91,26,0.1) 0%, transparent 70%);
   opacity: 0;
   transition: opacity 0.2s;
+  /* Prevents the absolutely-positioned hover-glow overlay from intercepting
+     clicks meant for the parent .typeCard <button>. Without this, opacity:0
+     does not stop click capture and every card click silently dies. */
+  pointer-events: none;
 }
 
 .typeCard:hover {
