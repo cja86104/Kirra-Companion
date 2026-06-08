@@ -31,11 +31,11 @@ export function getClient() {
 export async function getCurrentUser() {
   const supabase = getClient();
   const { data: { user }, error } = await supabase.auth.getUser();
-  
+
   if (error || !user) {
     return null;
   }
-  
+
   return user;
 }
 
@@ -45,11 +45,11 @@ export async function getCurrentUser() {
 export async function getCurrentSession() {
   const supabase = getClient();
   const { data: { session }, error } = await supabase.auth.getSession();
-  
+
   if (error || !session) {
     return null;
   }
-  
+
   return session;
 }
 
@@ -69,11 +69,11 @@ export function onAuthStateChange(
 export async function signOut() {
   const supabase = getClient();
   const { error } = await supabase.auth.signOut();
-  
+
   if (error) {
     throw error;
   }
-  
+
   // Clear singleton
   browserClient = null;
 }
@@ -87,11 +87,11 @@ export async function signInWithEmail(email: string, password: string) {
     email,
     password,
   });
-  
+
   if (error) {
     throw error;
   }
-  
+
   return data;
 }
 
@@ -99,9 +99,9 @@ export async function signInWithEmail(email: string, password: string) {
  * Sign up with email/password
  */
 export async function signUpWithEmail(
-  email: string, 
+  email: string,
   password: string,
-  metadata?: { 
+  metadata?: {
     full_name?: string;
     date_of_birth?: string;
     age_tier?: string;
@@ -115,11 +115,11 @@ export async function signUpWithEmail(
       data: metadata,
     },
   });
-  
+
   if (error) {
     throw error;
   }
-  
+
   return data;
 }
 
@@ -136,27 +136,38 @@ export async function signInWithOAuth(
       redirectTo: `${window.location.origin}/auth/callback`,
     },
   });
-  
+
   if (error) {
     throw error;
   }
-  
+
   return data;
 }
 
 /**
- * Reset password
+ * Send a password-reset email.
+ *
+ * The email link points the user at /auth/callback?next=/reset-password.
+ * The callback route (app/auth/callback/route.ts) is the single owner of
+ * exchangeCodeForSession; on success it forwards the user to
+ * /reset-password with a valid recovery session, where the new-password
+ * form can call updatePassword().
+ *
+ * We intentionally do NOT redirect to /reset-password directly here:
+ *   - centralising code exchange in one route handler avoids duplicating
+ *     server-side cookie wiring
+ *   - keeps the reset page a pure client form with no PKCE / token logic
  */
 export async function resetPassword(email: string) {
   const supabase = getClient();
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/auth/reset-password`,
+    redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
   });
-  
+
   if (error) {
     throw error;
   }
-  
+
   return data;
 }
 
@@ -168,11 +179,11 @@ export async function updatePassword(newPassword: string) {
   const { data, error } = await supabase.auth.updateUser({
     password: newPassword,
   });
-  
+
   if (error) {
     throw error;
   }
-  
+
   return data;
 }
 
@@ -184,10 +195,10 @@ export async function updateUserMetadata(metadata: Record<string, unknown>) {
   const { data, error } = await supabase.auth.updateUser({
     data: metadata,
   });
-  
+
   if (error) {
     throw error;
   }
-  
+
   return data;
 }
