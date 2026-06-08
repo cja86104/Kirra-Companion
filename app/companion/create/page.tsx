@@ -32,8 +32,6 @@ import { VoiceSelector } from '@/components/companion/VoiceSelector';
 import type {
   Profile,
   Companion,
-  Conversation,
-  ConversationInsert,
   VoiceConfig,
   Json,
   CompanionInsert,
