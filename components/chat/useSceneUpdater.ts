@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { 
-  GeneratedScene, 
-  SceneState, 
+import type {
+  GeneratedScene,
+  SceneState,
   UseSceneUpdaterOptions,
-  SceneGenerationResponse 
+  SceneGenerationResponse
 } from '@/types/scene';
 
 // ============================================================================
@@ -22,22 +22,31 @@ const MIN_MESSAGES_FOR_GENERATION = 4; // Need at least 4 messages to analyze
  * scene-generation check firing.
  *
  * Why: scene generation is an expensive multi-step request (DeepSeek analysis
- * + external image generation, ~10–14s end-to-end). When it fires the same
- * tick the user gets a chat response, it competes with TTS for the dev-mode
- * Next.js single-worker process and causes voice to start late. Voice is the
- * thing the user is waiting on; the scene update can comfortably wait a few
- * seconds without anyone noticing.
+ * + Segmind image generation + Supabase upload, ~10-14s end-to-end). The
+ * companion's reply that just arrived triggers TTS playback at the same
+ * moment - typical OpenAI TTS time-to-first-audio is ~4-8s and the audio
+ * itself runs ~10-20s. Voice is the thing the user is actively waiting on;
+ * the scene update can comfortably wait until well into the audio playback
+ * without anyone noticing the swap.
+ *
+ * The 15s window is sized to land the scene-gen request after TTS time-to-
+ * first-audio has completed and while the user is mid-listen. In dev mode
+ * Next.js shares a single worker between routes, so deferring scene gen
+ * also prevents it from stealing CPU from the in-flight TTS handler. In
+ * production they're separate serverless functions, but they still compete
+ * for the browser's network bandwidth (Segmind JPEG ~150-300KB vs TTS audio
+ * ~50-200KB) so the deferral remains useful.
  *
  * The debounce only applies to the message-driven path. The 60-second
  * periodic check is unaffected, the cooldown system is unaffected, and the
  * manual "Generate New Scene" button bypasses this entirely (it calls
  * triggerGeneration with force=true, which doesn't go through this path).
  *
- * If a second message arrives during the debounce window, the timer resets —
+ * If a second message arrives during the debounce window, the timer resets -
  * rapid back-and-forth turns into one scene check at the end of the burst,
  * not one per message.
  */
-const MESSAGE_DEBOUNCE_MS = 6000;
+const MESSAGE_DEBOUNCE_MS = 15000;
 
 // ============================================================================
 // FALLBACK SCENE URL GENERATOR
@@ -52,21 +61,19 @@ function getTimeSlot(): string {
 function getFallbackSceneUrl(relationshipType: string): string {
   const validTypes = ['romantic', 'friend', 'mentor', 'family', 'custom'];
   const type = validTypes.includes(relationshipType) ? relationshipType : 'custom';
-  
-  // Check if we have 12-slot images (romantic) or 4-slot images (others)
+
   if (type === 'romantic') {
     const timeSlot = getTimeSlot();
     return `/scenes/${type}-${timeSlot}.jpg`;
   }
-  
-  // Fallback to 4-slot system for other types
+
   const hour = new Date().getHours();
   let timeOfDay: string;
   if (hour >= 5 && hour < 11) timeOfDay = 'morning';
   else if (hour >= 11 && hour < 17) timeOfDay = 'day';
   else if (hour >= 17 && hour < 21) timeOfDay = 'evening';
   else timeOfDay = 'night';
-  
+
   return `/scenes/${type}-${timeOfDay}.jpg`;
 }
 
@@ -104,7 +111,17 @@ export function useSceneUpdater(
 
   // Refs
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const messageCountRef = useRef(messages.length);
+  // Tracks how many messages we last observed for the message-driven scene
+  // check. Initialized to null so the first observation after mount (or
+  // after switching conversations) establishes a baseline without firing -
+  // async history loads from the DB look like "the count jumped from 0 to
+  // N", which is not a real new-message event and must not trigger a scene
+  // regeneration.
+  const messageCountRef = useRef<number | null>(null);
+  // Tracks which conversation the current baseline is for. When the active
+  // conversationId changes we reset messageCountRef to null so the next
+  // observation re-baselines against the new conversation's loaded history.
+  const baselineConversationIdRef = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Holds the pending debounce timer for the message-driven scene check.
   // A new message arriving while this is set should reset the timer.
@@ -113,8 +130,8 @@ export function useSceneUpdater(
   // Derived state
   const fallbackSceneUrl = getFallbackSceneUrl(relationshipType);
   const cooldownMs = cooldownMinutes * 60 * 1000;
-  
-  const nextGenerationAllowedAt = lastGeneratedAt 
+
+  const nextGenerationAllowedAt = lastGeneratedAt
     ? new Date(lastGeneratedAt.getTime() + cooldownMs)
     : null;
 
@@ -124,10 +141,9 @@ export function useSceneUpdater(
 
   const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${companionId}`;
 
-  // Load last generation time from storage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       try {
@@ -144,10 +160,9 @@ export function useSceneUpdater(
     }
   }, [storageKey]);
 
-  // Save to storage when scene changes
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     localStorage.setItem(storageKey, JSON.stringify({
       lastGeneratedAt: lastGeneratedAt?.toISOString(),
       currentScene,
@@ -160,7 +175,7 @@ export function useSceneUpdater(
 
   const canGenerate = useCallback((): boolean => {
     if (!lastGeneratedAt) return true;
-    
+
     const elapsed = Date.now() - lastGeneratedAt.getTime();
     return elapsed >= cooldownMs;
   }, [lastGeneratedAt, cooldownMs]);
@@ -170,7 +185,6 @@ export function useSceneUpdater(
   // ============================================================================
 
   const triggerGeneration = useCallback(async (force = false) => {
-    // Checks
     if (!enabled) return;
     if (!force && !canGenerate()) return;
     if (isGenerating) return;
@@ -187,8 +201,8 @@ export function useSceneUpdater(
         body: JSON.stringify({
           companionId,
           conversationId,
-          relationshipType, // Pass relationship type for appropriate scene generation
-          messages: messages.slice(-20), // Last 20 messages
+          relationshipType,
+          messages: messages.slice(-20),
           forceRegenerate: force,
         }),
       });
@@ -216,10 +230,6 @@ export function useSceneUpdater(
 
   // ============================================================================
   // PERIODIC CHECK
-  //
-  // Runs once per `checkIntervalSeconds` (default 60s) regardless of message
-  // activity. Catches the case where the user has been chatting steadily and
-  // the cooldown finally elapses partway between messages.
   // ============================================================================
 
   useEffect(() => {
@@ -243,20 +253,34 @@ export function useSceneUpdater(
   // ============================================================================
   // MESSAGE-DRIVEN CHECK (debounced)
   //
-  // Fires when `messages.length` changes — i.e. a new message just arrived.
-  // Waits MESSAGE_DEBOUNCE_MS before checking-and-generating so this doesn't
-  // race voice playback on the server in dev mode. Resets if another message
-  // arrives during the window so a burst of messages produces one scene
-  // check at the end, not one per message.
+  // Fires when `messages.length` changes. Waits MESSAGE_DEBOUNCE_MS before
+  // checking-and-generating so this doesn't race voice playback. Resets if
+  // another message arrives during the window so a burst of messages produces
+  // one scene check at the end, not one per message.
+  //
+  // Also guards against the "chat-switch / async history load" false-positive
+  // where messages.length jumps from 0 to N because the DB query just resolved.
+  // That is not a real new-message event and must not trigger a scene regen.
+  // The baseline is tracked per conversationId and reset whenever conversationId
+  // changes, and bulk increases (delta > 2 in one render) are also filtered.
   // ============================================================================
 
   useEffect(() => {
     if (!enabled) return;
 
-    const hasNewMessages = messages.length > messageCountRef.current;
+    if (baselineConversationIdRef.current !== conversationId) {
+      baselineConversationIdRef.current = conversationId;
+      messageCountRef.current = null;
+    }
+
+    const previousCount = messageCountRef.current;
     messageCountRef.current = messages.length;
 
-    if (!hasNewMessages) return;
+    if (previousCount === null) return;
+
+    const delta = messages.length - previousCount;
+    if (delta <= 0 || delta > 2) return;
+
     if (messages.length < MIN_MESSAGES_FOR_GENERATION) return;
 
     if (messageDebounceTimerRef.current) {
@@ -276,7 +300,7 @@ export function useSceneUpdater(
         messageDebounceTimerRef.current = null;
       }
     };
-  }, [enabled, canGenerate, messages.length, triggerGeneration]);
+  }, [enabled, canGenerate, conversationId, messages.length, triggerGeneration]);
 
   // ============================================================================
   // AUDIO CONTROL
@@ -291,12 +315,11 @@ export function useSceneUpdater(
       return;
     }
 
-    // Create audio element
     const audioUrl = `/sounds/${currentScene.audio_track}`;
     const audio = new Audio(audioUrl);
     audio.loop = true;
     audio.volume = audioVolume;
-    
+
     audioRef.current = audio;
     audio.play().catch(err => {
       console.warn('[Scene] Audio autoplay blocked:', err);
@@ -332,13 +355,10 @@ export function useSceneUpdater(
   // ============================================================================
 
   return {
-    // Scene state
     currentScene,
     fallbackSceneUrl,
     isGenerating,
     isAnalyzing,
-    
-    // Audio state
     audioEnabled,
     audioTrack: currentScene?.audio_track ? {
       id: currentScene.audio_track,
@@ -349,8 +369,6 @@ export function useSceneUpdater(
       volume: audioVolume,
     } : null,
     audioVolume,
-    
-    // Animation state
     animationEnabled,
     animationOverlay: currentScene?.animation_type ? {
       id: currentScene.animation_type,
@@ -359,15 +377,9 @@ export function useSceneUpdater(
       themes: [],
       intensity: 'subtle',
     } : null,
-    
-    // Timing
     lastGeneratedAt,
     nextGenerationAllowedAt,
-    
-    // Error
     error,
-    
-    // Actions
     triggerGeneration: () => triggerGeneration(true),
     toggleAudio,
     toggleAnimation,

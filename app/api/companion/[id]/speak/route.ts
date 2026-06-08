@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import {
   generateSpeech,
+  generateSpeechStream,
   prepareSentenceQueue,
   hasVoiceAccess,
   getVoiceLimitForTier,
@@ -184,7 +185,54 @@ export async function POST(
       textToSpeak = text.slice(0, 4096);
     }
 
-    // Generate speech
+    // Generate speech.
+    //
+    // Full-text mode streams the OpenAI response body straight through to
+    // the client so playback can start as soon as the first chunks arrive
+    // (drops perceived time-to-first-audio from ~4-8s to ~1-2s without any
+    // prosody compromise - same single OpenAI call, just not buffered).
+    //
+    // Sentence modes stay buffered: the responses are short (~30-200 chars)
+    // so streaming wouldn't help, and the client relies on the sentence
+    // metadata response headers (which are tied to the buffered branch).
+    if (mode === 'full') {
+      const streamResult = await generateSpeechStream({
+        text: textToSpeak,
+        voiceId,
+        model: 'tts-1',
+        speed,
+        format: 'mp3',
+      });
+
+      // Update companion voice minutes (non-blocking). We can't measure
+      // actual duration during streaming so we use the same chars-per-sec
+      // heuristic as the buffered path.
+      const streamVoiceMinutes = (companion.total_voice_minutes || 0) + (streamResult.estimatedDuration / 60);
+      (async () => {
+        try {
+          await supabase
+            .from('companions')
+            .update({ total_voice_minutes: streamVoiceMinutes })
+            .eq('id', companionId);
+        } catch (err) {
+          console.error('Voice minutes update error:', err);
+        }
+      })();
+
+      return new Response(streamResult.stream, {
+        headers: {
+          'Content-Type': streamResult.contentType,
+          'X-Audio-Duration': String(Math.round(streamResult.estimatedDuration * 1000)),
+          'X-Characters-Used': String(streamResult.characterCount),
+          'X-Characters-Limit': String(characterLimit),
+          'X-TTS-Provider': 'openai',
+          'X-TTS-Mode': 'stream',
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    }
+
+    // Sentence modes - buffered path with sentence metadata headers.
     const speechResult = await generateSpeech({
       text: textToSpeak,
       voiceId,
@@ -215,15 +263,14 @@ export async function POST(
       'X-Characters-Used': String(speechResult.characterCount),
       'X-Characters-Limit': String(characterLimit),
       'X-TTS-Provider': 'openai',
+      'X-TTS-Mode': 'buffered',
       'Cache-Control': 'private, max-age=3600',
     };
 
     // Add sentence metadata for queued playback
-    if (mode === 'first' || mode === 'sentence') {
-      headers['X-Sentence-Index'] = String(currentIndex);
-      headers['X-Sentence-Total'] = String(totalSentences);
-      headers['X-Sentence-Last'] = isLastSentence ? '1' : '0';
-    }
+    headers['X-Sentence-Index'] = String(currentIndex);
+    headers['X-Sentence-Total'] = String(totalSentences);
+    headers['X-Sentence-Last'] = isLastSentence ? '1' : '0';
 
     return new NextResponse(speechResult.audioBuffer, { headers });
 
