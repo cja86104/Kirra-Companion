@@ -29,7 +29,6 @@ import { Slider } from '@/components/ui/slider';
 import { getClient } from '@/lib/supabase/client';
 import { BackstoryGenerator } from '@/components/companion/BackstoryGenerator';
 import { VoiceSelector } from '@/components/companion/VoiceSelector';
-import { SeedFlow, type SeedFlowResult } from '@/components/companion/SeedFlow';
 import type {
   Profile,
   Companion,
@@ -43,7 +42,20 @@ import type {
 
 type RelationshipType = 'friend' | 'mentor' | 'romantic' | 'family' | 'custom';
 
-type CreationPath = 'picker' | 'wizard' | 'seed';
+/**
+ * Companion-creation top-level UI state.
+ *
+ * 'picker' renders the three-tile entry screen ("Build with traits",
+ * "Write your own backstory", "Describe them in one line").
+ * 'wizard' renders the shared multi-step wizard used by ALL three paths.
+ *
+ * The seed-vs-wizard branch is no longer represented here. The third
+ * picker tile now sets `wizardInitialBackstoryMode = 'seed'` and routes
+ * into the same wizard as the other two tiles — the seed prompt is
+ * collected inside the Backstory step (step 4) via BackstoryGenerator's
+ * seed mode, which calls /api/companion/generate-from-seed.
+ */
+type CreationPath = 'picker' | 'wizard';
 
 type ValidationResult =
   | {
@@ -107,8 +119,12 @@ export default function CreateCompanionPage() {
   const [isMinor, setIsMinor] = useState<boolean | null>(null);
 
   const [selectedPath, setSelectedPath] = useState<CreationPath>('picker');
+  // Selects the initial UI BackstoryGenerator renders on step 4:
+  //   'generate' — two-card AI/Write picker (Path 1 — sliders)
+  //   'custom'   — drop straight into the write-your-own textarea (Path 2)
+  //   'seed'     — render the seed-prompt textarea + Generate (Path 3)
   const [wizardInitialBackstoryMode, setWizardInitialBackstoryMode] =
-    useState<'generate' | 'custom'>('generate');
+    useState<'generate' | 'custom' | 'seed'>('generate');
 
   const [companionData, setCompanionData] = useState<CompanionData>({
     name: '',
@@ -443,219 +459,6 @@ export default function CreateCompanionPage() {
     }
   };
 
-  // ===========================================================================
-  // Path 3 — seed-driven creation
-  // ===========================================================================
-  const createCompanionFromSeed = async (result: SeedFlowResult) => {
-    setIsCreating(true);
-
-    try {
-      const supabase = getClient();
-
-      const validation = await validateCompanionCreation(supabase);
-      if (!validation.ok) return;
-      const { user, profile } = validation;
-
-      // Defense-in-depth minor check using the seed-flow's chosen relationship
-      // type. SeedFlow already gates adult-only types in its UI, so this only
-      // fires on a tampered or stale state. No wizard-style recovery — just
-      // toast and bail; the user can hit Back inside SeedFlow to change.
-      const userIsMinor = profile?.age_tier === 'minor' ||
-                          profile?.age_tier === 'blocked' ||
-                          profile?.is_minor_flagged === true;
-
-      if (userIsMinor && (result.relationshipType === 'romantic' || result.relationshipType === 'custom')) {
-        toast.error('This relationship type is not available for your account');
-        return;
-      }
-
-      const now = new Date().toISOString();
-      const initialNeeds = {
-        social: 70,
-        energy: 80,
-        fun: 60,
-        comfort: 75,
-        affection: 50,
-        intellectual: 60,
-        creativity: 50,
-        lastUpdated: now,
-        lastInteraction: now,
-      };
-
-      const insertData = {
-        user_id: user.id,
-        name: result.name,
-        relationship_type: result.relationshipType,
-        backstory: result.backstory,
-        personality_base: result.personality_base,
-        interests: result.interests,
-        affection_level: result.affection_level,
-        trust_level: result.trust_level,
-        current_mood: {
-          primary: 'happy',
-          secondary: 'curious',
-          intensity: 0.7,
-        },
-        needs: initialNeeds,
-        avatar_url: null,
-        avatar_3d_config: null,
-        voice_config: null,
-      };
-
-      const { data: newCompanionData, error: companionError } = await supabase
-        .from('companions')
-        .insert({
-          ...insertData,
-          personality_base: insertData.personality_base as unknown as Json,
-          current_mood: insertData.current_mood as unknown as Json,
-          needs: insertData.needs as unknown as Json,
-          voice_config: insertData.voice_config as unknown as Json,
-        } satisfies CompanionInsert)
-        .select()
-        .single();
-
-      const companion = newCompanionData as Companion | null;
-
-      if (companionError || !companion) {
-        if (companionError) {
-          console.error('Seed-path companion insert error:', JSON.stringify(companionError, null, 2));
-          throw new Error(companionError.message || 'Failed to create companion');
-        }
-        throw new Error('Failed to create companion');
-      }
-
-      // Create companion DNA
-      const { error: dnaError } = await supabase
-        .from('companion_dna')
-        .upsert({
-          companion_id: companion.id,
-          learning_style_matrix: {
-            traits: result.personality_base,
-            learning_rate: 0.5,
-          } as unknown as Json,
-          humor_genome: {
-            style: 'playful',
-            level: 60,
-          } as unknown as Json,
-          emotional_resonance_map: {
-            baseline_mood: 'content',
-            mood_stability: 70,
-            empathy_level: result.personality_base.agreeableness,
-            expression_style: result.personality_base.extraversion > 50 ? 'expressive' : 'subtle',
-          } as unknown as Json,
-          interest_evolution_tree: {
-            interests: result.interests,
-            growth_potential: result.interests.map(i => ({ name: i, level: 50 })),
-          } as unknown as Json,
-          communication_dialect: {
-            formality: 30,
-            emoji_frequency: 30,
-            verbosity: 50,
-            humor_style: 'playful',
-            favorite_expressions: [],
-            speech_patterns: [],
-          } as unknown as Json,
-          memory_weighting_algorithm: {
-            recency_weight: 0.3,
-            importance_weight: 0.5,
-            emotional_weight: 0.2,
-          } as unknown as Json,
-        } satisfies CompanionDNAInsert, {
-          onConflict: 'companion_id',
-        });
-
-      if (dnaError) {
-        console.error('Seed-path DNA upsert error:', JSON.stringify(dnaError, null, 2));
-        throw new Error(dnaError.message || 'Failed to create companion DNA');
-      }
-
-      // Create the conversation row that will hold the opening message.
-      // Soft-fail: if this fails, skip the opening message and let the chat
-      // page's get-or-create create a fresh conversation when the user lands.
-      let conversation: Conversation | null = null;
-      try {
-        const { data: newConversation, error: conversationError } = await supabase
-          .from('conversations')
-          .insert({
-            companion_id: companion.id,
-            user_id: user.id,
-            title: `Chat with ${result.name}`,
-          } satisfies ConversationInsert)
-          .select()
-          .single();
-
-        if (conversationError || !newConversation) {
-          console.error(
-            'Seed-path conversation insert failed:',
-            conversationError ? JSON.stringify(conversationError, null, 2) : 'no row returned'
-          );
-        } else {
-          conversation = newConversation as Conversation;
-        }
-      } catch (conversationThrow) {
-        console.error('Seed-path conversation insert threw:', conversationThrow);
-      }
-
-      // Insert the companion's opening line as the first message in the new
-      // conversation. Only fires when the conversation insert succeeded.
-      // Soft-fail: chat is still functional without it; the user can prompt.
-      if (conversation) {
-        try {
-          const { error: messageError } = await supabase
-            .from('messages')
-            .insert({
-              conversation_id: conversation.id,
-              companion_id: companion.id,
-              user_id: user.id,
-              role: 'companion',
-              content: result.opening_line,
-            });
-
-          if (messageError) {
-            console.error(
-              'Seed-path opening message insert failed:',
-              JSON.stringify(messageError, null, 2)
-            );
-          }
-        } catch (messageThrow) {
-          console.error('Seed-path opening message insert threw:', messageThrow);
-        }
-      }
-
-      // Normalize the backstory register synchronously. Seed-generated
-      // backstories are written in third person on purpose (per the seed
-      // prompt) and absolutely need normalization before chat starts.
-      // Soft-fail same as the wizard path.
-      try {
-        const normalizeResponse = await fetch(
-          `/api/companion/${companion.id}/normalize-backstory`,
-          { method: 'POST' }
-        );
-        if (!normalizeResponse.ok) {
-          const errorBody: unknown = await normalizeResponse
-            .json()
-            .catch(() => ({}));
-          console.error(
-            'Seed-path backstory normalization failed:',
-            normalizeResponse.status,
-            errorBody
-          );
-        }
-      } catch (normalizeError) {
-        console.error('Seed-path backstory normalization threw:', normalizeError);
-      }
-
-      toast.success(`${result.name} has been created!`);
-      router.push(`/chat/${companion.id}`);
-
-    } catch (error) {
-      console.error('Failed to create companion from seed:', error);
-      toast.error('Failed to create companion. Please try again.');
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
   const renderStep = () => {
     switch (currentStep) {
       case 0:
@@ -944,7 +747,16 @@ export default function CreateCompanionPage() {
 
             <button
               type="button"
-              onClick={() => setSelectedPath('seed')}
+              onClick={() => {
+                // Path 3: seed-mode wizard. Enters the same multi-step
+                // wizard as Paths 1 and 2 — basics → relationship →
+                // personality → style → backstory (seed) → voice → review.
+                // The seed prompt is collected by BackstoryGenerator at
+                // step 4 in its 'seed' mode.
+                setWizardInitialBackstoryMode('seed');
+                setSelectedPath('wizard');
+                setCurrentStep(0);
+              }}
               className={cn(
                 'relative flex flex-col items-start gap-3 rounded-lg border border-primary/40 p-6 text-left transition-all',
                 'hover:border-primary/60 hover:bg-primary/5',
@@ -959,7 +771,7 @@ export default function CreateCompanionPage() {
               <div className="space-y-1">
                 <h3 className="font-semibold">Describe them in one line</h3>
                 <p className="text-sm text-muted-foreground">
-                  Tell us who they are in a sentence. We&apos;ll generate the full character.
+                  Tell us who they are in a sentence. We&apos;ll generate the backstory for you on the Backstory step.
                 </p>
               </div>
             </button>
@@ -1052,7 +864,7 @@ export default function CreateCompanionPage() {
               onClick={prevStep}
               disabled={currentStep === 0}
             >
-              <ChevronLeft className="mr-2 h-4 w-4" />
+                      <ChevronLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
 
@@ -1085,15 +897,6 @@ export default function CreateCompanionPage() {
             )}
           </div>
         </>
-      )}
-
-      {selectedPath === 'seed' && (
-        <SeedFlow
-          isMinor={isMinor === true}
-          isCreating={isCreating}
-          onCancel={() => setSelectedPath('picker')}
-          onCreate={createCompanionFromSeed}
-        />
       )}
     </div>
   );
