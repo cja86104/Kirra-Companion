@@ -14,7 +14,10 @@
  * - Subtle tonal variations create depth
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts are loaded via next/font/google in app/layout.tsx (self-hosted,
+   non-blocking). Do NOT @import the same families from fonts.googleapis.com
+   here — it is render-blocking, double-loads every weight, and is the
+   primary cause of multi-second first-paint delays on mobile. */
 
 @tailwind base;
 @tailwind components;
