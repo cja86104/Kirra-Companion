@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Bell, MessageCircle, Heart, Calendar, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -71,11 +71,7 @@ export default function NotificationsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const supabase = getClient();
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -98,7 +94,11 @@ export default function NotificationsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   const saveSettings = async (newSettings: NotificationSettings) => {
     setIsSaving(true);

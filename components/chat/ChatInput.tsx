@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils/cn';
 import { VoiceMessageRecorder, useVoiceRecordingSupported } from '@/components/chat/VoiceMessageRecorder';
 import { toast } from 'sonner';
+import Image from 'next/image';
 
 // Common emojis organized by category
 const EMOJI_CATEGORIES = {
@@ -207,9 +208,16 @@ export function ChatInput({
                 className="relative group rounded-lg border border-border bg-muted/50 overflow-hidden"
               >
                 {attachment.type === 'image' && attachment.preview ? (
-                  <img
+                  // next/image with unoptimized: blob: URLs (from
+                  // URL.createObjectURL on a freshly attached File) can't be
+                  // fetched by the server-side optimizer. width/height are
+                  // intrinsic — the className still drives display size.
+                  <Image
                     src={attachment.preview}
                     alt={attachment.file.name}
+                    width={80}
+                    height={80}
+                    unoptimized
                     className="h-20 w-20 object-cover"
                   />
                 ) : (

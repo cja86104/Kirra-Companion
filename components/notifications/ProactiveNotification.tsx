@@ -7,10 +7,11 @@
  * Shows as a toast/banner when a companion reaches out.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, MessageCircle, Heart, Sparkles, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import Image from 'next/image';
 import type { ProactiveMessage, ProactiveTriggerType } from '@/types/proactive';
 
 interface ProactiveNotificationProps {
@@ -118,20 +119,23 @@ export function ProactiveNotification({
     return () => clearTimeout(timer);
   }, []);
   
+  // handleDismiss is defined BEFORE the auto-dismiss effect now so the
+  // useCallback reference is stable when the effect mounts. onDismiss is
+  // the only dep — setIsExiting/setTimeout are inherently stable.
+  const handleDismiss = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onDismiss();
+    }, 300);
+  }, [onDismiss]);
+
   // Auto-dismiss after 30 seconds for non-urgent
   useEffect(() => {
     if (message.priority !== 'urgent' && message.priority !== 'high') {
       const timer = setTimeout(() => handleDismiss(), 30000);
       return () => clearTimeout(timer);
     }
-  }, [message.priority]);
-  
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onDismiss();
-    }, 300);
-  };
+  }, [message.priority, handleDismiss]);
   
   const handleRespond = () => {
     setIsExiting(true);
@@ -164,9 +168,11 @@ export function ProactiveNotification({
             {/* Avatar */}
             <div className="relative">
               {companionAvatar ? (
-                <img
+                <Image
                   src={companionAvatar}
                   alt={companionName}
+                  width={40}
+                  height={40}
                   className="w-10 h-10 rounded-full object-cover"
                 />
               ) : (

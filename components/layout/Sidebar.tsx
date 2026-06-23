@@ -86,7 +86,7 @@ export function Sidebar({ user, companions }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'relative flex h-full flex-col border-r border-border/50 bg-sidebar transition-all duration-300 ease-out',
+        'relative hidden h-full flex-col border-r border-border/50 bg-sidebar transition-all duration-300 ease-out lg:flex',
         isCollapsed ? 'w-[72px]' : 'w-[280px]'
       )}
     >

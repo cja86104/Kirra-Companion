@@ -191,7 +191,7 @@ export function Navbar({ user }: NavbarProps) {
   };
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 lg:px-6">
+    <header className="flex h-16 items-center justify-between border-b border-border bg-card pl-16 pr-4 lg:pl-6 lg:pr-6">
       {/* Left Section - Search */}
       <div className="flex items-center gap-4">
         <div className="hidden w-[300px] lg:block">

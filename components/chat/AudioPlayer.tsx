@@ -63,43 +63,6 @@ export function AudioPlayer({
     }
   }, [audioBlob]);
 
-  // Initialize audio element
-  useEffect(() => {
-    if (!audioUrl) return;
-
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-
-    audio.onloadedmetadata = () => {
-      setDuration(audio.duration);
-      if (autoPlay) {
-        play();
-      }
-    };
-
-    audio.onended = () => {
-      setIsPlaying(false);
-      setProgress(0);
-      setCurrentTime(0);
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-      onEnded?.();
-    };
-
-    audio.onerror = () => {
-      toast.error('Failed to load audio');
-      setIsLoading(false);
-    };
-
-    return () => {
-      audio.pause();
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, [audioUrl, autoPlay, onEnded]);
-
   const generateSpeech = useCallback(async () => {
     if (!companionId || !messageText) return null;
 
@@ -157,6 +120,44 @@ export function AudioPlayer({
       toast.error('Failed to play audio');
     }
   }, [audioUrl, companionId, messageText, generateSpeech, onPlay]);
+
+  // Initialize audio element
+  useEffect(() => {
+    if (!audioUrl) return;
+
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+
+    audio.onloadedmetadata = () => {
+      setDuration(audio.duration);
+      if (autoPlay) {
+        play();
+      }
+    };
+
+    audio.onended = () => {
+      setIsPlaying(false);
+      setProgress(0);
+      setCurrentTime(0);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      onEnded?.();
+    };
+
+    audio.onerror = () => {
+      toast.error('Failed to load audio');
+      setIsLoading(false);
+    };
+
+    return () => {
+      audio.pause();
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, [audioUrl, autoPlay, onEnded, play]);
+
 
   const pause = useCallback(() => {
     if (audioRef.current) {

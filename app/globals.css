@@ -958,4 +958,42 @@
   .glow-pink {
     box-shadow: 0 0 40px hsl(var(--primary) / 0.1) !important;
   }
+
+  /* ============================================================
+     MOBILE — dynamic viewport + safe-area utilities
+     ============================================================
+     - .h-dvh / .min-h-dvh: real viewport height excluding the iOS
+       collapsing URL-bar area (no 100vh content-shift on scroll).
+     - .pb-safe / .pt-safe / etc.: pad past the notch and home indicator.
+     - The @media block below sets input/textarea base font-size to 16px
+       on small screens so iOS Safari does not zoom on focus.
+     ============================================================ */
+  .h-dvh { height: 100dvh; }
+  .min-h-dvh { min-height: 100dvh; }
+  .h-svh { height: 100svh; }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .py-safe {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pb-safe-4 { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+  .pt-safe-4 { padding-top: calc(1rem + env(safe-area-inset-top)); }
+}
+
+@media (max-width: 767px) {
+  /* iOS Safari auto-zooms inputs whose font-size resolves to <16px.
+     We use text-sm (14px) widely; lift the floor at the element level
+     for small screens rather than chase every className. */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }

@@ -111,15 +111,26 @@ export function VoiceMessageRecorder({
   // microphone permission and begin recording. The browser's permission prompt
   // fires inside startRecording via getUserMedia.
   const autoStarted = useRef(false);
-  useEffect(() => {
-    if (autoStart && !autoStarted.current) {
-      autoStarted.current = true;
-      startRecording();
+  // useCallback so the autoStart useEffect can list it as a dep without
+  // creating an effect-loop. Body reads only refs and stable setters.
+  const stopRecording = useCallback(() => {
+    isRecordingRef.current = false;
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
-  // runs once on mount only — empty deps intentional
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    setIsRecording(false);
   }, []);
 
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
     // Check for speech recognition support
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -241,24 +252,18 @@ export function VoiceMessageRecorder({
         toast.error('Failed to start recording. Please check your microphone.');
       }
     }
-  };
+  }, [maxDuration, stopRecording]);
 
-  const stopRecording = useCallback(() => {
-    isRecordingRef.current = false;
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
+  useEffect(() => {
+    // The autoStarted ref guards against repeat calls even if deps change,
+    // so listing them satisfies exhaustive-deps without altering behavior.
+    if (autoStart && !autoStarted.current) {
+      autoStarted.current = true;
+      startRecording();
     }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-    setIsRecording(false);
-  }, []);
+  }, [autoStart, startRecording]);
+
+
 
   const sendTranscription = useCallback(() => {
     const finalText = (transcript + ' ' + interimTranscript).trim();

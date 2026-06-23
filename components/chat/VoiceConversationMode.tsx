@@ -374,13 +374,13 @@ export function VoiceConversationMode({
             
             {displayText && voiceState === 'listening' && (
               <p className="text-lg text-muted-foreground max-w-sm">
-                "{displayText}"
+                &quot;{displayText}&quot;
               </p>
             )}
             
             {!displayText && voiceState === 'listening' && (
               <p className="text-muted-foreground">
-                Speak naturally, I'll send when you pause
+                Speak naturally, I&apos;ll send when you pause
               </p>
             )}
           </div>

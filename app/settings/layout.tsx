@@ -12,6 +12,7 @@ import {
 
 import { getCurrentUser, getUserProfile, getUserCompanions } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { MobileSidebar } from '@/components/layout/MobileSidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { cn } from '@/lib/utils/cn';
 
@@ -46,8 +47,9 @@ export default async function SettingsLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <Sidebar user={profile} companions={companions} />
+      <MobileSidebar user={profile} companions={companions} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Navbar user={profile} />
         <main className="flex-1 overflow-y-auto">

@@ -136,6 +136,17 @@ export function ChatWindow({
   // The same companion message can arrive via both the API response AND the Supabase
   // realtime subscription — this ref ensures we only play it once.
   const playedMessageIdsRef = useRef<Set<string>>(new Set());
+  // Latest-value refs so the realtime subscription effect below can read
+  // current autoPlayVoice/hasVoiceEnabled/playQueued without re-subscribing
+  // every time those change. Updated by the effect just below.
+  const autoPlayVoiceRef = useRef(autoPlayVoice);
+  const hasVoiceEnabledRef = useRef(hasVoiceEnabled);
+  const playQueuedRef = useRef(playQueued);
+  useEffect(() => {
+    autoPlayVoiceRef.current = autoPlayVoice;
+    hasVoiceEnabledRef.current = hasVoiceEnabled;
+    playQueuedRef.current = playQueued;
+  }, [autoPlayVoice, hasVoiceEnabled, playQueued]);
 
   // =============================================================================
   // VOICE CHOICE — restore session-scoped decision OR prompt for one
@@ -265,12 +276,12 @@ export function ChatWindow({
         if (
           newMessage.role === 'companion' &&
           newMessage.content &&
-          autoPlayVoice &&
-          hasVoiceEnabled &&
+          autoPlayVoiceRef.current &&
+          hasVoiceEnabledRef.current &&
           !playedMessageIdsRef.current.has(newMessage.id)
         ) {
           playedMessageIdsRef.current.add(newMessage.id);
-          playQueued(newMessage.content);
+          playQueuedRef.current(newMessage.content);
         }
       })
       .subscribe();
@@ -440,7 +451,8 @@ export function ChatWindow({
       {/* =================================================================
           TOP BAR
           ================================================================= */}
-      <div className="absolute top-0 left-0 right-0 z-30 p-4">
+      {/* pt-safe-4 keeps controls below the notch / Dynamic Island. */}
+      <div className="absolute top-0 left-0 right-0 z-30 p-4 pt-safe-4">
         <div className="flex items-center justify-between">
           <Link href="/chat">
             <Button variant="ghost" size="icon" className="rounded-full bg-black/30 text-white hover:bg-black/50 backdrop-blur-sm">
@@ -448,7 +460,7 @@ export function ChatWindow({
             </Button>
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 md:gap-2">
             {/* Scene generation indicator */}
             {sceneState.isGenerating && (
               <motion.div
@@ -566,7 +578,7 @@ export function ChatWindow({
       {/* =================================================================
           RELATIONSHIP STATS
           ================================================================= */}
-      <div className="absolute top-16 right-4 z-20">
+      <div className="absolute top-20 right-3 z-20 md:top-16 md:right-4">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -588,7 +600,7 @@ export function ChatWindow({
       {/* =================================================================
           COMPANION AVATAR - Left side
           ================================================================= */}
-      <div className="absolute left-8 bottom-32 z-20">
+      <div className="absolute left-1/2 bottom-28 -translate-x-1/2 z-20 md:left-8 md:bottom-32 md:translate-x-0">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -600,7 +612,7 @@ export function ChatWindow({
             className="relative"
           >
             <Avatar className={cn(
-              "h-32 w-32 ring-2 shadow-2xl backdrop-blur-sm transition-all duration-300",
+              "h-24 w-24 md:h-32 md:w-32 ring-2 shadow-2xl backdrop-blur-sm transition-all duration-300",
               isVoicePlaying ? "ring-emerald-400 ring-4" : "ring-white/30"
             )}>
               {companion.avatar_url ? (
@@ -638,7 +650,7 @@ export function ChatWindow({
             initial={{ opacity: 0, x: -20, scale: 0.9 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -20, scale: 0.9 }}
-            className="absolute left-44 bottom-48 z-20 max-w-md"
+            className="absolute left-4 right-4 top-28 z-20 max-w-full md:left-44 md:right-auto md:top-auto md:bottom-48 md:max-w-md"
           >
             <div className={cn(
               "relative px-5 py-4 rounded-3xl rounded-bl-lg shadow-xl border-2 bg-gradient-to-br",
@@ -679,7 +691,7 @@ export function ChatWindow({
       {/* =================================================================
           FLOATING CONVERSATION HISTORY - Right side
           ================================================================= */}
-      <div className="absolute right-4 top-28 bottom-28 w-80 z-10 overflow-y-auto scrollbar-hide">
+      <div className="absolute right-4 top-28 bottom-28 w-80 z-10 overflow-y-auto scrollbar-hide hidden md:block">
         <div className="flex flex-col gap-3 p-2">
           {messages.map((message) => (
             <motion.div
@@ -703,7 +715,8 @@ export function ChatWindow({
       {/* =================================================================
           INPUT BAR
           ================================================================= */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 p-4">
+      {/* pb-safe-4 keeps the input above the iOS home indicator. */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-safe-4">
         <div className="max-w-2xl mx-auto">
 
           {/* Voice recording UI — replaces textarea when mic is active */}

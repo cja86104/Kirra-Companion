@@ -383,7 +383,7 @@ export function EvolutionStatus({ companionId, className, compact = false }: Evo
                 <div className="flex flex-wrap gap-1">
                   {status.dna.communication_dialect.uniquePhrases.slice(0, 8).map((phrase, i) => (
                     <Badge key={i} variant="outline" className="text-xs font-normal">
-                      "{phrase}"
+                      &quot;{phrase}&quot;
                     </Badge>
                   ))}
                 </div>

@@ -100,8 +100,9 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Removed maximumScale + userScalable: those block pinch-zoom (a11y
+  // regression). iOS input-focus zoom is handled by 16px font-size in
+  // app/globals.css instead.
   viewportFit: 'cover',
 };
 

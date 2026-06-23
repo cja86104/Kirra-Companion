@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Shield, Eye, Lock, Database, Loader2, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -61,11 +61,7 @@ export default function PrivacyPage() {
   const [isSaving, setIsSaving] = useState(false);
   const supabase = getClient();
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -88,7 +84,11 @@ export default function PrivacyPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   const saveSettings = async (newSettings: PrivacySettings) => {
     setIsSaving(true);

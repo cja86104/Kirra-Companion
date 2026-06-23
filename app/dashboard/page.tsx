@@ -12,7 +12,7 @@
  * - No empty space - every pixel earns its place
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -398,35 +398,10 @@ export default function DashboardPage() {
     }
   }, [companions, selectedCompanion]);
 
-  useEffect(() => {
-    if (selectedCompanion) {
-      loadCompanionData(selectedCompanion.id);
-    }
-  }, [selectedCompanion]);
-
-  const loadDashboardData = async () => {
-    try {
-      const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: companionsData } = await supabase
-        .from('companions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('last_interaction', { ascending: false });
-
-      if (companionsData) setCompanions(companionsData as Companion[]);
-
-    } catch (error) {
-      console.error('Failed to load dashboard:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCompanionData = async (companionId: string) => {
+  // useCallback so the effect below has a stable function reference and
+  // satisfies react-hooks/exhaustive-deps. Recreated when `companions` changes
+  // because we read companions inside (for daysKnown lookup).
+  const loadCompanionData = useCallback(async (companionId: string) => {
     try {
       const supabase = getClient();
 
@@ -558,7 +533,36 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Failed to load companion data:', error);
     }
+  }, [companions]);
+
+  useEffect(() => {
+    if (selectedCompanion) {
+      loadCompanionData(selectedCompanion.id);
+    }
+  }, [selectedCompanion, loadCompanionData]);
+
+  const loadDashboardData = async () => {
+    try {
+      const supabase = getClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: companionsData } = await supabase
+        .from('companions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('last_interaction', { ascending: false });
+
+      if (companionsData) setCompanions(companionsData as Companion[]);
+
+    } catch (error) {
+      console.error('Failed to load dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   const deleteCompanion = async (companion: Companion) => {
     setIsDeleting(true);
@@ -930,7 +934,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold flex items-center gap-2">
                     <Target className="h-5 w-5 text-primary" />
-                    {selectedCompanion.name}'s Needs
+                    {selectedCompanion.name}&apos;s Needs
                   </h3>
                   <Link href="/activities" className="text-sm text-primary hover:underline">
                     Activities →
