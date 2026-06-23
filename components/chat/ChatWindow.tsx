@@ -52,6 +52,7 @@ import { VoiceMessageRecorder, useVoiceRecordingSupported } from './VoiceMessage
 import { VoiceChoiceModal } from './VoiceChoiceModal';
 import { useSceneUpdater } from './useSceneUpdater';
 import { useQueuedVoicePlayback } from './useQueuedVoicePlayback';
+import { unlockAudioPlayback } from '@/lib/audio/unlock';
 import { getClient } from '@/lib/supabase/client';
 import { uploadMultipleAttachments } from '@/lib/supabase/storage';
 import { cn } from '@/lib/utils/cn';
@@ -280,6 +281,16 @@ export function ChatWindow({
   const sendMessage = async (content: string, attachments?: Attachment[]) => {
     if ((!content.trim() && (!attachments || attachments.length === 0)) || !conversation) return;
 
+    // iOS Safari audio unlock — covers the refresh-with-sessionStorage path
+    // where the user had previously chosen voice=on, so the consent modal
+    // never showed on this page load and the voice toggle was never tapped.
+    // The Enter keypress / Send click is a fresh user gesture; unlocking
+    // here (synchronously, before the await fetch below) ensures the TTS
+    // playback later in this function is allowed on iPhone.
+    if (autoPlayVoice && hasVoiceEnabled) {
+      unlockAudioPlayback();
+    }
+
     setIsLoading(true);
     setInputValue('');
     const messageContent = content.trim();
@@ -377,6 +388,12 @@ export function ChatWindow({
     const newValue = !autoPlayVoice;
     if (autoPlayVoice && isVoicePlaying) {
       stopVoice();
+    }
+    // When the user is enabling voice via this toggle, this click is the
+    // user gesture we need to unlock audio for iOS Safari. Must run
+    // synchronously here (no awaits). See lib/audio/unlock.ts.
+    if (newValue) {
+      unlockAudioPlayback();
     }
     setAutoPlayVoice(newValue);
 

@@ -43,8 +43,42 @@
  */
 
 import { useRef, useCallback, useState } from 'react';
+import { getUnlockedAudio } from '@/lib/audio/unlock';
 
 const MIME_AUDIO_MPEG = 'audio/mpeg';
+
+/**
+ * iOS Safari blocks `new Audio().play()` after an `await`-broken gesture
+ * chain. To work around this, the voice-consent button and the speaker
+ * toggle call `unlockAudioPlayback()` (in lib/audio/unlock.ts) inside their
+ * synchronous click handler. That unlocks one specific HTMLAudioElement
+ * which we then reuse here for every TTS playback.
+ *
+ * If the user reached the chat without ever clicking the consent modal
+ * (autoPlayVoice was restored from sessionStorage = 'true' on a fresh tab),
+ * there is no unlocked element yet. In that case we fall back to
+ * `new Audio()` — desktop browsers will play it fine; iOS will reject the
+ * first call, but the toggle button will unlock things on the next tap.
+ *
+ * Either way, MediaSource streaming still requires that the audio element
+ * be unlocked before play(); when we have one, we reuse it for both the
+ * streaming and the blob fallback paths.
+ */
+function getPlaybackAudioElement(): HTMLAudioElement {
+  const unlocked = getUnlockedAudio();
+  if (unlocked) {
+    // Reset previous src so the element is ready for a new stream/blob.
+    try {
+      unlocked.pause();
+      unlocked.removeAttribute('src');
+      unlocked.load();
+    } catch {
+      // best-effort cleanup
+    }
+    return unlocked;
+  }
+  return new Audio();
+}
 
 /**
  * Returns true when the browser can stream MP3 into a MediaSource. We
@@ -136,7 +170,10 @@ export function useQueuedVoicePlayback(companionId: string) {
 
     const mediaSource = new MediaSource();
     const url = URL.createObjectURL(mediaSource);
-    const audio = new Audio(url);
+    // Reuse the iOS-unlocked element when available — see
+    // getPlaybackAudioElement() comment for why this matters.
+    const audio = getPlaybackAudioElement();
+    audio.src = url;
     audio.preload = 'auto';
 
     mediaSourceRef.current = mediaSource;
@@ -279,7 +316,9 @@ export function useQueuedVoicePlayback(companionId: string) {
     if (abortController.signal.aborted) return;
 
     const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
+    // Reuse the iOS-unlocked element when available.
+    const audio = getPlaybackAudioElement();
+    audio.src = url;
     audio.preload = 'auto';
 
     objectUrlRef.current = url;

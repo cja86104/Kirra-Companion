@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { unlockAudioPlayback } from '@/lib/audio/unlock';
 
 interface VoiceChoiceModalProps {
   /** Whether the modal is open. Controlled by the parent. */
@@ -83,7 +84,14 @@ export function VoiceChoiceModal({
             Keep voice off
           </Button>
           <Button
-            onClick={() => onChoice(true)}
+            onClick={() => {
+              // CRITICAL: must run synchronously inside this onClick handler
+              // (no await before) so iOS Safari treats it as a real user
+              // gesture and unlocks the audio element for subsequent
+              // programmatic .play() calls. See lib/audio/unlock.ts.
+              unlockAudioPlayback();
+              onChoice(true);
+            }}
             className="sm:order-2"
           >
             <Volume2 className="mr-2 h-4 w-4" />
