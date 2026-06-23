@@ -16,7 +16,8 @@ import { Navbar } from '@/components/layout/Navbar';
 import { cn } from '@/lib/utils/cn';
 
 const settingsNav = [
-  { href: '/settings', icon: User, label: 'Account' },
+  // Canonical Account URL is /settings/account. /settings 308-redirects here.
+  { href: '/settings/account', icon: User, label: 'Account' },
   { href: '/settings/billing', icon: CreditCard, label: 'Billing' },
   { href: '/settings/notifications', icon: Bell, label: 'Notifications' },
   { href: '/settings/privacy', icon: Shield, label: 'Privacy' },

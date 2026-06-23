@@ -294,6 +294,102 @@ export async function generateSpeech(
 }
 
 /**
+ * Generate speech as a streamed response body.
+ *
+ * Identical to generateSpeech() except returns the OpenAI response body as a
+ * ReadableStream<Uint8Array> instead of buffering it. The caller is
+ * responsible for piping or reading the stream; cancel() on the stream will
+ * release the underlying connection.
+ *
+ * Use this when latency matters more than knowing the full byte count up
+ * front - e.g. real-time playback via the front-end's MediaSource pipeline,
+ * where audio playback can start as soon as the first chunks arrive instead
+ * of waiting for the entire response to download.
+ */
+export async function generateSpeechStream(
+  options: GenerateSpeechOptions
+): Promise<{
+  stream: ReadableStream<Uint8Array>;
+  contentType: string;
+  characterCount: number;
+  estimatedDuration: number;
+}> {
+  const {
+    text,
+    voiceId,
+    model = 'tts-1',
+    speed = 1.0,
+    format = 'mp3',
+  } = options;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is not set');
+  }
+
+  if (!OPENAI_VOICES[voiceId]) {
+    throw new Error(`Invalid voice ID: ${voiceId}`);
+  }
+
+  const clampedSpeed = Math.max(0.25, Math.min(4.0, speed));
+
+  // OpenAI limit is 4096 characters
+  const MAX_CHARS = 4096;
+  const truncatedText = text.slice(0, MAX_CHARS);
+
+  const response = await fetch(OPENAI_TTS_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      input: truncatedText,
+      voice: voiceId,
+      speed: clampedSpeed,
+      response_format: format,
+    }),
+  });
+
+  if (!response.ok) {
+    // Drain the error body so the connection is released cleanly before throwing.
+    const errorText = await response.text().catch(() => '');
+    console.error('OpenAI TTS Stream Error:', response.status, errorText);
+
+    if (response.status === 401) {
+      throw new Error('Invalid OpenAI API key');
+    }
+    if (response.status === 429) {
+      throw new Error('Rate limit exceeded. Please try again later.');
+    }
+    throw new Error(`TTS generation failed: ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error('TTS response had no body');
+  }
+
+  // Estimate duration: ~150 words/min, ~5 chars/word = 750 chars/min = 12.5 chars/sec
+  const estimatedDuration = (truncatedText.length / 12.5) / clampedSpeed;
+
+  const contentTypes: Record<AudioFormat, string> = {
+    mp3: 'audio/mpeg',
+    opus: 'audio/opus',
+    aac: 'audio/aac',
+    flac: 'audio/flac',
+  };
+
+  return {
+    stream: response.body,
+    contentType: contentTypes[format],
+    characterCount: truncatedText.length,
+    estimatedDuration,
+  };
+}
+
+/**
  * Generate TTS for a single sentence (optimized for queue)
  */
 export async function generateSentenceSpeech(

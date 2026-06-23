@@ -116,10 +116,25 @@ Now wait for the user message containing the seed and the relationship type, and
 export async function generateCharacterFromSeed(args: {
   seed: string;
   relationshipType: RelationshipType;
+  /**
+   * Optional fixed name. Supplied by the wizard's seed-mode Backstory step
+   * because the user has already entered the companion's name on the
+   * Basics step and we don't want the AI to invent a different one.
+   *
+   * When absent (e.g. legacy callers using the original seed flow), the
+   * AI invents a name per the system prompt's "Names: invent a first name
+   * that fits" rule.
+   */
+  name?: string;
 }): Promise<string> {
-  const { seed, relationshipType } = args;
+  const { seed, relationshipType, name } = args;
 
-  const userPrompt = `Relationship type: ${relationshipType}\nSeed: ${seed}\n\nWrite the backstory.`;
+  const nameLine =
+    typeof name === 'string' && name.trim().length > 0
+      ? `Name: ${name.trim()} (use this exact name in the backstory; do not invent a different one)\n`
+      : '';
+
+  const userPrompt = `Relationship type: ${relationshipType}\n${nameLine}Seed: ${seed}\n\nWrite the backstory.`;
 
   const response = await generateSimpleCompletion(
     SEED_CHARACTER_SYSTEM_PROMPT,

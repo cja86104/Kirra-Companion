@@ -9,6 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 
+/**
+ * Maximum length of the seed prompt the user can type in seed mode. Mirrors
+ * SeedSchema.seed.max in app/api/companion/generate-from-seed/route.ts —
+ * if you change one, change both.
+ */
+const SEED_PROMPT_MAX_LENGTH = 500;
+
 interface BackstoryGeneratorProps {
   name: string;
   relationshipType: string;
@@ -23,7 +30,36 @@ interface BackstoryGeneratorProps {
   backstory: string;
   onBackstoryChange: (backstory: string) => void;
   disabled?: boolean;
-  initialMode?: 'generate' | 'custom';
+  /**
+   * Selects the initial UI in this component:
+   *   'generate' — show the two-card AI-Generate / Write-Your-Own picker
+   *   'custom'   — jump straight into the write-your-own textarea
+   *   'seed'     — show the seed-prompt textarea and call the higher-quality
+   *                /api/companion/generate-from-seed endpoint (Path 3 in the
+   *                creation flow). The wizard sets this when the user picked
+   *                the "Describe them in one line" tile on the picker.
+   */
+  initialMode?: 'generate' | 'custom' | 'seed';
+}
+
+/**
+ * Narrow the JSON shape we read from /api/companion/generate-from-seed.
+ * The endpoint returns extra fields (name, personality_base, interests,
+ * opening_line) — we ignore them on this code path because the wizard
+ * has already collected those values from the user.
+ */
+interface SeedApiResponse {
+  backstory: string;
+}
+
+function isSeedApiResponse(value: unknown): value is SeedApiResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'backstory' in value &&
+    typeof (value as { backstory: unknown }).backstory === 'string' &&
+    (value as { backstory: string }).backstory.trim().length > 0
+  );
 }
 
 export function BackstoryGenerator({
@@ -41,6 +77,13 @@ export function BackstoryGenerator({
   const [isWritingCustom, setIsWritingCustom] = useState(initialMode === 'custom');
   const [editedBackstory, setEditedBackstory] = useState(backstory);
   const [generationCount, setGenerationCount] = useState(0);
+
+  // Seed-mode state. `seedPrompt` is the user's couple-of-sentences input;
+  // `lastSeedPromptUsed` is the value that was actually sent to the API so
+  // that the Regenerate button can re-run the seed pipeline (instead of the
+  // generic generate-backstory pipeline) without making the user retype.
+  const [seedPrompt, setSeedPrompt] = useState('');
+  const [lastSeedPromptUsed, setLastSeedPromptUsed] = useState<string | null>(null);
 
   const generateBackstory = async () => {
     if (!name || interests.length === 0) {
@@ -79,6 +122,110 @@ export function BackstoryGenerator({
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  /**
+   * Seed-mode generator. Hits the high-quality
+   * /api/companion/generate-from-seed endpoint and uses only the
+   * `backstory` field from the response (the endpoint also returns
+   * AI-generated name / personality / interests / opening_line, but the
+   * wizard has already collected those from the user, so we ignore them).
+   *
+   * `lastSeedPromptUsed` is stored so that the Regenerate button on the
+   * post-generation UI knows to re-fire this seed pipeline instead of the
+   * generic generate-backstory pipeline.
+   */
+  const generateFromSeed = async () => {
+    const trimmed = seedPrompt.trim();
+    if (trimmed.length === 0) {
+      toast.error('Add a few sentences describing this companion first');
+      return;
+    }
+    if (trimmed.length > SEED_PROMPT_MAX_LENGTH) {
+      toast.error(`Seed prompt must be ${SEED_PROMPT_MAX_LENGTH} characters or fewer`);
+      return;
+    }
+    if (!name) {
+      toast.error('Please add a name on the Basics step first');
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch('/api/companion/generate-from-seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seed: trimmed,
+          relationshipType,
+          name,
+        }),
+      });
+
+      if (!response.ok) {
+        let serverMessage: string | null = null;
+        try {
+          const errBody: unknown = await response.json();
+          if (
+            typeof errBody === 'object' &&
+            errBody !== null &&
+            'error' in errBody &&
+            typeof (errBody as { error: unknown }).error === 'string'
+          ) {
+            serverMessage = (errBody as { error: string }).error;
+          }
+        } catch {
+          // Body wasn't JSON. Leave serverMessage null and fall through to
+          // the generic toast below.
+        }
+        throw new Error(serverMessage ?? 'Failed to generate backstory');
+      }
+
+      const parsed: unknown = await response.json();
+      if (!isSeedApiResponse(parsed)) {
+        throw new Error('Backstory generator returned an unexpected response.');
+      }
+
+      onBackstoryChange(parsed.backstory);
+      setEditedBackstory(parsed.backstory);
+      setGenerationCount((prev) => prev + 1);
+      setLastSeedPromptUsed(trimmed);
+      toast.success('Backstory generated!');
+    } catch (error) {
+      console.error('Seed-backstory generation error:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to generate backstory'
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  /**
+   * Regenerate dispatcher. Picks the right pipeline based on how the
+   * current backstory was produced. If the user generated this backstory
+   * from a seed prompt, we re-fire the seed pipeline with the saved
+   * prompt; otherwise we run the standard trait-based regeneration.
+   */
+  const regenerateBackstory = async () => {
+    if (lastSeedPromptUsed !== null) {
+      await generateFromSeed();
+      return;
+    }
+    await generateBackstory();
+  };
+
+  /**
+   * Reset state so the user can enter a new seed prompt from scratch.
+   * Clears the current backstory and the saved prompt; the seed-mode
+   * empty-state UI will render again.
+   */
+  const restartSeed = () => {
+    setSeedPrompt('');
+    setLastSeedPromptUsed(null);
+    onBackstoryChange('');
+    setEditedBackstory('');
   };
 
   const startEditing = () => {
@@ -187,6 +334,94 @@ The more detail you add, the more personalized your companion will be!`}
     );
   }
 
+  // Seed mode: show the seed-prompt textarea instead of the two-card
+  // picker. Once a backstory has been generated this branch is skipped
+  // and the post-backstory display (further below) takes over.
+  if (!backstory && initialMode === 'seed') {
+    const remaining = SEED_PROMPT_MAX_LENGTH - seedPrompt.length;
+    const overLimit = remaining < 0;
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <Label htmlFor="seed-prompt">Describe them in a couple of sentences</Label>
+          <p className="text-xs text-muted-foreground">
+            We&apos;ll generate the full backstory from this. Be specific —
+            opinions, contradictions, a concrete detail. The richer the
+            seed, the richer the character.
+          </p>
+        </div>
+
+        <textarea
+          id="seed-prompt"
+          value={seedPrompt}
+          onChange={(e) => setSeedPrompt(e.target.value)}
+          placeholder={
+            `e.g. ${
+              relationshipType === 'romantic'
+                ? 'a poet who writes letters by hand and lives near the coast'
+                : relationshipType === 'mentor'
+                  ? "a writer who's been published for thirty years, now teaches"
+                  : relationshipType === 'family'
+                    ? 'my older sister who teaches high school history'
+                    : relationshipType === 'custom'
+                      ? "the voice in my head when I'm trying to be honest with myself"
+                      : 'the friend who always tells me the truth, even when it stings'
+            }`
+          }
+          className={cn(
+            'w-full min-h-[120px] p-4 rounded-lg border bg-background resize-none',
+            'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
+            'placeholder:text-muted-foreground text-sm leading-relaxed',
+            overLimit && 'border-destructive focus:ring-destructive/20 focus:border-destructive'
+          )}
+          disabled={disabled || isGenerating}
+          maxLength={SEED_PROMPT_MAX_LENGTH + 50 /* let user paste-then-trim */}
+        />
+
+        <div className="flex items-center justify-between">
+          <span
+            className={cn(
+              'text-xs',
+              overLimit ? 'text-destructive' : 'text-muted-foreground'
+            )}
+          >
+            {seedPrompt.length}/{SEED_PROMPT_MAX_LENGTH} characters
+          </span>
+          <Button
+            type="button"
+            onClick={generateFromSeed}
+            disabled={
+              disabled ||
+              isGenerating ||
+              seedPrompt.trim().length === 0 ||
+              overLimit ||
+              !name
+            }
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating…
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Generate backstory
+              </>
+            )}
+          </Button>
+        </div>
+
+        {!name && (
+          <p className="text-xs text-muted-foreground">
+            Go back and enter a name on the Basics step first.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   // No backstory yet - show both options
   if (!backstory) {
     return (
@@ -268,6 +503,8 @@ The more detail you add, the more personalized your companion will be!`}
   }
 
   // Has backstory - show it with edit options
+  const wasSeedGenerated = lastSeedPromptUsed !== null;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -287,7 +524,7 @@ The more detail you add, the more personalized your companion will be!`}
             type="button"
             variant="ghost"
             size="sm"
-            onClick={generateBackstory}
+            onClick={regenerateBackstory}
             disabled={disabled || isGenerating}
           >
             <RefreshCw className={cn('w-4 h-4 mr-1', isGenerating && 'animate-spin')} />
@@ -295,6 +532,34 @@ The more detail you add, the more personalized your companion will be!`}
           </Button>
         </div>
       </div>
+
+      {/* Seed-mode summary: show the prompt that produced this backstory
+          and let the user start over with a new prompt. Only renders when
+          this backstory was generated from a seed prompt. */}
+      {wasSeedGenerated && (
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                Generated from your prompt
+              </p>
+              <p className="mt-1 text-xs text-foreground/80 italic break-words">
+                &ldquo;{lastSeedPromptUsed}&rdquo;
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={restartSeed}
+              disabled={disabled || isGenerating}
+              className="shrink-0"
+            >
+              Use a different prompt
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="py-4">

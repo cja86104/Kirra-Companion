@@ -35,6 +35,13 @@ const RELATIONSHIP_TYPES = [
 const SeedSchema = z.object({
   seed: z.string().trim().min(1).max(500),
   relationshipType: z.enum(RELATIONSHIP_TYPES),
+  /**
+   * Optional. Used by the wizard's seed-mode Backstory step to lock the
+   * already-entered companion name so the AI doesn't invent a different
+   * one. The legacy standalone seed flow doesn't send this; the generator
+   * falls back to inventing a name.
+   */
+  name: z.string().trim().min(1).max(50).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -65,13 +72,13 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const { seed, relationshipType } = parseResult.data;
+    const { seed, relationshipType, name } = parseResult.data;
 
     // Call 1: seed → backstory. Throws on failure; we translate that into a
     // user-facing 502 so the create page can show a "try again" affordance.
     let backstory: string;
     try {
-      backstory = await generateCharacterFromSeed({ seed, relationshipType });
+      backstory = await generateCharacterFromSeed({ seed, relationshipType, name });
     } catch (error) {
       console.error('Seed character generation failed:', error);
       return NextResponse.json(
