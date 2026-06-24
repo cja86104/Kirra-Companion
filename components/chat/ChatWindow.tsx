@@ -52,7 +52,7 @@ import { VoiceMessageRecorder, useVoiceRecordingSupported } from './VoiceMessage
 import { VoiceChoiceModal } from './VoiceChoiceModal';
 import { useSceneUpdater } from './useSceneUpdater';
 import { useQueuedVoicePlayback } from './useQueuedVoicePlayback';
-import { unlockAudioPlayback } from '@/lib/audio/unlock';
+import { primeAudioElement } from '@/lib/audio/unlock';
 import { getClient } from '@/lib/supabase/client';
 import { uploadMultipleAttachments } from '@/lib/supabase/storage';
 import { cn } from '@/lib/utils/cn';
@@ -122,6 +122,13 @@ export function ChatWindow({
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Persistent <audio> element used for every TTS clip. iOS Safari blocks
+  // audio.play() that isn't initiated inside a user gesture, but it tracks
+  // activation PER ELEMENT - so we render one element here, prime it on
+  // the first user gesture (see effect below), and reuse it for streaming
+  // and blob playback alike. A fresh `new Audio()` per call would be
+  // blocked. See lib/audio/unlock.ts for the full explanation.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const supabase = getClient();
   const isVoiceConversationSupported = useVoiceConversationSupported();
   const isVoiceMicSupported = useVoiceRecordingSupported();
@@ -131,7 +138,10 @@ export function ChatWindow({
   const hasVoiceEnabled = !!voiceConfig?.voiceId;
 
   // Queued voice playback hook - optimized for sentence-level TTS
-  const { playQueued, stop: stopVoice, isPlaying: isVoicePlaying } = useQueuedVoicePlayback(companion.id);
+  const { playQueued, stop: stopVoice, isPlaying: isVoicePlaying } = useQueuedVoicePlayback(
+    companion.id,
+    { audioRef },
+  );
   // Track which message IDs have already triggered voice playback to prevent double-play.
   // The same companion message can arrive via both the API response AND the Supabase
   // realtime subscription — this ref ensures we only play it once.
@@ -189,6 +199,37 @@ export function ChatWindow({
 
     setVoiceChoiceLoaded(true);
   }, [companion.id, hasVoiceEnabled]);
+
+  // ── Mobile: silent first-gesture audio unlock ──────────────────────────
+  // Arms a one-shot document listener that primes the persistent <audio>
+  // element on the FIRST pointer/touch/click/keydown anywhere on the page.
+  // This is the critical fix for the "sessionStorage said voice=on, modal
+  // never showed, audio.play() rejected, user hears nothing" failure mode:
+  // without this, the element is never primed during a gesture and iOS
+  // silently rejects every later TTS play(). Re-arms if a later TTS clip
+  // somehow re-locks the element. Matches the UnderFireAI pattern.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!autoPlayVoice || !hasVoiceEnabled) return;
+
+    const events: (keyof DocumentEventMap)[] = [
+      'pointerdown',
+      'touchend',
+      'click',
+      'keydown',
+    ];
+    const handler: EventListener = () => {
+      events.forEach((e) => document.removeEventListener(e, handler));
+      void primeAudioElement(audioRef.current);
+    };
+    events.forEach((e) =>
+      document.addEventListener(e, handler, { passive: true }),
+    );
+
+    return () => {
+      events.forEach((e) => document.removeEventListener(e, handler));
+    };
+  }, [autoPlayVoice, hasVoiceEnabled]);
 
   // Handler fired by the VoiceChoiceModal buttons. Persists the choice for
   // the session and flips state so TTS gates resolve correctly.
@@ -295,11 +336,13 @@ export function ChatWindow({
     // iOS Safari audio unlock — covers the refresh-with-sessionStorage path
     // where the user had previously chosen voice=on, so the consent modal
     // never showed on this page load and the voice toggle was never tapped.
-    // The Enter keypress / Send click is a fresh user gesture; unlocking
+    // The Enter keypress / Send click is a fresh user gesture; priming
     // here (synchronously, before the await fetch below) ensures the TTS
-    // playback later in this function is allowed on iPhone.
+    // playback later in this function is allowed on iPhone. The first-
+    // gesture listener above usually beats us to this, but Send-on-first-
+    // load is the case it can't catch.
     if (autoPlayVoice && hasVoiceEnabled) {
-      unlockAudioPlayback();
+      void primeAudioElement(audioRef.current);
     }
 
     setIsLoading(true);
@@ -404,7 +447,7 @@ export function ChatWindow({
     // user gesture we need to unlock audio for iOS Safari. Must run
     // synchronously here (no awaits). See lib/audio/unlock.ts.
     if (newValue) {
-      unlockAudioPlayback();
+      void primeAudioElement(audioRef.current);
     }
     setAutoPlayVoice(newValue);
 
@@ -785,8 +828,8 @@ export function ChatWindow({
 
           <p className="text-center text-white/60 text-xs mt-2 drop-shadow">
             {isVoiceRecording
-              ? 'Speak now — click stop when done'
-              : 'Press Enter to send • Shift+Enter for new line'}
+              ? 'Speak now - click stop when done'
+              : 'Press Enter to send - Shift+Enter for new line'}
           </p>
         </div>
       </div>
@@ -807,12 +850,35 @@ export function ChatWindow({
       )}
 
       {/* =================================================================
-          VOICE CHOICE MODAL — blocking one-time-per-session consent prompt
+          VOICE CHOICE MODAL - blocking one-time-per-session consent prompt
           ================================================================= */}
       <VoiceChoiceModal
         open={voiceChoiceLoaded && autoPlayVoice === null && hasVoiceEnabled}
         companionName={companion.name}
         onChoice={handleVoiceChoice}
+        onPrimeAudioGesture={() => {
+          // Synchronous inside the modal's onClick = inside the iOS user-
+          // gesture window. void because we don't await; prime resolves
+          // ~30ms later when the silent MP3 finishes its play()/pause().
+          void primeAudioElement(audioRef.current);
+        }}
+      />
+
+      {/* =================================================================
+          PERSISTENT TTS AUDIO ELEMENT
+          =================================================================
+          Single in-DOM audio element reused for every TTS clip. iOS Safari
+          tracks autoplay activation per-element, so this element gets
+          primed once during a user gesture (first-touch listener above,
+          voice toggle, modal Turn-voice-on, or Send) and stays unlocked
+          for the session. A fresh new Audio() per playback would be
+          blocked every time. playsInline keeps iOS from going full-screen
+          on play; the hidden style hides the default controls bar. */}
+      <audio
+        ref={audioRef}
+        playsInline
+        preload="auto"
+        style={{ display: 'none' }}
       />
     </div>
   );
