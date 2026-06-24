@@ -413,8 +413,24 @@ export function useVoiceConversationSupported(): boolean {
   useEffect(() => {
     const checkSupport = () => {
       try {
+        // Hands-free continuous voice mode relies on
+        // webkitSpeechRecognition.continuous, which is unreliable on
+        // mobile (iOS Safari uses Apple Dictation under the hood and
+        // never opens the real mic; Android Chrome fires audio-capture/
+        // network errors in continuous mode). Hide the phone-call button
+        // on mobile - users tap the mic button which records via
+        // MediaRecorder + /api/chat/transcribe (Groq Whisper).
+        if (
+          typeof window !== 'undefined' &&
+          typeof navigator !== 'undefined' &&
+          (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+            window.innerWidth < 768)
+        ) {
+          setIsSupported(false);
+          return;
+        }
         const hasSpeechRecognition = getSpeechRecognition() !== null;
-        const hasMediaDevices = typeof navigator !== 'undefined' && 
+        const hasMediaDevices = typeof navigator !== 'undefined' &&
           navigator.mediaDevices !== undefined;
         setIsSupported(hasSpeechRecognition && hasMediaDevices);
       } catch {

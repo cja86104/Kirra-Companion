@@ -18,6 +18,25 @@ const DEFAULT_CHECK_INTERVAL_SECONDS = 60; // Check every minute
 const MIN_MESSAGES_FOR_GENERATION = 4; // Need at least 4 messages to analyze
 
 /**
+ * Mobile detection — used to disable AUTOMATIC scene regeneration on
+ * phone/tablet UAs. User-confirmed: on first chat with a new companion the
+ * image-gen pipeline (DeepSeek analysis + Segmind image + Supabase upload,
+ * ~10-14s end-to-end + ~150-300KB download) collides with TTS playback and
+ * either delays or completely cuts off the voice. On mobile we keep the
+ * initial scene image from companion creation and never auto-regenerate.
+ * The manual "Generate New Scene" menu item still works on mobile because
+ * it bypasses the auto-fire effects and calls triggerGeneration(true).
+ */
+function isMobileEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (typeof navigator === 'undefined') return false;
+  return (
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    window.innerWidth < 768
+  );
+}
+
+/**
  * Debounce window between a new message arriving and the message-driven
  * scene-generation check firing.
  *
@@ -234,6 +253,8 @@ export function useSceneUpdater(
 
   useEffect(() => {
     if (!enabled) return;
+    // Mobile: never auto-regenerate scenes. See isMobileEnvironment() docstring.
+    if (isMobileEnvironment()) return;
 
     const periodicCheck = () => {
       if (canGenerate() && messages.length >= MIN_MESSAGES_FOR_GENERATION) {
@@ -267,6 +288,8 @@ export function useSceneUpdater(
 
   useEffect(() => {
     if (!enabled) return;
+    // Mobile: never auto-regenerate scenes. See isMobileEnvironment() docstring.
+    if (isMobileEnvironment()) return;
 
     if (baselineConversationIdRef.current !== conversationId) {
       baselineConversationIdRef.current = conversationId;
@@ -353,7 +376,6 @@ export function useSceneUpdater(
   // ============================================================================
   // RETURN STATE
   // ============================================================================
-
   return {
     currentScene,
     fallbackSceneUrl,
