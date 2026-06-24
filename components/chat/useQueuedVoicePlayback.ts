@@ -39,9 +39,24 @@
  */
 
 import { useRef, useCallback, useState, type RefObject } from 'react';
-import { primeAudioElement } from '@/lib/audio/unlock';
 
 const MIME_AUDIO_MPEG = 'audio/mpeg';
+
+/**
+ * Mobile UA / narrow-viewport gate. We force the blob playback path on
+ * mobile because UnderFireAI confirmed in production that even iOS 17+
+ * ManagedMediaSource hangs in "loading" forever with an attached audio
+ * element. The blob path is slightly slower (waits for the full MP3) but
+ * actually plays. Desktop keeps the streaming path for faster TTFA.
+ */
+function isMobileEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (typeof navigator === 'undefined') return false;
+  return (
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    window.innerWidth < 768
+  );
+}
 
 export interface UseQueuedVoicePlaybackOptions {
   /**
@@ -54,12 +69,15 @@ export interface UseQueuedVoicePlaybackOptions {
 
 /**
  * Returns true when the browser can stream MP3 into a MediaSource. We
- * deliberately do NOT use ManagedMediaSource here (iOS 17+) - UnderFireAI
- * confirmed in production it still hangs in "loading" forever on iOS even
- * with an attached audio element. Mobile falls back to blob().
+ * deliberately do NOT use ManagedMediaSource (iOS 17+) - UnderFireAI
+ * confirmed in production it still hangs in "loading" forever on iOS
+ * even with an attached audio element. Mobile is hard-forced to blob
+ * regardless of MediaSource presence.
  */
 function supportsMediaSourceStreaming(): boolean {
   if (typeof window === 'undefined') return false;
+  // Hard mobile gate - skip MediaSource entirely on phone/tablet UAs.
+  if (isMobileEnvironment()) return false;
   const MS = (window as unknown as { MediaSource?: typeof MediaSource }).MediaSource;
   if (typeof MS === 'undefined') return false;
   try {
@@ -234,9 +252,12 @@ export function useQueuedVoicePlayback(
     audio.muted = false;
     audio.volume = 1.0;
 
-    // Best-effort opportunistic re-prime: harmless on desktop, no-op if
-    // already unlocked, may unlock late on mobile if a gesture was missed.
-    void primeAudioElement(audio);
+    // CRITICAL: do NOT call primeAudioElement(audio) here. The prime
+    // overwrites `src` with the silent MP3 and then `pause()`s — racing
+    // our real play() below. Result: element plays silence, then pauses,
+    // `ended` never fires, UI is stuck on "Speaking" forever. Priming is
+    // the parent's job and must happen BEFORE fetch (gesture listener,
+    // modal click, Send-button handler).
 
     // Start playback now. The element waits for samples then begins.
     audio.play().catch(err => {
@@ -316,8 +337,12 @@ export function useQueuedVoicePlayback(
     audio.muted = false;
     audio.volume = 1.0;
 
-    // Best-effort opportunistic re-prime.
-    void primeAudioElement(audio);
+    // CRITICAL: do NOT call primeAudioElement(audio) here. The prime
+    // overwrites `src` with the silent MP3 and then `pause()`s — racing
+    // our real play() below. Result: element plays silence, then pauses,
+    // `ended` never fires, UI is stuck on "Speaking" forever. Priming is
+    // the parent's job and must happen BEFORE fetch (gesture listener,
+    // modal click, Send-button handler).
 
     try {
       await audio.play();
@@ -368,11 +393,6 @@ export function useQueuedVoicePlayback(
       if (abortController.signal.aborted) return;
 
       if (!response.ok) {
-        console.error(
-          `[voice] /speak returned ${response.status} for companion ${companionId}`,
-        );
-        setIsPlaying(false);
-        setCurrentSentenceIndex(-1);
         abortControllerRef.current = null;
         return;
       }
