@@ -2,7 +2,7 @@
 
 > **AI companions that feel like people — not chatbots.**
 
-Kirra is a production-ready AI companion platform built on Next.js and Supabase. You give a companion a one-line seed — a name, a feeling, a single detail — and it arrives as a fully formed person: backstory, personality, opinions, quirks, voice, and a life that continues running whether you're online or not.
+Kirra is a production-grade AI companion platform built on Next.js and Supabase. You give a companion a one-line seed — a name, a feeling, a single detail — and it arrives as a fully formed person: backstory, personality, opinions, quirks, voice, and a life that continues running whether you're online or not.
 
 ---
 
