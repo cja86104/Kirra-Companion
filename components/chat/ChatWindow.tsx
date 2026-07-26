@@ -19,6 +19,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Brain,
@@ -36,6 +37,7 @@ import {
   Music,
   Loader2,
   ImageIcon,
+  X,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -92,6 +94,17 @@ const MOOD_CONFIG: Record<string, MoodConfig> = {
 };
 
 // =============================================================================
+// ATTACHMENT LIMITS — mirror ChatInput.tsx and the server-side Zod schema
+// (app/api/companion/[id]/chat/route.ts caps size at 10MB per file).
+// =============================================================================
+
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_ATTACHMENTS = 5;
+// Matches the mime types allowed on the chat-attachments bucket (migration 010).
+const ATTACHMENT_ACCEPT =
+  'image/jpeg,image/png,image/gif,image/webp,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx';
+
+// =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
@@ -118,10 +131,14 @@ export function ChatWindow({
   const [voiceConversationActive, setVoiceConversationActive] = useState(false);
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  
+  // Files selected via the paperclip button, waiting to be sent with the next
+  // message. Uploaded to Supabase Storage inside sendMessage on send.
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Persistent <audio> element used for every TTS clip. iOS Safari blocks
   // audio.play() that isn't initiated inside a user gesture, but it tracks
   // activation PER ELEMENT - so we render one element here, prime it on
@@ -466,10 +483,68 @@ export function ChatWindow({
     }
   }, [autoPlayVoice, isVoicePlaying, stopVoice, companion.id]);
 
+  // =============================================================================
+  // ATTACHMENT HANDLERS
+  // =============================================================================
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (pendingAttachments.length + files.length > MAX_ATTACHMENTS) {
+      toast.error(`Maximum ${MAX_ATTACHMENTS} attachments allowed`);
+      e.target.value = '';
+      return;
+    }
+
+    Array.from(files).forEach((file) => {
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        toast.error(`${file.name} is too large (max 10MB)`);
+        return;
+      }
+
+      const isImage = file.type.startsWith('image/');
+      const attachment: Attachment = { file, type: isImage ? 'image' : 'file' };
+
+      if (isImage) {
+        // Data-URL preview for the pending strip. The reader resolves after
+        // the attachment is already in state, so patch it in by File identity.
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const preview = ev.target?.result;
+          if (typeof preview !== 'string') return;
+          setPendingAttachments((prev) =>
+            prev.map((a) => (a.file === file ? { ...a, preview } : a))
+          );
+        };
+        reader.readAsDataURL(file);
+      }
+
+      setPendingAttachments((prev) => [...prev, attachment]);
+    });
+
+    // Reset so selecting the same file again re-fires onChange
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Single send path for the Send button and Enter key: hands pending
+  // attachments to sendMessage (which uploads them) and clears the strip.
+  const handleSend = () => {
+    if (!conversation || isLoading) return;
+    if (!inputValue.trim() && pendingAttachments.length === 0) return;
+    const toSend = pendingAttachments.length > 0 ? [...pendingAttachments] : undefined;
+    setPendingAttachments([]);
+    void sendMessage(inputValue, toSend);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(inputValue);
+      handleSend();
     }
   };
 
@@ -776,7 +851,48 @@ export function ChatWindow({
               />
             </div>
           ) : (
-            <div className="relative flex items-end gap-2">
+            <>
+              {/* Pending attachment previews */}
+              {pendingAttachments.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {pendingAttachments.map((attachment, index) => (
+                    <div
+                      key={`${attachment.file.name}-${attachment.file.lastModified}-${index}`}
+                      className="relative rounded-xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden shadow-lg"
+                    >
+                      {attachment.type === 'image' && attachment.preview ? (
+                        // unoptimized: data: URLs can't go through the
+                        // server-side image optimizer (same as ChatInput.tsx)
+                        <Image
+                          src={attachment.preview}
+                          alt={attachment.file.name}
+                          width={64}
+                          height={64}
+                          unoptimized
+                          className="h-16 w-16 object-cover"
+                        />
+                      ) : (
+                        <div className="h-16 w-16 flex flex-col items-center justify-center p-1.5">
+                          <Paperclip className="h-5 w-5 text-white/70" />
+                          <span className="text-[10px] text-white/70 truncate w-full text-center mt-1">
+                            {attachment.file.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(index)}
+                        aria-label={`Remove ${attachment.file.name}`}
+                        className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="relative flex items-end gap-2">
               <div className="flex-1 relative">
                 <textarea
                   ref={inputRef}
@@ -790,9 +906,19 @@ export function ChatWindow({
                 />
 
                 <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept={ATTACHMENT_ACCEPT}
+                    onChange={handleFileSelect}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
                     className="h-10 w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"
                     title="Attach file"
                   >
@@ -814,8 +940,8 @@ export function ChatWindow({
                   )}
 
                   <Button
-                    onClick={() => sendMessage(inputValue)}
-                    disabled={!inputValue.trim() || isLoading}
+                    onClick={handleSend}
+                    disabled={(!inputValue.trim() && pendingAttachments.length === 0) || isLoading}
                     size="icon"
                     className="h-10 w-10 rounded-full bg-white/20 hover:bg-white/30 text-white shadow-lg backdrop-blur-sm"
                   >
@@ -823,7 +949,8 @@ export function ChatWindow({
                   </Button>
                 </div>
               </div>
-            </div>
+              </div>
+            </>
           )}
 
           <p className="text-center text-white/60 text-xs mt-2 drop-shadow">
