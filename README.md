@@ -213,7 +213,167 @@ The reference quality bar for seed-generated companions is documented in `docs/s
 
 ## License
 
-[Your license here]
+Kirra Companion Source Available License
+Version 1.0 — 2026
+
+Copyright (c) 2026 Allen Code Co
+Chris Allen — Winchester, Virginia
+
+================================================================================
+PLAIN ENGLISH SUMMARY (not a substitute for the full terms below)
+
+You are free to use, run, and modify Kirra Companion for personal,
+non-commercial purposes. You may not use it — or any substantial part of it —
+to build, power, or operate any product or service that generates revenue,
+is offered commercially, or competes with Kirra Companion. If you want to
+do any of those things, contact us first.
+================================================================================
+
+
+1. DEFINITIONS
+
+   "Software" means the Kirra Companion source code, documentation, assets,
+   and all associated files in this repository, including but not limited to:
+   the companion intelligence systems (seed character generation, DNA evolution
+   engine, life simulation, needs system, proactive messaging, memory
+   extraction), safety infrastructure, and all supporting libraries,
+   components, and configuration files.
+
+   "Core Engine" means, specifically, the companion intelligence systems
+   located in lib/companion/, lib/ai/, lib/safety/, lib/tts/, lib/stt/,
+   and the API routes in app/api/ that power those systems. The Core Engine
+   is the primary subject of the commercial restrictions in Section 3.
+
+   "Personal Use" means use by an individual for private, non-commercial
+   purposes — running the Software for yourself, for learning, or for
+   non-revenue-generating personal projects. Personal Use does not include
+   use within any organization, company, or group that operates commercially,
+   even if your individual role within that entity is unpaid.
+
+   "Commercial Use" means any use of the Software, in whole or in part, that:
+   (a) generates revenue directly or indirectly;
+   (b) is offered as a product or service to third parties, whether free or
+       paid;
+   (c) is used internally by a for-profit organization to support its
+       operations; or
+   (d) is used to build, train, or improve any competing AI companion product
+       or service.
+
+   "You" means the individual or legal entity exercising the rights granted
+   under this License.
+
+
+2. GRANT OF RIGHTS — PERSONAL USE
+
+   Subject to the terms and conditions of this License, Allen Code Co grants
+   You a worldwide, royalty-free, non-exclusive, non-transferable license to:
+
+   (a) Use and run the Software for Personal Use;
+   (b) Copy and modify the Software for Personal Use; and
+   (c) Share unmodified copies of the Software with others, provided this
+       License is included in full and no fees are charged for the copy.
+
+   No other rights are granted.
+
+
+3. RESTRICTIONS
+
+   3.1 No Commercial Use. You may not engage in Commercial Use of the
+   Software or any portion of it without a separate written commercial
+   license from Allen Code Co.
+
+   3.2 No Competing Products. You may not use the Software, the Core Engine,
+   or any substantial portion of either to build, operate, power, or improve
+   any AI companion platform, product, or service — whether commercial or not
+   — that is made available to third parties.
+
+   3.3 No Sublicensing. You may not sublicense, sell, rent, lease, or
+   otherwise transfer rights to the Software or any portion of it.
+
+   3.4 No Removal of Notices. You may not remove or alter any copyright,
+   license, or attribution notices contained in the Software.
+
+   3.5 Modifications. If You modify the Software for Personal Use, your
+   modifications are subject to this same License. Modified versions may not
+   be distributed under a different license, and this License must be
+   included with any distribution.
+
+   3.6 No Extraction of the Core Engine. You may not extract, isolate, or
+   repackage the Core Engine — or any substantial portion of the companion
+   intelligence systems — for use in any separate project, product, or
+   codebase, whether or not that use is commercial.
+
+
+4. COMMERCIAL LICENSING
+
+   If you wish to use Kirra Companion or its Core Engine for any purpose not
+   permitted by Section 2, including Commercial Use, integration into another
+   product, or use within an organization, you must obtain a separate
+   commercial license.
+
+   Contact: chris@allencodeco.com
+   Website: https://www.allencodeco.com
+
+
+5. CONTRIBUTIONS
+
+   Any contribution intentionally submitted to this project by You shall be
+   subject to this License. By submitting a contribution, You represent that
+   You have the right to do so and that Allen Code Co may use, modify, and
+   distribute Your contribution under the terms of this License.
+
+
+6. DISCLAIMER OF WARRANTIES
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL
+   ALLEN CODE CO OR CHRIS ALLEN BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
+
+
+7. LIMITATION OF LIABILITY
+
+   TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL
+   ALLEN CODE CO OR CHRIS ALLEN BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+   TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+   PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE OF
+   OR INABILITY TO USE THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   SUCH DAMAGE.
+
+
+8. TERMINATION
+
+   Your rights under this License terminate automatically if You fail to
+   comply with any of its terms. Upon termination, You must destroy all
+   copies of the Software in your possession. Sections 3, 6, 7, and 9
+   survive termination.
+
+
+9. GOVERNING LAW
+
+   This License shall be governed by and construed in accordance with the
+   laws of the Commonwealth of Virginia, United States, without regard to
+   its conflict of law provisions. Any legal action arising under this
+   License shall be brought exclusively in the state or federal courts
+   located in Virginia.
+
+
+10. ENTIRE AGREEMENT
+
+    This License constitutes the entire agreement between You and Allen Code Co
+    with respect to the Software and supersedes all prior or contemporaneous
+    understandings, agreements, representations, and warranties. No waiver of
+    any provision shall be effective unless in writing and signed by Allen
+    Code Co.
+
+
+================================================================================
+For licensing inquiries: chris@allencodeco.com
+================================================================================
 
 ---
 
